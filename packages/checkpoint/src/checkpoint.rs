@@ -2,34 +2,33 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::{Signature, ThresholdSig},
 };
-use crate::{adapter::Adapter, msg::ConsensusKey};
-use crate::{
-    bitcoin::{signatory::derive_pubkey, Nbtc},
-    constants::{
-        MAX_CHECKPOINT_AGE, MAX_CHECKPOINT_INTERVAL, MAX_FEE_RATE, MIN_FEE_RATE, USER_FEE_FACTOR,
-    },
-};
+use crate::{adapter::Adapter, interface::DequeExtension, msg::ConsensusKey};
 use crate::{
     constants::DEFAULT_FEE_RATE,
     error::{ContractError, ContractResult},
 };
+use crate::{
+    constants::{
+        MAX_CHECKPOINT_AGE, MAX_CHECKPOINT_INTERVAL, MAX_FEE_RATE, MIN_FEE_RATE, USER_FEE_FACTOR,
+    },
+    signatory::derive_pubkey,
+};
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, ContractResult, StdError, StdResult, Storage};
+use cosmwasm_std::{Addr, Coin, StdError, StdResult, Storage};
+use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
+use serde::{Deserialize, Serialize};
 
 use crate::signatory::SIGSET_THRESHOLD;
 
 // use std::convert::TryFrom;
-use std::{
-    default,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 /// The status of a checkpoint. Checkpoints start as `Building`, and eventually
 /// advance through the three states.
-#[derive(Default)]
+#[cw_serde]
 pub enum CheckpointStatus {
     /// The checkpoint is being constructed. It can still be mutated by adding
     /// bitcoin inputs and outputs, pending actions, etc.    
@@ -51,7 +50,7 @@ pub enum CheckpointStatus {
 /// This structure contains the necessary data for signing an input, and once
 /// signed can be turned into a `bitcoin::TxIn` for inclusion in a Bitcoin
 /// transaction.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
     /// The outpoint being spent by this input.
     pub prevout: Adapter<bitcoin::OutPoint>,
@@ -91,7 +90,7 @@ pub struct Input {
 impl Input {
     /// Converts the `Input` to a `bitcoin::TxIn`, useful when constructing an
     /// actual Bitcoin transaction to be broadcast.
-    pub fn to_txin(&self, store: &mut dyn Storage) -> ContractResult<TxIn> {
+    pub fn to_txin(&self, store: &dyn Storage) -> ContractResult<TxIn> {
         let mut witness = self.signatures.to_witness(store)?;
         if self.signatures.signed() {
             witness.push(self.redeem_script.to_bytes());
@@ -123,7 +122,7 @@ impl Input {
             script_pubkey: Adapter::new(script_pubkey),
             redeem_script: Adapter::new(redeem_script),
             sigset_index: sigset.index(),
-            dest: dest.encode()?.try_into()?,
+            dest: dest.to_vec(),
             amount,
             est_witness_vsize: sigset.est_witness_vsize(),
             signatures: ThresholdSig::from_sigset(store, sigset)?,
@@ -151,30 +150,28 @@ pub struct BitcoinTx {
     /// The transaction is valid and ready to be broadcast to the bitcoin
     /// network once all inputs have been signed.
     pub signed_inputs: u16,
-
-    /// The inputs to the transaction.
-    pub input: Deque<Input>,
-
-    /// The outputs to the transaction.
-    pub output: Deque<Output>,
 }
+
+/// The inputs to the transaction.
+pub const BITCOIN_TX_INPUT: Deque<Input> = Deque::new("bitcoin_input");
+
+/// The outputs to the transaction.
+pub const BITCOIN_TX_OUTPUT: Deque<Output> = Deque::new("bitcoin_output");
 
 impl BitcoinTx {
     /// Converts the `BitcoinTx` to a `bitcoin::Transaction`.
-    pub fn to_bitcoin_tx(&self) -> ContractResult<Transaction> {
+    pub fn to_bitcoin_tx(&self, store: &dyn Storage) -> ContractResult<Transaction> {
         Ok(bitcoin::Transaction {
             version: 1,
             lock_time: bitcoin::PackedLockTime(self.lock_time),
-            input: self
-                .input
-                .iter()?
-                .map(|input| input?.to_txin())
-                .collect::<ContractResult<Vec<TxIn>>>()?,
-            output: self
-                .output
-                .iter()?
-                .map(|output| Ok((**output?).clone()))
-                .collect::<ContractResult<Vec<TxOut>>>()?,
+            input: BITCOIN_TX_INPUT
+                .iter(store)?
+                .map(|input| input?.to_txin(store))
+                .collect::<ContractResult<_>>()?,
+            output: BITCOIN_TX_OUTPUT
+                .iter(store)?
+                .map(|output| output.map(|o| o.into_inner()))
+                .collect::<StdResult<_>>()?,
         })
     }
 
@@ -189,29 +186,28 @@ impl BitcoinTx {
 
     /// Returns `true` if all inputs in the transaction are fully signed,
     /// otherwise returns `false`.
-    pub fn signed(&self) -> bool {
-        self.signed_inputs as u64 == self.input.len()
+    pub fn signed(&self, store: &dyn Storage) -> bool {
+        self.signed_inputs as u32 == BITCOIN_TX_INPUT.len(store).unwrap_or(0)
     }
 
     /// The estimated size of the transaction, including the worst-case sizes of
     /// all input witnesses once fully signed, in virtual bytes.
-    pub fn vsize(&self) -> ContractResult<u64> {
-        Ok(self.to_bitcoin_tx()?.vsize().try_into()?)
+    pub fn vsize(&self, store: &dyn Storage) -> ContractResult<u64> {
+        Ok(self.to_bitcoin_tx(store)?.vsize().try_into()?)
     }
 
     /// The hash of the transaction. Note that this will change if any inputs or
     /// outputs are added, removed, or modified, so should only be used once the
     /// transaction is known to be final.
-    pub fn txid(&self) -> ContractResult<bitcoin::Txid> {
-        let bitcoin_tx = self.to_bitcoin_tx()?;
+    pub fn txid(&self, store: &dyn Storage) -> ContractResult<bitcoin::Txid> {
+        let bitcoin_tx = self.to_bitcoin_tx(store)?;
         Ok(bitcoin_tx.txid())
     }
 
     /// The total value of the outputs in the transaction, in satoshis.
-    pub fn value(&self) -> ContractResult<u64> {
-        #[allow(clippy::manual_try_fold)]
-        self.output
-            .iter()?
+    pub fn value(&self, store: &dyn Storage) -> ContractResult<u64> {
+        BITCOIN_TX_OUTPUT
+            .iter(store)?
             .fold(Ok(0), |sum: ContractResult<u64>, out| Ok(sum? + out?.value))
     }
 
@@ -219,13 +215,16 @@ impl BitcoinTx {
     /// populates the input's signing state with it. This should be used when a
     /// transaction is finalized and its structure will not change, and
     /// coordination of signing will begin.
-    pub fn populate_input_sig_message(&mut self, input_index: usize) -> ContractResult<()> {
-        let bitcoin_tx = self.to_bitcoin_tx()?;
+    pub fn populate_input_sig_message(
+        &mut self,
+        store: &dyn Storage,
+        input_index: usize,
+    ) -> ContractResult<()> {
+        let bitcoin_tx = self.to_bitcoin_tx(store)?;
         let mut sc = bitcoin::util::sighash::SighashCache::new(&bitcoin_tx);
-        let mut input = self
-            .input
-            .get_mut(input_index as u64)?
-            .ok_or(Error::InputIndexOutOfBounds(input_index))?;
+        let mut input = BITCOIN_TX_INPUT
+            .get(store, input_index as u32)?
+            .ok_or(ContractError::InputIndexOutOfBounds(input_index))?;
 
         let sighash = sc.segwit_signature_hash(
             input_index,
@@ -246,15 +245,17 @@ impl BitcoinTx {
     /// This function will fail if the fee is greater than the value of the
     /// outputs in the transaction. Any inputs which are not large enough to pay
     /// their share of the fee will be removed.
-    pub fn deduct_fee(&mut self, fee: u64) -> ContractResult<()> {
+    pub fn deduct_fee(&mut self, store: &mut dyn Storage, fee: u64) -> ContractResult<()> {
         if fee == 0 {
             return Ok(());
         }
 
-        if self.output.is_empty() {
+        if BITCOIN_TX_OUTPUT.is_empty(store)? {
             // TODO: Bitcoin module error
-            return Err(Error::BitcoinFee(fee));
+            return Err(ContractError::BitcoinFee(fee));
         }
+
+        let mut output_len = BITCOIN_TX_OUTPUT.len(store)? as u64;
 
         // This algorithm calculates the amount to attempt to deduct from each
         // output (`threshold`), and then removes any outputs which are too
@@ -264,35 +265,35 @@ impl BitcoinTx {
         let threshold = loop {
             // The threshold is the fee divided by the number of outputs (each
             // output pays an equal share of the fee).
-            let threshold = fee / self.output.len();
+            let threshold = fee / output_len;
 
             // Remove any outputs which are too small to pay the threshold.
             let mut min_output = u64::MAX;
-            self.output.retain_unordered(|output| {
+            output_len = BITCOIN_TX_OUTPUT.retain_unordered(store, |output| {
                 let dust_value = output.script_pubkey.dust_value().to_sat();
                 let adjusted_output = output.value.saturating_sub(dust_value);
                 if adjusted_output < min_output {
                     min_output = adjusted_output;
                 }
-                Ok(adjusted_output > threshold)
+                adjusted_output > threshold
             })?;
 
             // Handle the case where no outputs remain.
-            if self.output.is_empty() {
+            if output_len == 0 {
                 break threshold;
             }
 
             // If the threshold is less than the smallest output, we can stop
             // here.
-            let threshold = fee / self.output.len();
+            let threshold = fee / output_len;
             if min_output >= threshold {
                 break threshold;
             }
         };
 
         // Deduct the final fee share from each remaining output.
-        for i in 0..self.output.len() {
-            let mut output = self.output.get_mut(i)?.unwrap();
+        for i in 0..output_len {
+            let mut output = BITCOIN_TX_OUTPUT.get(store, i as u32)?.unwrap();
             output.value -= threshold;
         }
 
@@ -403,7 +404,7 @@ pub struct Checkpoint {
     /// disbursal.
     ///
     /// These transfers can be initiated by a simple nBTC send or by a deposit.    
-    pub pending: Map<Dest, Coin<Nbtc>>,
+    pub pending: Map<Dest, Coin>,
 
     /// The fee rate to use when calculating the miner fee for the transactions
     /// in the checkpoint, in satoshis per virtual byte.

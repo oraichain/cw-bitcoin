@@ -58,18 +58,34 @@ impl<T: Encodable> Encode for Adapter<T> {
     }
 
     fn encode_into<W: Write>(&self, dest: &mut W) -> EncodingResult<()> {
-        self.inner.consensus_encode(dest)
+        match self.inner.consensus_encode(dest) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn encoding_length(&self) -> EncodingResult<usize> {
         let mut _dest: Vec<u8> = Vec::new();
-        self.inner.consensus_encode(&mut _dest)
+        match self.inner.consensus_encode(&mut _dest) {
+            Ok(inner) => Ok(inner),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
 impl<T: Decodable> Decode for Adapter<T> {
     fn decode<R: Read>(mut input: R) -> EncodingResult<Self> {
-        Decodable::consensus_decode(&mut input)
+        let decoded_bytes = Decodable::consensus_decode(&mut input);
+        match decoded_bytes {
+            Ok(inner) => Ok(Self { inner }),
+            Err(_) => {
+                let std_e = std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to decode bitcoin primitive",
+                );
+                Err(std_e.into())
+            }
+        }
     }
 }
 

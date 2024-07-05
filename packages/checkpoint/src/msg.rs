@@ -1,6 +1,8 @@
 use std::ops::Deref;
 
 use bitcoin::util::bip32::ExtendedPubKey;
+use cosmwasm_schema::cw_serde;
+use cosmwasm_std::{Addr, IbcMsg};
 
 /// A Tendermint/CometBFT public key.
 pub type ConsensusKey = [u8; 32];
@@ -31,4 +33,22 @@ impl Deref for Xpub {
     fn deref(&self) -> &Self::Target {
         &self.key
     }
+}
+
+#[cw_serde]
+pub enum Dest {
+    Address(Addr),
+    Ibc(IbcDest),
+}
+
+#[cw_serde]
+pub struct IbcDest {
+    pub source_port: String,
+    pub source_channel: String,
+    #[serde(skip)]
+    pub receiver: String,
+    #[serde(skip)]
+    pub sender: String,
+    pub timeout_timestamp: u64,
+    pub memo: String,
 }

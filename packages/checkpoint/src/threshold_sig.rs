@@ -10,6 +10,7 @@ use bitcoin::secp256k1::{
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Order, StdError, StdResult, Storage};
 use cw_storage_plus::Map;
+use serde::{Deserialize, Serialize};
 
 // TODO: update for taproot-based design (musig rounds, fallback path)
 
@@ -88,7 +89,7 @@ impl From<PublicKey> for Pubkey {
 ///
 /// It is populated based on a `SignatorySet` and a message to sign, and then
 /// each signer signs the message and adds their signature to the state.]
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct ThresholdSig {
     /// The threshold of voting power required for a the signature to be
     /// considered "signed".

@@ -76,6 +76,7 @@ where
 /// create a UTXO which can be only spent by a threshold of the signatories,
 /// based on voting power.
 #[cw_serde]
+#[derive(Default)]
 pub struct SignatorySet {
     /// The time at which this signatory set was created, in seconds.
     ///
