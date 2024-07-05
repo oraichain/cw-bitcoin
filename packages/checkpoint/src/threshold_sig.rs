@@ -259,7 +259,7 @@ impl ThresholdSig {
         &mut self,
         store: &mut dyn Storage,
         pubkey: Pubkey,
-        sig: Signature,
+        sig: &Signature,
     ) -> ContractResult<()> {
         let mut share = SIGS.load(store, pubkey.as_slice())?;
 
@@ -267,9 +267,9 @@ impl ThresholdSig {
             return Err(StdError::generic_err("Pubkey already signed"))?;
         }
 
-        self.verify(&pubkey, &sig)?;
+        self.verify(&pubkey, sig)?;
 
-        share.sig = Some(sig);
+        share.sig = Some(sig.clone());
         self.signed += share.power;
 
         SIGS.save(store, pubkey.as_slice(), &share)?;

@@ -53,7 +53,7 @@ pub struct Signatory {
 /// based on the current signatory set index.
 pub fn derive_pubkey<T>(
     secp: &Secp256k1<T>,
-    xpub: Xpub,
+    xpub: &Xpub,
     sigset_index: u32,
 ) -> ContractResult<PublicKey>
 where
