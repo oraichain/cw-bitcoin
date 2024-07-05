@@ -1,1 +1,1 @@
-## Bitcoin trustless bridge implement in CosmWasm contract facilitating taproot bitcoin script.
+## Bitcoin trustless bridge implemented in CosmWasm contract facilitating taproot bitcoin script.
