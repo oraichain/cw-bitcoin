@@ -153,7 +153,7 @@ impl ThresholdSig {
 
     /// Populates the set of signers based on the public keys and voting power
     /// in the given `SignatorySet`.
-    pub fn from_sigset(signatories: &SignatorySet, store: &mut dyn Storage) -> StdResult<Self> {
+    pub fn from_sigset(store: &mut dyn Storage, signatories: &SignatorySet) -> StdResult<Self> {
         let mut ts = ThresholdSig::default();
         let mut total_vp = 0;
 
@@ -183,7 +183,7 @@ impl ThresholdSig {
     ///
     /// This function expects shares to be unsigned, and will panic if any of
     /// them already include a signature.
-    pub fn from_shares(shares: Vec<(Pubkey, Share)>, store: &mut dyn Storage) -> StdResult<Self> {
+    pub fn from_shares(store: &mut dyn Storage, shares: Vec<(Pubkey, Share)>) -> StdResult<Self> {
         let mut ts = ThresholdSig::default();
         let mut total_vp = 0;
         let mut len = 0;

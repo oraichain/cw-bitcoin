@@ -1,5 +1,7 @@
 #![feature(trait_alias)]
-// mod checkpoint;
+mod adapter;
+mod checkpoint;
+mod constants;
 mod error;
 mod msg;
 mod signatory;
