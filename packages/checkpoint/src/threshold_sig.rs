@@ -8,8 +8,7 @@ use bitcoin::secp256k1::{
     ecdsa, PublicKey, Secp256k1,
 };
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Order, StdError, StdResult, Storage};
-use cw_storage_plus::Map;
+use cosmwasm_std::{StdError, StdResult};
 use serde::{Deserialize, Serialize};
 
 // TODO: update for taproot-based design (musig rounds, fallback path)
@@ -103,11 +102,11 @@ pub struct ThresholdSig {
 
     /// The number of signers in the set.
     pub len: u16,
-}
 
-/// A map of entries containing the pubkey and voting power of each signer,
-/// and the signature if they have signed.
-pub const SIGS: Map<&[u8], Share> = Map::new("sigs");
+    /// A map of entries containing the pubkey and voting power of each signer,
+    /// and the signature if they have signed.
+    pub sigs: Vec<(Pubkey, Share)>,
+}
 
 impl ThresholdSig {
     /// Create a new empty `ThresholdSig` state. It will need to be populated
@@ -128,22 +127,11 @@ impl ThresholdSig {
     }
 
     /// Clears all signatures from the state.
-    pub fn clear_sigs(&mut self, store: &mut dyn Storage) -> StdResult<()> {
+    pub fn clear_sigs(&mut self) -> StdResult<()> {
         self.signed = 0;
-
-        SIGS.clear(store);
-
-        // let entries: Vec<_> = SIGS
-        //     .iter()?
-        //     .collect::<StdResult<Vec<_>>>()?
-        //     .into_iter()
-        //     .map(|(k, _)| *k)
-        //     .collect();
-        // for k in entries {
-        //     let mut sig = SIGS.get_mut(k)?.unwrap();
-        //     sig.sig = None;
-        // }
-
+        for (_, sig) in &mut self.sigs {
+            sig.sig = None;
+        }
         Ok(())
     }
 
@@ -154,19 +142,18 @@ impl ThresholdSig {
 
     /// Populates the set of signers based on the public keys and voting power
     /// in the given `SignatorySet`.
-    pub fn from_sigset(store: &mut dyn Storage, signatories: &SignatorySet) -> StdResult<Self> {
+    pub fn from_sigset(signatories: &SignatorySet) -> Self {
         let mut ts = ThresholdSig::default();
         let mut total_vp = 0;
 
         for signatory in signatories.iter() {
-            SIGS.save(
-                store,
-                signatory.pubkey.as_slice(),
-                &Share {
+            ts.sigs.push((
+                signatory.pubkey.clone(),
+                Share {
                     power: signatory.voting_power,
                     sig: None,
                 },
-            )?;
+            ));
 
             ts.len += 1;
             total_vp += signatory.voting_power;
@@ -176,7 +163,7 @@ impl ThresholdSig {
         ts.threshold =
             ((total_vp as u128) * SIGSET_THRESHOLD.0 as u128 / SIGSET_THRESHOLD.1 as u128) as u64;
 
-        Ok(ts)
+        ts
     }
 
     /// Populates the set of signers based on the given list of entries of
@@ -184,16 +171,16 @@ impl ThresholdSig {
     ///
     /// This function expects shares to be unsigned, and will panic if any of
     /// them already include a signature.
-    pub fn from_shares(store: &mut dyn Storage, shares: Vec<(Pubkey, Share)>) -> StdResult<Self> {
+    pub fn from_shares(shares: Vec<(Pubkey, Share)>) -> Self {
         let mut ts = ThresholdSig::default();
         let mut total_vp = 0;
         let mut len = 0;
 
-        for (pubkey, share) in shares.into_iter() {
+        for (pubkey, share) in shares {
             assert!(share.sig.is_none());
             total_vp += share.power;
             len += 1;
-            SIGS.save(store, pubkey.as_slice(), &share)?;
+            ts.sigs.push((pubkey, share));
         }
 
         // TODO: get threshold ratio from somewhere else
@@ -201,7 +188,7 @@ impl ThresholdSig {
             ((total_vp as u128) * SIGSET_THRESHOLD.0 as u128 / SIGSET_THRESHOLD.1 as u128) as u64;
         ts.len = len;
 
-        Ok(ts)
+        ts
     }
 
     /// Returns `true` if the more than the threshold of voting power has signed
@@ -212,41 +199,34 @@ impl ThresholdSig {
 
     /// Returns a vector of `(pubkey, signature)` tuples for each signer who has
     /// signed the message.    
-    pub fn sigs(&self, store: &dyn Storage) -> StdResult<Vec<(Pubkey, Signature)>> {
-        SIGS.range_raw(store, None, None, Order::Ascending)
-            .filter_map(|entry| {
-                let (pubkey, share) = match entry {
-                    Err(e) => return Some(Err(e)),
-                    Ok(entry) => entry,
-                };
-                share
-                    .sig
-                    .map(|sig| Ok((Pubkey { bytes: pubkey }, sig.clone())))
-            })
-            .collect::<StdResult<_>>()
+    pub fn sigs(&self) -> Vec<(Pubkey, Signature)> {
+        self.sigs
+            .iter()
+            .filter_map(|(pubkey, share)| share.sig.clone().map(|sig| (pubkey.clone(), sig)))
+            .collect()
     }
 
     /// Returns a vector of `(pubkey, share)` tuples for each signer, even if
     /// they have not yet signed.
     // TODO: should be iterator?
-    pub fn shares(&self, store: &dyn Storage) -> StdResult<Vec<(Pubkey, Share)>> {
-        SIGS.range_raw(store, None, None, Order::Ascending)
-            .map(|entry| entry.map(|(pubkey, share)| (Pubkey { bytes: pubkey }, share.clone())))
-            .collect::<StdResult<_>>()
+    pub fn shares(&self) -> Vec<(Pubkey, Share)> {
+        self.sigs.clone()
     }
 
     /// Returns `true` if the given pubkey is part of the set of signers.
     /// Returns `false` otherwise.
-    pub fn contains_key(&self, store: &dyn Storage, pubkey: Pubkey) -> bool {
-        SIGS.has(store, pubkey.as_slice())
+    pub fn contains_key(&self, pubkey: Pubkey) -> bool {
+        self.sigs.iter().any(|(key, _)| pubkey.eq(key))
     }
 
     /// Returns `true` if the given pubkey is part of the set of signers and has
     /// not yet signed. Returns `false` if the pubkey is not part of the set of
     /// signers or has already signed.
-    pub fn needs_sig(&self, store: &dyn Storage, pubkey: Pubkey) -> bool {
-        SIGS.load(store, pubkey.as_slice())
-            .map(|share| share.sig.is_none())
+    pub fn needs_sig(&self, pubkey: Pubkey) -> bool {
+        self.sigs
+            .iter()
+            .find(|(key, _)| pubkey.eq(key))
+            .map(|(_, share)| share.sig.is_none())
             .unwrap_or(false)
     }
 
@@ -255,40 +235,50 @@ impl ThresholdSig {
     /// Returns an error if the pubkey is not part of the set of signers, if the
     /// signature is invalid, or if the signer has already signed.
     // TODO: exempt from fee
-    pub fn sign(
-        &mut self,
-        store: &mut dyn Storage,
-        pubkey: Pubkey,
-        sig: &Signature,
-    ) -> ContractResult<()> {
-        let mut share = SIGS.load(store, pubkey.as_slice())?;
+    pub fn sign(&mut self, pubkey: Pubkey, sig: &Signature) -> ContractResult<()> {
+        let share = &mut self
+            .sigs
+            .iter_mut()
+            .find(|(key, _)| pubkey.eq(key))
+            .unwrap()
+            .1;
 
         if share.sig.is_some() {
             return Err(StdError::generic_err("Pubkey already signed"))?;
         }
 
-        self.verify(&pubkey, sig)?;
+        let msg = secp256k1::Message::from_slice(self.message.as_slice())?;
+        Self::secp_verify(&msg, &pubkey, sig)?;
 
         share.sig = Some(sig.clone());
         self.signed += share.power;
-
-        SIGS.save(store, pubkey.as_slice(), &share)?;
 
         Ok(())
     }
 
     /// Verifies the given signature for the message, using the given signer's
     /// pubkey.
-    pub fn verify(&self, pubkey: &Pubkey, sig: &Signature) -> ContractResult<()> {
+    /// Verifies the given signature for the message, using the given signer's
+    /// pubkey.
+    pub fn secp_verify(
+        msg: &secp256k1::Message,
+        pubkey: &Pubkey,
+        sig: &Signature,
+    ) -> ContractResult<()> {
         // TODO: re-use secp context
         let secp = Secp256k1::verification_only();
         let pubkey = PublicKey::from_slice(&pubkey.bytes)?;
-        let msg = secp256k1::Message::from_slice(self.message.as_slice())?;
+
         let sig = ecdsa::Signature::from_compact(&sig.0)?;
 
         secp.verify_ecdsa(&msg, &sig, &pubkey)?;
 
         Ok(())
+    }
+
+    pub fn verify(&self, pubkey: &Pubkey, sig: &Signature) -> ContractResult<()> {
+        let msg = secp256k1::Message::from_slice(self.message.as_slice())?;
+        Self::secp_verify(&msg, pubkey, sig)
     }
 
     /// Returns a vector of signatures (or empty bytes for unsigned entries) in
@@ -299,17 +289,21 @@ impl ThresholdSig {
     /// script.
     // TODO: this shouldn't know so much about bitcoin-specific structure,
     // decouple by exposing a power-ordered iterator of Option<Signature>
-    pub fn to_witness(&self, store: &dyn Storage) -> ContractResult<Vec<Vec<u8>>> {
+    pub fn to_witness(&self) -> ContractResult<Vec<Vec<u8>>> {
         if !self.signed() {
             return Ok(vec![]);
         }
 
-        let mut entries: Vec<_> = SIGS
-            .range(store, None, None, Order::Ascending)
-            .collect::<StdResult<_>>()?;
+        let mut entries: Vec<_> = self.sigs.clone();
         // Sort ascending by voting power, opposite order of public keys in the
         // script
-        entries.sort_by(|a, b| (a.1.power, &a.0).cmp(&(b.1.power, &b.0)));
+        entries.sort_by(|a, b| {
+            if a.1.power == b.1.power {
+                a.0.bytes.cmp(&b.0.bytes)
+            } else {
+                a.1.power.cmp(&b.1.power)
+            }
+        });
 
         entries
             .into_iter()
