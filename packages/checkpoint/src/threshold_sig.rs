@@ -89,7 +89,7 @@ impl From<PublicKey> for Pubkey {
 ///
 /// It is populated based on a `SignatorySet` and a message to sign, and then
 /// each signer signs the message and adds their signature to the state.]
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct ThresholdSig {
     /// The threshold of voting power required for a the signature to be
     /// considered "signed".

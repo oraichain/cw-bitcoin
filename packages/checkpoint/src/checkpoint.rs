@@ -59,7 +59,7 @@ pub enum CheckpointStatus {
 /// This structure contains the necessary data for signing an input, and once
 /// signed can be turned into a `bitcoin::TxIn` for inclusion in a Bitcoin
 /// transaction.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Input {
     /// The outpoint being spent by this input.
     pub prevout: Adapter<bitcoin::OutPoint>,
@@ -149,8 +149,7 @@ impl Input {
 pub type Output = Adapter<bitcoin::TxOut>;
 
 /// A bitcoin transaction, as a native `orga` data structure.
-#[cw_serde]
-#[derive(Default)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BitcoinTx {
     /// The locktime field included in the bitcoin transaction, representing
     /// either a block height or timestamp.
@@ -160,14 +159,20 @@ pub struct BitcoinTx {
     /// The transaction is valid and ready to be broadcast to the bitcoin
     /// network once all inputs have been signed.
     pub signed_inputs: u16,
+
+    /// The inputs to the transaction.
+    pub input: Vec<Input>,
+
+    /// The outputs to the transaction.
+    pub output: Vec<Output>,
 }
 
-/// The inputs to the transaction.
-/// TODO: should be map or something different by namespace, currently fix for build
-pub const BITCOIN_TX_INPUT: Deque<Input> = Deque::new("bitcoin_input");
+// /// The inputs to the transaction.
+// /// TODO: should be map or something different by namespace, currently fix for build
+// pub const BITCOIN_TX_INPUT: Deque<Input> = Deque::new("bitcoin_input");
 
-/// The outputs to the transaction.
-pub const BITCOIN_TX_OUTPUT: Deque<Output> = Deque::new("bitcoin_output");
+// /// The outputs to the transaction.
+// pub const BITCOIN_TX_OUTPUT: Deque<Output> = Deque::new("bitcoin_output");
 
 impl BitcoinTx {
     /// Converts the `BitcoinTx` to a `bitcoin::Transaction`.
@@ -175,14 +180,16 @@ impl BitcoinTx {
         Ok(bitcoin::Transaction {
             version: 1,
             lock_time: bitcoin::PackedLockTime(self.lock_time),
-            input: BITCOIN_TX_INPUT
-                .iter(store)?
-                .map(|input| input?.to_txin(store))
+            input: self
+                .input
+                .iter()
+                .map(|input| input.to_txin(store))
                 .collect::<ContractResult<_>>()?,
-            output: BITCOIN_TX_OUTPUT
-                .iter(store)?
-                .map(|output| output.map(|o| o.into_inner()))
-                .collect::<StdResult<_>>()?,
+            output: self
+                .output
+                .iter()
+                .map(|output| output.clone().into_inner())
+                .collect(),
         })
     }
 
@@ -197,8 +204,8 @@ impl BitcoinTx {
 
     /// Returns `true` if all inputs in the transaction are fully signed,
     /// otherwise returns `false`.
-    pub fn signed(&self, store: &dyn Storage) -> bool {
-        self.signed_inputs as u32 == BITCOIN_TX_INPUT.len(store).unwrap_or(0)
+    pub fn signed(&self) -> bool {
+        self.signed_inputs as usize == self.input.len()
     }
 
     /// The estimated size of the transaction, including the worst-case sizes of
@@ -216,10 +223,10 @@ impl BitcoinTx {
     }
 
     /// The total value of the outputs in the transaction, in satoshis.
-    pub fn value(&self, store: &dyn Storage) -> ContractResult<u64> {
-        BITCOIN_TX_OUTPUT
-            .iter(store)?
-            .fold(Ok(0), |sum: ContractResult<u64>, out| Ok(sum? + out?.value))
+    pub fn value(&self) -> ContractResult<u64> {
+        self.output
+            .iter()
+            .fold(Ok(0), |sum: ContractResult<u64>, out| Ok(sum? + out.value))
     }
 
     /// Calculates the sighash to be signed for the given input index, and
@@ -233,8 +240,9 @@ impl BitcoinTx {
     ) -> ContractResult<()> {
         let bitcoin_tx = self.to_bitcoin_tx(store)?;
         let mut sc = bitcoin::util::sighash::SighashCache::new(&bitcoin_tx);
-        let mut input = BITCOIN_TX_INPUT
-            .get(store, input_index as u32)?
+        let input = self
+            .input
+            .get_mut(input_index)
             .ok_or(ContractError::InputIndexOutOfBounds(input_index))?;
 
         let sighash = sc.segwit_signature_hash(
@@ -261,12 +269,12 @@ impl BitcoinTx {
             return Ok(());
         }
 
-        if BITCOIN_TX_OUTPUT.is_empty(store)? {
+        if self.output.is_empty() {
             // TODO: Bitcoin module error
             return Err(ContractError::BitcoinFee(fee));
         }
 
-        let mut output_len = BITCOIN_TX_OUTPUT.len(store)? as u64;
+        let mut output_len = self.output.len() as u64;
 
         // This algorithm calculates the amount to attempt to deduct from each
         // output (`threshold`), and then removes any outputs which are too
@@ -280,14 +288,21 @@ impl BitcoinTx {
 
             // Remove any outputs which are too small to pay the threshold.
             let mut min_output = u64::MAX;
-            output_len = BITCOIN_TX_OUTPUT.retain_unordered(store, |output| {
-                let dust_value = output.script_pubkey.dust_value().to_sat();
-                let adjusted_output = output.value.saturating_sub(dust_value);
-                if adjusted_output < min_output {
-                    min_output = adjusted_output;
-                }
-                adjusted_output > threshold
-            })?;
+            self.output = self
+                .output
+                .clone()
+                .into_iter()
+                .filter(|output| {
+                    let dust_value = output.script_pubkey.dust_value().to_sat();
+                    let adjusted_output = output.value.saturating_sub(dust_value);
+                    if adjusted_output < min_output {
+                        min_output = adjusted_output;
+                    }
+                    adjusted_output > threshold
+                })
+                .collect();
+
+            output_len = self.output.len() as u64;
 
             // Handle the case where no outputs remain.
             if output_len == 0 {
@@ -304,7 +319,7 @@ impl BitcoinTx {
 
         // Deduct the final fee share from each remaining output.
         for i in 0..output_len {
-            let mut output = BITCOIN_TX_OUTPUT.get(store, i as u32)?.unwrap();
+            let output = self.output.get_mut(i as usize).unwrap();
             output.value -= threshold;
         }
 
@@ -347,8 +362,7 @@ pub enum BatchType {
 /// together. Signatories submit signatures for all inputs in all transactions
 /// in the batch at once. Once the batch is fully signed, the checkpoint can
 /// advance to signing of the next batch, if any.
-#[cw_serde]
-#[derive(Default)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Batch {
     signed_txs: u16,
     batch: Vec<BitcoinTx>,
@@ -455,7 +469,7 @@ impl Checkpoint {
     /// transaction, and an empty batch of final emergency disbursal
     /// transactions.
     pub fn new(store: &mut dyn Storage, sigset: SignatorySet) -> ContractResult<Self> {
-        let mut checkpoint = Checkpoint {
+        let checkpoint = Checkpoint {
             status: CheckpointStatus::default(),
             fee_rate: DEFAULT_FEE_RATE,
             signed_at_btc_height: None,
@@ -516,11 +530,11 @@ impl Checkpoint {
             // Iterate over all transactions in the batch.
             for j in 0..batch.len() {
                 let tx = &mut batch[j];
-                let tx_was_signed = tx.signed(store);
+                let tx_was_signed = tx.signed();
 
                 // Iterate over all inputs in the transaction.
-                for k in 0..BITCOIN_TX_INPUT.len(store)? {
-                    let mut input = BITCOIN_TX_INPUT.get(store, k)?.unwrap();
+                for k in 0..tx.input.len() {
+                    let input = tx.input.get_mut(k).unwrap();
                     let pubkey = derive_pubkey(&secp, xpub, input.sigset_index)?;
 
                     // Skip input if either the signatory is not part of this
@@ -554,7 +568,7 @@ impl Checkpoint {
                 // If these signatures made the transaction fully signed,
                 // increase the counter of fully-signed transactions in the
                 // containing batch.
-                if !tx_was_signed && tx.signed(store) {
+                if !tx_was_signed && tx.signed() {
                     batch.signed_txs += 1;
                 }
             }
@@ -631,9 +645,7 @@ impl Checkpoint {
         for batch in BATCHES.iter(store)? {
             let batch = batch?;
             for tx in batch.iter() {
-                for input in BITCOIN_TX_INPUT.iter(store)? {
-                    let input = input?;
-
+                for input in &tx.input {
                     let pubkey = derive_pubkey(&secp, xpub, input.sigset_index)?;
                     if input.signatures.needs_sig(store, pubkey.into()) {
                         msgs.push((input.signatures.message(), input.sigset_index));
@@ -716,13 +728,11 @@ impl Checkpoint {
         let batch = BATCHES.get(store, BatchType::Checkpoint as u32)?.unwrap();
         let tx = batch.get(0).unwrap();
 
-        for input in BITCOIN_TX_INPUT.iter(store)? {
-            let input = input?;
+        for input in &tx.input {
             fees += input.amount;
         }
 
-        for output in BITCOIN_TX_OUTPUT.iter(store)? {
-            let output = output?;
+        for output in &tx.output {
             fees -= output.value;
         }
 
@@ -758,11 +768,11 @@ impl Checkpoint {
         tx.input.truncate(config.max_inputs as usize);
 
         let vsize = tx.vsize() as u64
-            + BITCOIN_TX_INPUT
-                .iter(store)?
+            + cp.input
+                .iter()
                 .take(config.max_inputs as usize)
                 .try_fold(0, |sum, input| {
-                    Ok::<_, ContractError>(sum + input?.est_witness_vsize)
+                    Ok::<_, ContractError>(sum + input.est_witness_vsize)
                 })?;
 
         Ok(vsize)
@@ -781,16 +791,18 @@ impl Checkpoint {
         let checkpoint_tx = checkpoint_batch
             .get(0)
             .ok_or(StdError::generic_err("Cannot get checkpoint tx"))?;
-        for i in 0..config.max_inputs.min(BITCOIN_TX_INPUT.len(store)? as u64) {
-            let input = BITCOIN_TX_INPUT
-                .get(store, i as u32)?
+        for i in 0..config.max_inputs.min(checkpoint_tx.input.len() as u64) {
+            let input = checkpoint_tx
+                .input
+                .get(i as usize)
                 .ok_or(StdError::generic_err("Cannot get checkpoint tx input"))?;
             in_amount += input.amount;
         }
         let mut out_amount = 0;
-        for i in 0..config.max_outputs.min(BITCOIN_TX_OUTPUT.len(store)? as u64) {
-            let output = BITCOIN_TX_OUTPUT
-                .get(store, i as u32)?
+        for i in 0..config.max_outputs.min(checkpoint_tx.output.len() as u64) {
+            let output = checkpoint_tx
+                .output
+                .get(i as usize)
                 .ok_or(StdError::generic_err("Cannot get checkpoint tx output"))?;
             out_amount += output.value;
         }
@@ -1870,64 +1882,48 @@ mod test {
 
     use super::*;
 
-    fn push_bitcoin_tx_output(store: &mut dyn Storage, tx: &mut BitcoinTx, value: u64) {
+    fn push_bitcoin_tx_output(tx: &mut BitcoinTx, value: u64) {
         let tx_out = bitcoin::TxOut {
             value,
             script_pubkey: bitcoin::Script::new(),
         };
-        BITCOIN_TX_OUTPUT
-            .push_back(store, &Output::new(tx_out))
-            .unwrap();
+        tx.output.push(Output::new(tx_out));
     }
 
     #[test]
     fn deduct_fee() {
         let mut deps = mock_dependencies();
         let mut bitcoin_tx = BitcoinTx::default();
-        push_bitcoin_tx_output(deps.as_mut().storage, &mut bitcoin_tx, 0);
-        push_bitcoin_tx_output(deps.as_mut().storage, &mut bitcoin_tx, 10000);
+        push_bitcoin_tx_output(&mut bitcoin_tx, 0);
+        push_bitcoin_tx_output(&mut bitcoin_tx, 10000);
 
         bitcoin_tx.deduct_fee(deps.as_mut().storage, 100).unwrap();
 
-        assert_eq!(BITCOIN_TX_OUTPUT.len(deps.as_ref().storage).unwrap(), 1);
-        assert_eq!(
-            BITCOIN_TX_OUTPUT
-                .get(deps.as_ref().storage, 0)
-                .unwrap()
-                .unwrap()
-                .value,
-            9900
-        );
+        assert_eq!(bitcoin_tx.output.len(), 1);
+        assert_eq!(bitcoin_tx.output.get(0).unwrap().value, 9900);
     }
 
     #[test]
     fn deduct_fee_multi_pass() {
         let mut deps = mock_dependencies();
         let mut bitcoin_tx = BitcoinTx::default();
-        push_bitcoin_tx_output(deps.as_mut().storage, &mut bitcoin_tx, 502);
-        push_bitcoin_tx_output(deps.as_mut().storage, &mut bitcoin_tx, 482);
-        push_bitcoin_tx_output(deps.as_mut().storage, &mut bitcoin_tx, 300);
+        push_bitcoin_tx_output(&mut bitcoin_tx, 502);
+        push_bitcoin_tx_output(&mut bitcoin_tx, 482);
+        push_bitcoin_tx_output(&mut bitcoin_tx, 300);
 
         bitcoin_tx.deduct_fee(deps.as_mut().storage, 30).unwrap();
 
-        assert_eq!(BITCOIN_TX_OUTPUT.len(deps.as_ref().storage,).unwrap(), 1);
-        assert_eq!(
-            BITCOIN_TX_OUTPUT
-                .get(deps.as_ref().storage, 0)
-                .unwrap()
-                .unwrap()
-                .value,
-            472
-        );
+        assert_eq!(bitcoin_tx.output.len(), 1);
+        assert_eq!(bitcoin_tx.output.get(0).unwrap().value, 472);
     }
 
     #[test]
     fn deduct_fee_multi_pass_empty_result() {
         let mut deps = mock_dependencies();
         let mut bitcoin_tx = BitcoinTx::default();
-        push_bitcoin_tx_output(deps.as_mut().storage, &mut bitcoin_tx, 60);
-        push_bitcoin_tx_output(deps.as_mut().storage, &mut bitcoin_tx, 70);
-        push_bitcoin_tx_output(deps.as_mut().storage, &mut bitcoin_tx, 100);
+        push_bitcoin_tx_output(&mut bitcoin_tx, 60);
+        push_bitcoin_tx_output(&mut bitcoin_tx, 70);
+        push_bitcoin_tx_output(&mut bitcoin_tx, 100);
 
         bitcoin_tx.deduct_fee(deps.as_mut().storage, 200).unwrap();
     }
