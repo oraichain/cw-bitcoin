@@ -1496,8 +1496,27 @@ impl CheckpointQueue {
     /// If the index is out of bounds or was pruned, an error is returned.
     pub fn get(&self, store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {
         let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let queue_len = checkpoints.len(store)?;
+        let index = self.get_deque_index(index, queue_len)?;
         let checkpoint = checkpoints.get(store, index)?.unwrap();
         Ok(checkpoint)
+    }
+
+    /// Calculates the index within the deque based on the given checkpoint
+    /// index.
+    ///
+    /// This is necessary because the values can differ for queues which have
+    /// been pruned. For example, a queue may contain 5 checkpoints,
+    /// representing indexes 30 to 34. Checkpoint index 30 is at deque index 0,
+    /// checkpoint 34 is at deque index 4, and checkpoint index 29 is now
+    /// out-of-bounds.
+    fn get_deque_index(&self, index: u32, queue_len: u32) -> ContractResult<u32> {
+        let start = self.index + 1 - queue_len;
+        if index > self.index || index < start {
+            Err(StdError::generic_err("Index out of bounds").into())
+        } else {
+            Ok(index - start)
+        }
     }
 
     /// The number of checkpoints in the queue.
@@ -1508,16 +1527,17 @@ impl CheckpointQueue {
     // TODO: remove this attribute, not sure why clippy is complaining when
     // is_empty is defined
     #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self, store: &dyn Storage) -> u32 {
+    pub fn len(&self, store: &dyn Storage) -> ContractResult<u32> {
         let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
-        checkpoints.len(store).unwrap_or(0)
+        let queue_len = checkpoints.len(store)?;
+        Ok(queue_len)
     }
 
     /// Returns `true` if there are no checkpoints in the queue.
     ///
     /// This will only be `true` before the first deposit has been processed.
-    pub fn is_empty(&self, store: &dyn Storage) -> bool {
-        self.len(store) == 0
+    pub fn is_empty(&self, store: &dyn Storage) -> ContractResult<bool> {
+        Ok(self.len(store)? == 0)
     }
 
     /// The index of the last checkpoint in the queue (aka the `Building`
@@ -1535,7 +1555,7 @@ impl CheckpointQueue {
         // TODO: return iterator
         // TODO: use Deque iterator
         let checkpoints = Deque::new(&self.queue);
-        let queue_len = self.len(store);
+        let queue_len = checkpoints.len(store)?;
         let mut out = Vec::with_capacity(queue_len as usize);
 
         for i in 0..queue_len {
@@ -1558,7 +1578,7 @@ impl CheckpointQueue {
 
         let mut out = vec![];
 
-        let length = self.len(store);
+        let length = self.len(store)?;
         if length == 0 {
             return Ok(out);
         }
@@ -1587,7 +1607,7 @@ impl CheckpointQueue {
     }
 
     pub fn first_index(&self, store: &dyn Storage) -> ContractResult<u32> {
-        Ok(self.index + 1 - self.len(store))
+        Ok(self.index + 1 - self.len(store)?)
     }
 
     /// A reference to the last completed checkpoint.
@@ -1649,7 +1669,7 @@ impl CheckpointQueue {
 
     /// A reference to the checkpoint in the `Signing` state, if there is one.
     pub fn signing(&self, store: &dyn Storage) -> ContractResult<Option<SigningCheckpoint>> {
-        if self.len(store) < 2 {
+        if self.len(store)? < 2 {
             return Ok(None);
         }
 
@@ -1675,8 +1695,8 @@ impl CheckpointQueue {
     /// Prunes old checkpoints from the queue.
     pub fn prune(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
         let latest = self.building(store)?.create_time();
-        let mut queue_len = self.len(store);
         let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let mut queue_len = checkpoints.len(store)?;
         while let Some(oldest) = checkpoints.front(store)? {
             // TODO: move to min_checkpoints field in config
             if queue_len <= 10 {
@@ -1782,7 +1802,7 @@ impl CheckpointQueue {
         };
 
         let confirmed_index = match self.confirmed_index {
-            None => return Ok(self.len(store) - 1 - signing_offset),
+            None => return Ok(self.len(store)? - 1 - signing_offset),
             Some(index) => index,
         };
 
@@ -2209,24 +2229,22 @@ mod test {
             .backfill(deps.as_mut().storage, 8, backfill_data.into_iter(), (2, 3))
             .unwrap();
 
-        assert_eq!(queue.len(deps.as_ref().storage), 8);
+        assert_eq!(queue.len(deps.as_ref().storage).unwrap(), 8);
         assert_eq!(queue.index, 10);
+
         assert_eq!(
             queue
-                .queue()
                 .get(deps.as_ref().storage, 3)
-                .unwrap()
                 .unwrap()
                 .sigset
                 .redeem_script(&[0], (2, 3))
                 .unwrap(),
             sigset(3).redeem_script(&[0], (2, 3)).unwrap(),
         );
+
         assert_eq!(
             queue
-                .queue()
                 .get(deps.as_ref().storage, 10)
-                .unwrap()
                 .unwrap()
                 .sigset
                 .redeem_script(&[0], (2, 3))
@@ -2250,13 +2268,11 @@ mod test {
             .backfill(deps.as_mut().storage, 0, backfill_data.into_iter(), (2, 3))
             .unwrap();
 
-        assert_eq!(queue.len(deps.as_ref().storage), 2);
+        assert_eq!(queue.len(deps.as_ref().storage).unwrap(), 2);
         assert_eq!(queue.index, 1);
         assert_eq!(
             queue
-                .queue()
                 .get(deps.as_ref().storage, 0)
-                .unwrap()
                 .unwrap()
                 .sigset
                 .redeem_script(&[0], (2, 3))
@@ -2265,9 +2281,7 @@ mod test {
         );
         assert_eq!(
             queue
-                .queue()
                 .get(deps.as_ref().storage, 1)
-                .unwrap()
                 .unwrap()
                 .sigset
                 .redeem_script(&[0], (2, 3))
