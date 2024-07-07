@@ -7,4 +7,5 @@ mod error;
 mod interface;
 mod msg;
 mod signatory;
+mod state;
 mod threshold_sig;

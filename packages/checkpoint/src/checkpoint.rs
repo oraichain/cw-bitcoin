@@ -4,8 +4,8 @@ use super::{
 };
 use crate::{
     adapter::Adapter,
-    interface::DequeExtension,
-    msg::{ConsensusKey, Dest, Xpub},
+    interface::{Accounts, Dest},
+    msg::Xpub,
 };
 use crate::{
     constants::DEFAULT_FEE_RATE,
@@ -20,7 +20,7 @@ use crate::{
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Coin, StdError, StdResult, Storage};
+use cosmwasm_std::{Coin, Env, Order, StdError, Storage};
 use cw_storage_plus::{Deque, Map};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
@@ -28,10 +28,7 @@ use serde::{Deserialize, Serialize};
 use crate::signatory::SIGSET_THRESHOLD;
 
 // use std::convert::TryFrom;
-use std::{
-    cell::Ref,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 /// The status of a checkpoint. Checkpoints start as `Building`, and eventually
 /// advance through the three states.
@@ -405,6 +402,14 @@ pub struct Checkpoint {
     /// `Complete`.
     pub status: CheckpointStatus,
 
+    /// Pending transfers of nBTC to be processed once the checkpoint is fully
+    /// signed. These transfers are processed in lockstep with the checkpointing
+    /// process in order to keep nBTC balances in sync with the emergency
+    /// disbursal.
+    ///
+    /// These transfers can be initiated by a simple nBTC send or by a deposit.    
+    pub pending: Vec<(String, Coin)>,
+
     /// The batches of transactions in the checkpoint, to each be signed
     /// atomically, in order. The first batch contains the "final emergency
     /// disbursal transactions", the second batch contains the "intermediate
@@ -441,14 +446,6 @@ pub struct Checkpoint {
     pub sigset: SignatorySet,
 }
 
-/// Pending transfers of nBTC to be processed once the checkpoint is fully
-/// signed. These transfers are processed in lockstep with the checkpointing
-/// process in order to keep nBTC balances in sync with the emergency
-/// disbursal.
-///
-/// These transfers can be initiated by a simple nBTC send or by a deposit.    
-pub const PENDING: Map<&[u8], Coin> = Map::new("pending"); // check point id + receive address in bytes
-
 impl Checkpoint {
     /// Creates a new checkpoint with the given signatory set.
     ///
@@ -464,6 +461,7 @@ impl Checkpoint {
             deposits_enabled: true,
             sigset,
             fees_collected: 0,
+            pending: vec![],
             batches: vec![],
         };
 
@@ -907,17 +905,6 @@ pub struct Config {
 }
 
 impl Config {
-    fn regtest() -> Self {
-        Self {
-            min_checkpoint_interval: 15,
-            emergency_disbursal_lock_time_interval: 60,
-            emergency_disbursal_max_tx_size: 11,
-            user_fee_factor: 20_000,
-            max_age: 60 * 60 * 24 * 7 * 3,
-            ..Config::bitcoin()
-        }
-    }
-
     fn bitcoin() -> Self {
         Self {
             min_checkpoint_interval: 60 * 5,
@@ -963,6 +950,7 @@ impl Default for Config {
 /// (`confirmed_index`) to track which of these completed checkpoints have been
 /// confirmed in a Bitcoin block.
 #[cw_serde]
+#[derive(Default)]
 pub struct CheckpointQueue {
     /// The index of the checkpoint currently being built.
     pub index: u32,
@@ -978,31 +966,24 @@ pub struct CheckpointQueue {
 
     /// Configuration parameters used in processing checkpoints.
     pub config: Config,
-}
 
-/// The checkpoints in the queue, in order from oldest to newest. The last
-/// checkpoint is the checkpoint currently being built, and has the index
-/// contained in the `index` field.
-pub const CHECKPOINT_QUEUE: Deque<Checkpoint> = Deque::new("checkpoint");
+    /// The checkpoints in the queue, in order from oldest to newest. The last
+    /// checkpoint is the checkpoint currently being built, and has the index
+    /// contained in the `index` field.
+    pub queue: String,
+}
 
 /// A wrapper around  an immutable reference to a `Checkpoint` which adds type
 /// information guaranteeing that the checkpoint is in the `Complete` state.
 #[derive(Deref)]
-pub struct CompletedCheckpoint<'a>(Ref<'a, Checkpoint>);
-
-/// A wrapper around an immutable reference to a `Checkpoint` which adds type
-/// information guaranteeing that the checkpoint is in the `Signing` state.
-#[derive(Deref, Debug)]
-pub struct SigningCheckpoint<'a>(Ref<'a, Checkpoint>);
+pub struct CompletedCheckpoint(Box<Checkpoint>);
 
 /// A wrapper around a mutable reference to a `Checkpoint` which adds type
 /// information guaranteeing that the checkpoint is in the `Complete` state.
 #[derive(Deref, DerefMut)]
-pub struct SigningCheckpointMut(u64);
+pub struct SigningCheckpoint(Box<Checkpoint>);
 
-pub const SIGNING_CHECKPOINT: Map<u64, Checkpoint> = Map::new("signing_checkpoint");
-
-impl SigningCheckpointMut {
+impl SigningCheckpoint {
     /// Adds a batch of signatures to the checkpoint for the signatory with the
     /// given extended public key (`xpub`).
     ///
@@ -1010,38 +991,27 @@ impl SigningCheckpointMut {
     /// checkpoint transaction, and must be provided for all inputs in which the
     /// signatory is present in the signatory set.
     pub fn sign(
-        &self,
-        store: &mut dyn Storage,
+        &mut self,
         xpub: Xpub,
         sigs: Vec<Signature>,
         btc_height: u32,
     ) -> ContractResult<()> {
-        let mut checkpoint = SIGNING_CHECKPOINT.load(store, self.0)?;
-        checkpoint.sign(&xpub, sigs, btc_height)?;
-        SIGNING_CHECKPOINT.save(store, self.0, &checkpoint)?;
+        self.0.sign(&xpub, sigs, btc_height)?;
         Ok(())
     }
 
     /// Changes the status of the checkpoint to `Complete`.
-    pub fn advance(&self, store: &mut dyn Storage) -> ContractResult<()> {
-        let mut checkpoint = SIGNING_CHECKPOINT.load(store, self.0)?;
-
-        checkpoint.status = CheckpointStatus::Complete;
-        SIGNING_CHECKPOINT.save(store, self.0, &checkpoint)?;
+    pub fn advance(&mut self) -> ContractResult<()> {
+        self.status = CheckpointStatus::Complete;
 
         Ok(())
     }
 }
 
-/// A wrapper around an immutable reference to a `Checkpoint` which adds type
-/// information guaranteeing that the checkpoint is in the `Building` state.
-#[derive(Deref)]
-pub struct BuildingCheckpoint<'a>(Ref<'a, Checkpoint>);
-
 /// A wrapper around a mutable reference to a `Checkpoint` which adds type
 /// information guaranteeing that the checkpoint is in the `Building` state.
 #[derive(Deref, DerefMut)]
-pub struct BuildingCheckpointMut(u64);
+pub struct BuildingCheckpoint(Box<Checkpoint>);
 
 /// The data returned by the `advance()` method of `BuildingCheckpointMut`.
 type BuildingAdvanceRes = (
@@ -1052,23 +1022,21 @@ type BuildingAdvanceRes = (
     Vec<Output>,       // excess outputs
 );
 
-impl BuildingCheckpointMut {
+impl BuildingCheckpoint {
     /// Adds an output to the intermediate emergency disbursal transaction of
     /// the checkpoint, to be spent by the given final emergency disbursal
     /// transaction. The corresponding input is also added to the final
     /// emergency disbursal transaction.
     fn link_intermediate_tx(
         &mut self,
-        store: &mut dyn Storage,
         tx: &mut BitcoinTx,
         threshold: (u64, u64),
     ) -> ContractResult<()> {
-        let mut checkpoint = SIGNING_CHECKPOINT.load(store, self.0)?;
-        let sigset = checkpoint.sigset.clone();
+        let sigset = self.sigset.clone();
         let output_script = sigset.output_script(&[0u8], threshold)?;
         let tx_value = tx.value()?;
 
-        let intermediate_tx_batch = checkpoint
+        let intermediate_tx_batch = self
             .batches
             .get_mut(BatchType::IntermediateTx as usize)
             .unwrap();
@@ -1087,8 +1055,6 @@ impl BuildingCheckpointMut {
 
         tx.input.push(final_tx_input);
 
-        SIGNING_CHECKPOINT.save(store, self.0, &checkpoint)?;
-
         Ok(())
     }
 
@@ -1104,19 +1070,14 @@ impl BuildingCheckpointMut {
     /// non-existent output. for simplicity the unconnected final transaction is
     /// left in the state (it can be skipped by relayers when broadcasting the
     /// remaining valid emergency disbursal transactions).
-    fn deduct_emergency_disbursal_fees(
-        &mut self,
-        store: &mut dyn Storage,
-        fee_rate: u64,
-    ) -> ContractResult<()> {
+    fn deduct_emergency_disbursal_fees(&mut self, fee_rate: u64) -> ContractResult<()> {
         // TODO: Unit tests
-        let mut checkpoint = SIGNING_CHECKPOINT.load(store, self.0)?;
         // Deduct fees from intermediate emergency disbursal transaction.
         // Let-binds the amount deducted so we can ensure to deduct the same
         // amount from the final emergency disbursal transactions since the
         // outputs they spend are now worth less than before.
         let intermediate_tx_fee = {
-            let intermediate_tx_batch = checkpoint
+            let intermediate_tx_batch = self
                 .batches
                 .get_mut(BatchType::IntermediateTx as usize)
                 .unwrap();
@@ -1126,7 +1087,7 @@ impl BuildingCheckpointMut {
             fee
         };
 
-        let intermediate_tx_batch = checkpoint
+        let intermediate_tx_batch = self
             .batches
             .get(BatchType::IntermediateTx as usize)
             .unwrap();
@@ -1136,7 +1097,6 @@ impl BuildingCheckpointMut {
 
         if intermediate_tx_len == 0 {
             println!("Generated empty emergency disbursal");
-            SIGNING_CHECKPOINT.save(store, self.0, &checkpoint)?;
             return Ok(());
         }
 
@@ -1153,10 +1113,7 @@ impl BuildingCheckpointMut {
 
         // Deduct fees from final emergency disbursal transactions. Only retain
         // transactions which have enough value to pay the fee.
-        let disbursal_batch = checkpoint
-            .batches
-            .get_mut(BatchType::Disbursal as usize)
-            .unwrap();
+        let disbursal_batch = self.batches.get_mut(BatchType::Disbursal as usize).unwrap();
         disbursal_batch.batch = disbursal_batch
             .batch
             .clone()
@@ -1204,178 +1161,315 @@ impl BuildingCheckpointMut {
                 None
             })
             .collect();
-        SIGNING_CHECKPOINT.save(store, self.0, &checkpoint)?;
         Ok(())
     }
 
-    // /// Generates the emergency disbursal transactions for the checkpoint,
-    // /// populating the first and second transaction batches in the checkpoint.
-    // ///
-    // /// The emergency disbursal transactions are generated from a list of
-    // /// outputs representing the holders of nBTC: one for every nBTC account
-    // /// which has an associated recovery script, one for every pending transfer
-    // /// in the checkpoint, and one for every output passed in by the consumer
-    // /// via the `external_outputs` iterator.
-    // #[allow(clippy::too_many_arguments)]
-    // fn generate_emergency_disbursal_txs(
-    //     &mut self,
-    //     nbtc_accounts: &Accounts<Nbtc>,
-    //     recovery_scripts: &Map<Addr, Adapter<bitcoin::Script>>,
-    //     reserve_outpoint: bitcoin::OutPoint,
-    //     external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
-    //     fee_rate: u64,
-    //     reserve_value: u64,
-    //     config: &Config,
-    // ) -> ContractResult<()> {
-    //     // TODO: Use tree structure instead of single-intermediate, many-final,
-    //     // since the intermediate tx may grow too large
+    /// Generates the emergency disbursal transactions for the checkpoint,
+    /// populating the first and second transaction batches in the checkpoint.
+    ///
+    /// The emergency disbursal transactions are generated from a list of
+    /// outputs representing the holders of nBTC: one for every nBTC account
+    /// which has an associated recovery script, one for every pending transfer
+    /// in the checkpoint, and one for every output passed in by the consumer
+    /// via the `external_outputs` iterator.
+    #[allow(clippy::too_many_arguments)]
+    fn generate_emergency_disbursal_txs(
+        &mut self,
+        env: Env,
+        store: &mut dyn Storage,
+        nbtc_accounts: &Accounts,
+        recovery_scripts: &Map<String, Adapter<bitcoin::Script>>,
+        reserve_outpoint: bitcoin::OutPoint,
+        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
+        fee_rate: u64,
+        reserve_value: u64,
+        config: &Config,
+    ) -> ContractResult<()> {
+        // TODO: Use tree structure instead of single-intermediate, many-final,
+        // since the intermediate tx may grow too large
+        let intermediate_tx_batch = self
+            .batches
+            .get_mut(BatchType::IntermediateTx as usize)
+            .unwrap();
+        if intermediate_tx_batch.is_empty() {
+            return Ok(());
+        }
 
-    //     #[cfg(not(feature = "full"))]
-    //     unimplemented!();
+        let sigset = self.sigset.clone();
 
-    //     // Deduct Bitcoin miner fees from the intermediate tx and all final txs.
-    //     self.deduct_emergency_disbursal_fees(fee_rate)?;
+        let lock_time =
+            env.block.time.seconds() as u32 + config.emergency_disbursal_lock_time_interval;
 
-    //     // Populate the sighashes to be signed for each final tx's input.
-    //     let mut disbursal_batch = BATCHES.get_mut(BatchType::Disbursal as u64)?.unwrap();
-    //     for i in 0..disbursal_batch.len() {
-    //         let mut tx = disbursal_batch.get_mut(i)?.unwrap();
-    //         for j in 0..tx.input.len() {
-    //             tx.populate_input_sig_message(j.try_into()?)?;
-    //         }
-    //     }
+        let mut outputs = Vec::new();
 
-    //     // Populate the sighashes to be signed for the intermediate tx's input.
-    //     let mut intermediate_tx_batch = self
-    //         .batches
-    //         .get_mut(BatchType::IntermediateTx as u64)?
-    //         .unwrap();
-    //     let mut intermediate_tx = intermediate_tx_batch.get_mut(0)?.unwrap();
-    //     intermediate_tx.populate_input_sig_message(0)?;
+        // Create an output for every nBTC account with an associated
+        // recovery script.
+        for script in recovery_scripts
+            .range(store, None, None, Order::Ascending)
+            .into_iter()
+        {
+            let (address, dest_script) = script?;
+            let balance = nbtc_accounts.balance(address).unwrap();
+            let tx_out = bitcoin::TxOut {
+                value: (balance.amount.u128() / 1_000_000u128) as u64,
+                script_pubkey: dest_script.clone().into_inner(),
+            };
 
-    //     Ok(())
-    // }
+            outputs.push(Ok(tx_out))
+        }
 
-    // /// Advances the checkpoint to the `Signing` state.
-    // ///
-    // /// This will generate the emergency disbursal transactions representing the
-    // /// ownership of nBTC at this point in time. It will also prepare all inputs
-    // /// to be signed, across the three transaction batches.
-    // ///
-    // /// This step freezes the checkpoint, and no further changes can be made to
-    // /// it other than adding signatures. This means at this point all
-    // /// transactions contained within have a known transaction id which will not
-    // /// change.
-    // #[allow(unused_variables)]
-    // pub fn advance(
-    //     mut self,
-    //     nbtc_accounts: &Accounts<Nbtc>,
-    //     recovery_scripts: &Map<Addr, Adapter<bitcoin::Script>>,
-    //     external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
-    //     timestamping_commitment: Vec<u8>,
-    //     cp_fees: u64,
-    //     config: &Config,
-    // ) -> ContractResult<BuildingAdvanceRes> {
-    //     self.0.status = CheckpointStatus::Signing;
+        // Create an output for every pending nBTC transfer in the checkpoint.
+        // TODO: combine pending transfer outputs into other outputs by adding to amount
+        let pending_outputs: Vec<_> = self
+            .pending
+            .iter()
+            .filter_map(|(dest, coin)| {
+                let script_pubkey =
+                    match Dest::to_output_script(store, dest.to_string(), recovery_scripts) {
+                        Err(err) => return Some(Err(err.into())),
+                        Ok(maybe_script) => maybe_script,
+                    }?;
+                Some(Ok::<_, ContractError>(TxOut {
+                    value: (coin.amount.u128() / 1_000_000u128) as u64,
+                    script_pubkey,
+                }))
+            })
+            .collect();
 
-    //     let outs = self.additional_outputs(config, &timestamping_commitment)?;
-    //     let mut checkpoint_batch = BATCHES.get_mut(BatchType::Checkpoint as u64)?.unwrap();
-    //     let mut checkpoint_tx = checkpoint_batch.get_mut(0)?.unwrap();
-    //     for out in outs.iter().rev() {
-    //         checkpoint_tx.output.push_front(Adapter::new(out.clone()))?;
-    //     }
+        // Iterate through outputs and batch them into final txs, adding
+        // outputs to the intermediate tx and linking inputs to them as we
+        // go.
+        let mut final_txs = vec![BitcoinTx::with_lock_time(lock_time)];
+        for output in outputs
+            .into_iter()
+            .chain(pending_outputs.into_iter())
+            .chain(external_outputs)
+        {
+            let output = output?;
 
-    //     // Remove excess inputs and outputs from the checkpoint tx, to be pushed
-    //     // onto the suceeding checkpoint while in its `Building` state.
-    //     let mut excess_inputs = vec![];
-    //     while checkpoint_tx.input.len() > config.max_inputs {
-    //         let removed_input = checkpoint_tx.input.pop_back()?.unwrap();
-    //         excess_inputs.push(removed_input);
-    //     }
-    //     let mut excess_outputs = vec![];
-    //     while checkpoint_tx.output.len() > config.max_outputs {
-    //         let removed_output = checkpoint_tx.output.pop_back()?.unwrap();
-    //         excess_outputs.push(removed_output);
-    //     }
+            // Skip outputs under the configured minimum amount.
+            if output.value < config.emergency_disbursal_min_tx_amt {
+                continue;
+            }
 
-    //     // Sum the total input and output amounts.
-    //     // TODO: Input/Output sum functions
-    //     let mut in_amount = 0;
-    //     for i in 0..checkpoint_tx.input.len() {
-    //         let input = checkpoint_tx.input.get(i)?.unwrap();
-    //         in_amount += input.amount;
-    //     }
-    //     let mut out_amount = 0;
-    //     for i in 0..checkpoint_tx.output.len() {
-    //         let output = checkpoint_tx.output.get(i)?.unwrap();
-    //         out_amount += output.value;
-    //     }
+            // If the last final tx is too large, create a new, empty one
+            // and add our output there instead.
+            // TODO: don't pop and repush, just get a mutable reference
+            let mut curr_tx = final_txs.pop().unwrap();
+            if curr_tx.vsize()? >= config.emergency_disbursal_max_tx_size {
+                self.link_intermediate_tx(&mut curr_tx, config.sigset_threshold)?;
+                final_txs.push(curr_tx);
+                curr_tx = BitcoinTx::with_lock_time(lock_time);
+            }
 
-    //     // Deduct the outgoing amount and calculated fee amount from the reserve
-    //     // input amount, to set the resulting reserve output value.
-    //     let reserve_value = in_amount.checked_sub(out_amount + cp_fees).ok_or_else(|| {
-    //         StdError::generic_err("Insufficient reserve value to cover miner fees")
-    //     })?;
-    //     let mut reserve_out = checkpoint_tx.output.get_mut(0)?.unwrap();
-    //     reserve_out.value = reserve_value;
+            // Add output to final tx.
+            curr_tx.output.push(Adapter::new(output));
 
-    //     // Prepare the checkpoint tx's inputs to be signed by calculating their
-    //     // sighashes.
-    //     let bitcoin_tx = checkpoint_tx.to_bitcoin_tx()?;
-    //     let mut sc = bitcoin::util::sighash::SighashCache::new(&bitcoin_tx);
-    //     for i in 0..checkpoint_tx.input.len() {
-    //         let mut input = checkpoint_tx.input.get_mut(i)?.unwrap();
-    //         let sighash = sc.segwit_signature_hash(
-    //             i as usize,
-    //             &input.redeem_script,
-    //             input.amount,
-    //             EcdsaSighashType::All,
-    //         )?;
-    //         input.signatures.set_message(sighash.into_inner());
-    //     }
+            final_txs.push(curr_tx);
+        }
 
-    //     // Generate the emergency disbursal transactions, spending from the
-    //     // reserve output.
-    //     let reserve_outpoint = bitcoin::OutPoint {
-    //         txid: checkpoint_tx.txid()?,
-    //         vout: 0,
-    //     };
-    //     self.generate_emergency_disbursal_txs(
-    //         nbtc_accounts,
-    //         recovery_scripts,
-    //         reserve_outpoint,
-    //         external_outputs,
-    //         self.fee_rate,
-    //         reserve_value,
-    //         config,
-    //     )?;
+        // We are done adding outputs, so link the last final tx to the
+        // intermediate tx.
+        let mut last_tx = final_txs.pop().unwrap();
+        self.link_intermediate_tx(&mut last_tx, config.sigset_threshold)?;
+        final_txs.push(last_tx);
 
-    //     Ok((
-    //         reserve_outpoint,
-    //         reserve_value,
-    //         cp_fees,
-    //         excess_inputs,
-    //         excess_outputs,
-    //     ))
-    // }
+        // Add the reserve output as an input to the intermediate tx, and
+        // set its locktime to the desired value.
+        let tx_in = Input::new(
+            reserve_outpoint,
+            &sigset,
+            &[0u8],
+            reserve_value,
+            config.sigset_threshold,
+        )?;
+        let output_script = self.sigset.output_script(&[0u8], config.sigset_threshold)?;
+        let intermediate_tx_batch = self
+            .batches
+            .get_mut(BatchType::IntermediateTx as usize)
+            .unwrap();
+        let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
+        intermediate_tx.lock_time = lock_time;
+        intermediate_tx.input.push(tx_in);
 
-    // /// Insert a transfer to the pending transfer queue.
-    // ///
-    // /// Transfers will be processed once the containing checkpoint is finished
-    // /// being signed, but will be represented in this checkpoint's emergency
-    // /// disbursal before they are processed.
-    // pub fn insert_pending(&mut self, dest: Dest, coins: Coin<Nbtc>) -> ContractResult<()> {
-    //     let mut amount = self
-    //         .pending
-    //         .remove(dest.clone())?
-    //         .map_or(0.into(), |c| c.amount);
-    //     amount = (amount + coins.amount).result()?;
-    //     self.pending.insert(dest, Coin::mint(amount))?;
-    //     Ok(())
-    // }
+        // For any excess value not accounted for by emergency disbursal
+        // outputs, add an output to the intermediate tx which pays the
+        // excess back to the signatory set. The signatory set will need to
+        // coordinate out-of-band to figure out how to deal with these
+        // unaccounted-for funds to return them to the rightful nBTC
+        // holders.
+        let intermediate_tx_out_value = intermediate_tx.value()?;
+        let excess_value = reserve_value - intermediate_tx_out_value;
+        let excess_tx_out = bitcoin::TxOut {
+            value: excess_value,
+            script_pubkey: output_script,
+        };
+        intermediate_tx.output.push(Adapter::new(excess_tx_out));
+
+        // Push the newly created final txs into the checkpoint batch to
+        // save them in the state.
+        let disbursal_batch = self.batches.get_mut(BatchType::Disbursal as usize).unwrap();
+        for tx in final_txs {
+            disbursal_batch.push(tx);
+        }
+
+        // Deduct Bitcoin miner fees from the intermediate tx and all final txs.
+        self.deduct_emergency_disbursal_fees(fee_rate)?;
+
+        // Populate the sighashes to be signed for each final tx's input.
+        let disbursal_batch = self.batches.get_mut(BatchType::Disbursal as usize).unwrap();
+        for i in 0..disbursal_batch.len() {
+            let tx = disbursal_batch.get_mut(i).unwrap();
+            for j in 0..tx.input.len() {
+                tx.populate_input_sig_message(j)?;
+            }
+        }
+
+        // Populate the sighashes to be signed for the intermediate tx's input.
+        let intermediate_tx_batch = self
+            .batches
+            .get_mut(BatchType::IntermediateTx as usize)
+            .unwrap();
+        let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
+        intermediate_tx.populate_input_sig_message(0)?;
+
+        Ok(())
+    }
+
+    /// Advances the checkpoint to the `Signing` state.
+    ///
+    /// This will generate the emergency disbursal transactions representing the
+    /// ownership of nBTC at this point in time. It will also prepare all inputs
+    /// to be signed, across the three transaction batches.
+    ///
+    /// This step freezes the checkpoint, and no further changes can be made to
+    /// it other than adding signatures. This means at this point all
+    /// transactions contained within have a known transaction id which will not
+    /// change.
+    #[allow(unused_variables)]
+    pub fn advance(
+        mut self,
+        env: Env,
+        store: &mut dyn Storage,
+        key: u64,
+        nbtc_accounts: &Accounts,
+        recovery_scripts: &Map<String, Adapter<bitcoin::Script>>,
+        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
+        timestamping_commitment: Vec<u8>,
+        cp_fees: u64,
+        config: &Config,
+    ) -> ContractResult<BuildingAdvanceRes> {
+        self.0.status = CheckpointStatus::Signing;
+
+        let outs = self.additional_outputs(config, &timestamping_commitment)?;
+        let checkpoint_batch = self
+            .batches
+            .get_mut(BatchType::Checkpoint as usize)
+            .unwrap();
+        let checkpoint_tx = checkpoint_batch.get_mut(0).unwrap();
+        for out in outs.iter().rev() {
+            checkpoint_tx.output.insert(0, Adapter::new(out.clone()));
+        }
+
+        // Remove excess inputs and outputs from the checkpoint tx, to be pushed
+        // onto the suceeding checkpoint while in its `Building` state.
+        let mut excess_inputs = vec![];
+        while checkpoint_tx.input.len() as u64 > config.max_inputs {
+            let removed_input = checkpoint_tx.input.pop().unwrap();
+            excess_inputs.push(removed_input);
+        }
+        let mut excess_outputs = vec![];
+        while checkpoint_tx.output.len() as u64 > config.max_outputs {
+            let removed_output = checkpoint_tx.output.pop().unwrap();
+            excess_outputs.push(removed_output);
+        }
+
+        // Sum the total input and output amounts.
+        // TODO: Input/Output sum functions
+        let mut in_amount = 0;
+        for i in 0..checkpoint_tx.input.len() {
+            let input = checkpoint_tx.input.get(i).unwrap();
+            in_amount += input.amount;
+        }
+        let mut out_amount = 0;
+        for i in 0..checkpoint_tx.output.len() {
+            let output = checkpoint_tx.output.get(i).unwrap();
+            out_amount += output.value;
+        }
+
+        // Deduct the outgoing amount and calculated fee amount from the reserve
+        // input amount, to set the resulting reserve output value.
+        let reserve_value = in_amount.checked_sub(out_amount + cp_fees).ok_or_else(|| {
+            StdError::generic_err("Insufficient reserve value to cover miner fees")
+        })?;
+        let reserve_out = checkpoint_tx.output.get_mut(0).unwrap();
+        reserve_out.value = reserve_value;
+
+        // Prepare the checkpoint tx's inputs to be signed by calculating their
+        // sighashes.
+        let bitcoin_tx = checkpoint_tx.to_bitcoin_tx()?;
+        let mut sc = bitcoin::util::sighash::SighashCache::new(&bitcoin_tx);
+        for i in 0..checkpoint_tx.input.len() {
+            let input = checkpoint_tx.input.get_mut(i).unwrap();
+            let sighash = sc.segwit_signature_hash(
+                i as usize,
+                &input.redeem_script,
+                input.amount,
+                EcdsaSighashType::All,
+            )?;
+            input.signatures.set_message(sighash.into_inner());
+        }
+
+        // Generate the emergency disbursal transactions, spending from the
+        // reserve output.
+        let reserve_outpoint = bitcoin::OutPoint {
+            txid: checkpoint_tx.txid()?,
+            vout: 0,
+        };
+        self.generate_emergency_disbursal_txs(
+            env,
+            store,
+            nbtc_accounts,
+            recovery_scripts,
+            reserve_outpoint,
+            external_outputs,
+            self.fee_rate,
+            reserve_value,
+            config,
+        )?;
+
+        Ok((
+            reserve_outpoint,
+            reserve_value,
+            cp_fees,
+            excess_inputs,
+            excess_outputs,
+        ))
+    }
+
+    /// Insert a transfer to the pending transfer queue.
+    ///
+    /// Transfers will be processed once the containing checkpoint is finished
+    /// being signed, but will be represented in this checkpoint's emergency
+    /// disbursal before they are processed.
+    pub fn insert_pending(&mut self, dest: Dest, coin: Coin) -> ContractResult<()> {
+        let dest_key = dest.to_receiver_addr();
+        match self.pending.iter_mut().find(|item| item.0 == dest_key) {
+            Some((_, existed_coin)) => {
+                existed_coin.amount += coin.amount;
+            }
+            None => self.pending.push((dest_key, coin)),
+        };
+
+        Ok(())
+    }
 }
 
 impl CheckpointQueue {
+    pub fn queue(&self) -> Deque<Checkpoint> {
+        Deque::new(&self.queue)
+    }
+
     /// Set the queue's configuration parameters.
     pub fn configure(&mut self, config: Config) {
         self.config = config;
@@ -1386,450 +1480,421 @@ impl CheckpointQueue {
         self.config.clone()
     }
 
-    //     /// Removes all checkpoints from the queue and resets the index to zero.
-    //     pub fn reset(&mut self) -> ContractResult<()> {
-    //         self.index = 0;
-    //         super::clear_deque(&mut self.queue)?;
-
-    //         Ok(())
-    //     }
-
-    //     /// Gets a reference to the checkpoint at the given index.
-    //     ///
-    //     /// If the index is out of bounds or was pruned, an error is returned.
-    //     pub fn get(&self, index: u32) -> ContractResult<Ref<'_, Checkpoint>> {
-    //         let index = self.get_deque_index(index)?;
-    //         Ok(self.queue.get(index as u64)?.unwrap())
-    //     }
-
-    //     /// Gets a mutable reference to the checkpoint at the given index.
-    //     ///
-    //     /// If the index is out of bounds or was pruned, an error is returned.
-    //     pub fn get_mut(&mut self, index: u32) -> ContractResult<ChildMut<'_, u64, Checkpoint>> {
-    //         let index = self.get_deque_index(index)?;
-    //         Ok(self.queue.get_mut(index as u64)?.unwrap())
-    //     }
-
-    //     /// Calculates the index within the deque based on the given checkpoint
-    //     /// index.
-    //     ///
-    //     /// This is necessary because the values can differ for queues which have
-    //     /// been pruned. For example, a queue may contain 5 checkpoints,
-    //     /// representing indexes 30 to 34. Checkpoint index 30 is at deque index 0,
-    //     /// checkpoint 34 is at deque index 4, and checkpoint index 29 is now
-    //     /// out-of-bounds.
-    //     fn get_deque_index(&self, index: u32) -> ContractResult<u32> {
-    //         let start = self.index + 1 - (self.queue.len() as u32);
-    //         if index > self.index || index < start {
-    //             Err(StdError::generic_err("Index out of bounds"))
-    //         } else {
-    //             Ok(index - start)
-    //         }
-    //     }
-
-    //     /// The number of checkpoints in the queue.
-    //     ///
-    //     /// This will likely be different from `index` since checkpoints can be
-    //     /// pruned. After receiving the first deposit, the network will always have
-    //     /// at least one checkpoint in the queue.
-    //     // TODO: remove this attribute, not sure why clippy is complaining when
-    //     // is_empty is defined
-    //     #[allow(clippy::len_without_is_empty)]
-    //     pub fn len(&self) -> ContractResult<u32> {
-    //         Ok(u32::try_from(self.queue.len())?)
-    //     }
-
-    //     /// Returns `true` if there are no checkpoints in the queue.
-    //     ///
-    //     /// This will only be `true` before the first deposit has been processed.
-    //     pub fn is_empty(&self) -> ContractResult<bool> {
-    //         Ok(self.len()? == 0)
-    //     }
-
-    //     /// The index of the last checkpoint in the queue (aka the `Building`
-    //     /// checkpoint).
-    //     pub fn index(&self) -> u32 {
-    //         self.index
-    //     }
-
-    //     /// All checkpoints in the queue, in order from oldest to newest.
-    //     ///
-    //     /// The return value is a vector of tuples, where the first element is the
-    //     /// checkpoint's index, and the second element is a reference to the
-    //     /// checkpoint.
-    //     pub fn all(&self) -> ContractResult<Vec<(u32, Ref<'_, Checkpoint>)>> {
-    //         // TODO: return iterator
-    //         // TODO: use Deque iterator
-
-    //         let mut out = Vec::with_capacity(self.queue.len() as usize);
-
-    //         for i in 0..self.queue.len() {
-    //             let checkpoint = self.queue.get(i)?.unwrap();
-    //             out.push((
-    //                 (self.index + 1 - (self.queue.len() as u32 - i as u32)),
-    //                 checkpoint,
-    //             ));
-    //         }
-
-    //         Ok(out)
-    //     }
-
-    // /// All checkpoints in the queue which are in the `Complete` state, in order
-    // /// from oldest to newest.
-    // pub fn completed(&self, limit: u32) -> ContractResult<Vec<CompletedCheckpoint<'_>>> {
-    //     // TODO: return iterator
-    //     // TODO: use Deque iterator
-
-    //     let mut out = vec![];
-
-    //     let length = self.len()?;
-    //     if length == 0 {
-    //         return Ok(out);
-    //     }
-
-    //     let skip = if self.signing()?.is_some() { 2 } else { 1 };
-    //     let end = self.index.saturating_sub(skip - 1);
-
-    //     let start = end - limit.min(length - skip);
-
-    //     for i in start..end {
-    //         let checkpoint = self.get(i)?;
-    //         out.push(CompletedCheckpoint(checkpoint));
-    //     }
-
-    //     Ok(out)
-    // }
-
-    // /// The index of the last completed checkpoint.
-    // pub fn last_completed_index(&self) -> ContractResult<u32> {
-    //     if self.signing()?.is_some() {
-    //         self.index.checked_sub(2)
-    //     } else {
-    //         self.index.checked_sub(1)
-    //     }
-    //     .ok_or_else(|| Error::Orga(StdError::generic_err("No completed checkpoints yet")))
-    // }
-
-    // pub fn first_index(&self) -> ContractResult<u32> {
-    //     Ok(self.index + 1 - self.len()?)
-    // }
-
-    // /// A reference to the last completed checkpoint.
-    // pub fn last_completed(&self) -> ContractResult<Ref<Checkpoint>> {
-    //     self.get(self.last_completed_index()?)
-    // }
-
-    // /// A mutable reference to the last completed checkpoint.
-    // pub fn last_completed_mut(&mut self) -> ContractResult<ChildMut<u64, Checkpoint>> {
-    //     self.get_mut(self.last_completed_index()?)
-    // }
-
-    // /// The last completed checkpoint, converted to a Bitcoin transaction.
-    // pub fn last_completed_tx(&self) -> ContractResult<Adapter<bitcoin::Transaction>> {
-    //     self.last_completed()?.checkpoint_tx()
-    // }
-
-    // /// All completed checkpoints, converted to Bitcoin transactions.
-    // pub fn completed_txs(&self, limit: u32) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
-    //     self.completed(limit)?
-    //         .into_iter()
-    //         .map(|c| c.checkpoint_tx())
-    //         .collect()
-    // }
-
-    // /// The emergency disbursal transactions for the last completed checkpoint.
-    // ///
-    // /// The first element of the returned vector is the intermediate
-    // /// transaction, and the remaining elements are the final transactions.
-    // pub fn emergency_disbursal_txs(&self) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
-    //     if let Some(completed) = self.completed(1)?.last() {
-    //         completed.emergency_disbursal_txs()
-    //     } else {
-    //         Ok(vec![])
-    //     }
-    // }
-
-    // /// The last complete builiding checkpoint transaction, which have the type BatchType::Checkpoint
-    // /// Here we have only one element in the vector, and I use vector because I don't want to throw
-    // /// any error if vec! is empty
-    // pub fn last_completed_checkpoint_tx(
-    //     &self,
-    // ) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
-    //     let mut txs = vec![];
-    //     if let Some(completed) = self.completed(1)?.last() {
-    //         txs.push(completed.checkpoint_tx()?);
-    //         Ok(txs)
-    //     } else {
-    //         Ok(vec![])
-    //     }
-    // }
-
-    // /// A reference to the checkpoint in the `Signing` state, if there is one.
-    // pub fn signing(&self) -> ContractResult<Option<SigningCheckpoint<'_>>> {
-    //     if self.queue.len() < 2 {
-    //         return Ok(None);
-    //     }
-
-    //     let second = self.get(self.index - 1)?;
-    //     if !matches!(second.status, CheckpointStatus::Signing) {
-    //         return Ok(None);
-    //     }
-
-    //     Ok(Some(SigningCheckpoint(second)))
-    // }
-
-    // /// A mutable reference to the checkpoint in the `Signing` state, if there
-    // /// is one.
-    // pub fn signing_mut(&mut self) -> ContractResult<Option<SigningCheckpointMut>> {
-    //     if self.queue.len() < 2 {
-    //         return Ok(None);
-    //     }
-
-    //     let second = self.get_mut(self.index - 1)?;
-    //     if !matches!(second.status, CheckpointStatus::Signing) {
-    //         return Ok(None);
-    //     }
-
-    //     Ok(Some(SigningCheckpointMut(second)))
-    // }
-
-    // /// A reference to the checkpoint in the `Building` state.
-    // ///
-    // /// This is the checkpoint which is currently being built, and is not yet
-    // /// being signed. Other than at the start of the network, before the first
-    // /// deposit has been received, there will always be a checkpoint in this
-    // /// state.
-    // pub fn building(&self) -> ContractResult<BuildingCheckpoint> {
-    //     let last = self.get(self.index)?;
-    //     Ok(BuildingCheckpoint(last))
-    // }
-
-    // /// A mutable reference to the checkpoint in the `Building` state.
-    // ///
-    // /// This is the checkpoint which is currently being built, and is not yet
-    // /// being signed. Other than at the start of the network, before the first
-    // /// deposit has been received, there will always be a checkpoint in this
-    // /// state.
-    // pub fn building_mut(&mut self) -> ContractResult<BuildingCheckpointMut> {
-    //     let last = self.get_mut(self.index)?;
-    //     Ok(BuildingCheckpointMut(last))
-    // }
-
-    // /// Prunes old checkpoints from the queue.
-    // pub fn prune(&mut self) -> ContractResult<()> {
-    //     let latest = self.building()?.create_time();
-
-    //     while let Some(oldest) = self.queue.front()? {
-    //         // TODO: move to min_checkpoints field in config
-    //         if self.queue.len() <= 10 {
-    //             break;
-    //         }
-
-    //         if latest - oldest.create_time() <= self.config.max_age {
-    //             break;
-    //         }
-
-    //         self.queue.pop_front()?;
-    //     }
-
-    //     Ok(())
-    // }
-
-    // pub fn calc_fee_checkpoint(
-    //     &self,
-    //     cp_index: u32,
-    //     timestamping_commitment: &[u8],
-    // ) -> ContractResult<u64> {
-    //     let cp = self.get(cp_index)?;
-    //     let additional_fees = self.fee_adjustment(cp.fee_rate, &self.config)?;
-    //     let base_fee = cp.base_fee(&self.config, timestamping_commitment)?;
-    //     let total_fee = base_fee + additional_fees;
-
-    //     Ok(total_fee)
-    // }
-
-    // /// The active signatory set, which is the signatory set for the `Building`
-    // /// checkpoint.
-    // pub fn active_sigset(&self) -> ContractResult<SignatorySet> {
-    //     Ok(self.building()?.sigset.clone())
-    // }
-
-    // /// Process a batch of signatures, applying them to the checkpoint with the
-    // /// given index.
-    // ///
-    // /// Note that signatures can be sumitted to checkpoints which are already
-    // /// complete, causing them to be over-signed (which does not affect their
-    // /// validity). This is useful for letting all signers submit, regardless of
-    // /// whether they are faster or slower than the other signers. This is
-    // /// useful, for example, in being able to check if a signer is offline.
-    // ///
-    // /// If the batch of signatures causes the checkpoint to be fully signed, it
-    // /// will be advanced to the `Complete` state.
-    // ///
-    // /// This method is exempt from paying transaction fees since the amount of
-    // /// signatures that can be submitted is capped and this type of transaction
-    // /// cannot be used to DoS the network.
-    // pub fn sign(
-    //     &mut self,
-    //     store: &mut dyn Storage,
-    //     xpub: Xpub,
-    //     sigs: Vec<Signature>,
-    //     index: u32,
-    //     btc_height: u32,
-    // ) -> ContractResult<()> {
-    //     super::exempt_from_fee()?;
-
-    //     let mut checkpoint = self.get_mut(index)?;
-    //     let status = checkpoint.status;
-    //     if matches!(status, CheckpointStatus::Building) {
-    //         return Err(StdError::generic_err("Checkpoint is still building"));
-    //     }
-
-    //     checkpoint.sign(xpub, sigs, btc_height)?;
-
-    //     if matches!(status, CheckpointStatus::Signing) && checkpoint.signed()? {
-    //         let checkpoint_tx = checkpoint.checkpoint_tx()?;
-    //         info!("Checkpoint signing complete {:?}", checkpoint_tx);
-    //         SigningCheckpointMut(index).advance(store)?;
-    //     }
-
-    //     Ok(())
-    // }
-
-    // /// The signatory set for the checkpoint with the given index.
-    // pub fn sigset(&self, index: u32) -> ContractResult<SignatorySet> {
-    //     Ok(self.get(index)?.sigset.clone())
-    // }
-
-    // /// Query building miner fee for checking with fee_collected
-    // pub fn query_building_miner_fee(
-    //     &self,
-    //     cp_index: u32,
-    //     timestamping_commitment: [u8; 32],
-    // ) -> ContractResult<u64> {
-    //     self.calc_fee_checkpoint(cp_index, &timestamping_commitment)
-    // }
-
-    // /// The number of completed checkpoints which have not yet been confirmed on
-    // /// the Bitcoin network.
-    // pub fn num_unconfirmed(&self) -> ContractResult<u32> {
-    //     let has_signing = self.signing()?.is_some();
-    //     let signing_offset = has_signing as u32;
-
-    //     let last_completed_index = self.index.checked_sub(1 + signing_offset);
-    //     let last_completed_index = match last_completed_index {
-    //         None => return Ok(0),
-    //         Some(index) => index,
-    //     };
-
-    //     let confirmed_index = match self.confirmed_index {
-    //         None => return Ok(self.len()? - 1 - signing_offset),
-    //         Some(index) => index,
-    //     };
-
-    //     Ok(last_completed_index - confirmed_index)
-    // }
-
-    // pub fn first_unconfirmed_index(&self) -> ContractResult<Option<u32>> {
-    //     let num_unconf = self.num_unconfirmed()?;
-    //     if num_unconf == 0 {
-    //         return Ok(None);
-    //     }
-
-    //     let has_signing = self.signing()?.is_some();
-    //     let signing_offset = has_signing as u32;
-
-    //     Ok(Some(self.index - num_unconf - signing_offset))
-    // }
-
-    // pub fn unconfirmed(&self) -> ContractResult<Vec<Ref<'_, Checkpoint>>> {
-    //     let first_unconf_index = self.first_unconfirmed_index()?;
-    //     if let Some(index) = first_unconf_index {
-    //         let mut out = vec![];
-    //         for i in index..=self.index {
-    //             let cp = self.get(i)?;
-    //             if !matches!(cp.status, CheckpointStatus::Complete) {
-    //                 break;
-    //             }
-    //             out.push(cp);
-    //         }
-    //         Ok(out)
-    //     } else {
-    //         Ok(vec![])
-    //     }
-    // }
-
-    // pub fn unhandled_confirmed(&self) -> ContractResult<Vec<u32>> {
-    //     if self.confirmed_index.is_none() {
-    //         return Ok(vec![]);
-    //     }
-
-    //     let mut out = vec![];
-    //     for i in self.first_unhandled_confirmed_cp_index..=self.confirmed_index.unwrap() {
-    //         let cp = self.get(i)?;
-    //         if !matches!(cp.status, CheckpointStatus::Complete) {
-    //             log::warn!("Existing confirmed checkpoint without 'complete' status.");
-    //             break;
-    //         }
-    //         out.push(i);
-    //     }
-    //     Ok(out)
-    // }
-
-    // pub fn unconfirmed_fees_paid(&self) -> ContractResult<u64> {
-    //     self.unconfirmed()?
-    //         .iter()
-    //         .map(|cp| cp.checkpoint_tx_miner_fees())
-    //         .try_fold(0, |fees, result: ContractResult<_>| {
-    //             let fee = result?;
-    //             Ok::<_, ContractError>(fees + fee)
-    //         })
-    // }
-
-    // pub fn unconfirmed_vbytes(&self, config: &Config) -> ContractResult<u64> {
-    //     self.unconfirmed()?
-    //         .iter()
-    //         .map(|cp| cp.est_vsize(config, &[0; 32])) // TODO: shouldn't need to pass fixed length commitment to est_vsize
-    //         .try_fold(0, |sum, result: ContractResult<_>| {
-    //             let vbytes = result?;
-    //             Ok::<_, ContractError>(sum + vbytes)
-    //         })
-    // }
-
-    // fn fee_adjustment(&self, fee_rate: u64, config: &Config) -> ContractResult<u64> {
-    //     let unconf_fees_paid = self.unconfirmed_fees_paid()?;
-    //     let unconf_vbytes = self.unconfirmed_vbytes(config)?;
-    //     Ok((unconf_vbytes * fee_rate).saturating_sub(unconf_fees_paid))
-    // }
-
-    // pub fn backfill(
-    //     &mut self,
-    //     first_index: u32,
-    //     redeem_scripts: impl Iterator<Item = Script>,
-    //     threshold_ratio: (u64, u64),
-    // ) -> ContractResult<()> {
-    //     let mut index = first_index + 1;
-
-    //     let create_time = self.queue.get(0)?.unwrap().create_time();
-
-    //     for script in redeem_scripts {
-    //         index -= 1;
-
-    //         if index >= self.first_index()? {
-    //             continue;
-    //         }
-
-    //         let (mut sigset, _) = SignatorySet::from_script(&script, threshold_ratio)?;
-    //         sigset.index = index;
-    //         sigset.create_time = create_time;
-    //         let mut cp = Checkpoint::new(sigset)?;
-    //         cp.status = CheckpointStatus::Complete;
-
-    //         self.queue.push_front(cp)?;
-    //     }
-
-    //     Ok(())
-    // }
+    /// Removes all checkpoints from the queue and resets the index to zero.
+    pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
+        self.index = 0;
+        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        while !checkpoints.is_empty(store)? {
+            checkpoints.pop_back(store)?;
+        }
+
+        Ok(())
+    }
+
+    /// Gets a reference to the checkpoint at the given index.
+    ///
+    /// If the index is out of bounds or was pruned, an error is returned.
+    pub fn get(&self, store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {
+        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let checkpoint = checkpoints.get(store, index)?.unwrap();
+        Ok(checkpoint)
+    }
+
+    /// The number of checkpoints in the queue.
+    ///
+    /// This will likely be different from `index` since checkpoints can be
+    /// pruned. After receiving the first deposit, the network will always have
+    /// at least one checkpoint in the queue.
+    // TODO: remove this attribute, not sure why clippy is complaining when
+    // is_empty is defined
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self, store: &dyn Storage) -> u32 {
+        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        checkpoints.len(store).unwrap_or(0)
+    }
+
+    /// Returns `true` if there are no checkpoints in the queue.
+    ///
+    /// This will only be `true` before the first deposit has been processed.
+    pub fn is_empty(&self, store: &dyn Storage) -> bool {
+        self.len(store) == 0
+    }
+
+    /// The index of the last checkpoint in the queue (aka the `Building`
+    /// checkpoint).
+    pub fn index(&self) -> u32 {
+        self.index
+    }
+
+    /// All checkpoints in the queue, in order from oldest to newest.
+    ///
+    /// The return value is a vector of tuples, where the first element is the
+    /// checkpoint's index, and the second element is a reference to the
+    /// checkpoint.
+    pub fn all(&self, store: &dyn Storage) -> ContractResult<Vec<(u32, Checkpoint)>> {
+        // TODO: return iterator
+        // TODO: use Deque iterator
+        let checkpoints = Deque::new(&self.queue);
+        let queue_len = self.len(store);
+        let mut out = Vec::with_capacity(queue_len as usize);
+
+        for i in 0..queue_len {
+            let checkpoint = checkpoints.get(store, i)?.unwrap();
+            out.push(((self.index + 1 - (queue_len - i as u32)), checkpoint));
+        }
+
+        Ok(out)
+    }
+
+    /// All checkpoints in the queue which are in the `Complete` state, in order
+    /// from oldest to newest.
+    pub fn completed(
+        &self,
+        store: &dyn Storage,
+        limit: u32,
+    ) -> ContractResult<Vec<CompletedCheckpoint>> {
+        // TODO: return iterator
+        // TODO: use Deque iterator
+
+        let mut out = vec![];
+
+        let length = self.len(store);
+        if length == 0 {
+            return Ok(out);
+        }
+
+        let skip = if self.signing(store)?.is_some() { 2 } else { 1 };
+        let end = self.index.saturating_sub(skip - 1);
+
+        let start = end - limit.min(length - skip);
+
+        for i in start..end {
+            let checkpoint = self.get(store, i)?;
+            out.push(CompletedCheckpoint(Box::new(checkpoint)));
+        }
+
+        Ok(out)
+    }
+
+    /// The index of the last completed checkpoint.
+    pub fn last_completed_index(&self, store: &dyn Storage) -> ContractResult<u32> {
+        if self.signing(store)?.is_some() {
+            self.index.checked_sub(2)
+        } else {
+            self.index.checked_sub(1)
+        }
+        .ok_or_else(|| StdError::generic_err("No completed checkpoints yet").into())
+    }
+
+    pub fn first_index(&self, store: &dyn Storage) -> ContractResult<u32> {
+        Ok(self.index + 1 - self.len(store))
+    }
+
+    /// A reference to the last completed checkpoint.
+    pub fn last_completed(&self, store: &dyn Storage) -> ContractResult<Checkpoint> {
+        let index = self.last_completed_index(store)?;
+        self.get(store, index)
+    }
+
+    /// The last completed checkpoint, converted to a Bitcoin transaction.
+    pub fn last_completed_tx(
+        &self,
+        store: &dyn Storage,
+    ) -> ContractResult<Adapter<bitcoin::Transaction>> {
+        self.last_completed(store)?.checkpoint_tx()
+    }
+
+    /// All completed checkpoints, converted to Bitcoin transactions.
+    pub fn completed_txs(
+        &self,
+        store: &dyn Storage,
+        limit: u32,
+    ) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
+        self.completed(store, limit)?
+            .into_iter()
+            .map(|c| c.checkpoint_tx())
+            .collect()
+    }
+
+    /// The emergency disbursal transactions for the last completed checkpoint.
+    ///
+    /// The first element of the returned vector is the intermediate
+    /// transaction, and the remaining elements are the final transactions.
+    pub fn emergency_disbursal_txs(
+        &self,
+        store: &dyn Storage,
+    ) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
+        if let Some(completed) = self.completed(store, 1)?.last() {
+            completed.emergency_disbursal_txs()
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// The last complete builiding checkpoint transaction, which have the type BatchType::Checkpoint
+    /// Here we have only one element in the vector, and I use vector because I don't want to throw
+    /// any error if vec! is empty
+    pub fn last_completed_checkpoint_tx(
+        &self,
+        store: &dyn Storage,
+    ) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
+        let mut txs = vec![];
+        if let Some(completed) = self.completed(store, 1)?.last() {
+            txs.push(completed.checkpoint_tx()?);
+            Ok(txs)
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// A reference to the checkpoint in the `Signing` state, if there is one.
+    pub fn signing(&self, store: &dyn Storage) -> ContractResult<Option<SigningCheckpoint>> {
+        if self.len(store) < 2 {
+            return Ok(None);
+        }
+
+        let second = self.get(store, self.index - 1)?;
+        if !matches!(second.status, CheckpointStatus::Signing) {
+            return Ok(None);
+        }
+
+        Ok(Some(SigningCheckpoint(Box::new(second))))
+    }
+
+    /// A reference to the checkpoint in the `Building` state.
+    ///
+    /// This is the checkpoint which is currently being built, and is not yet
+    /// being signed. Other than at the start of the network, before the first
+    /// deposit has been received, there will always be a checkpoint in this
+    /// state.
+    pub fn building(&self, store: &dyn Storage) -> ContractResult<BuildingCheckpoint> {
+        let last = self.get(store, self.index)?;
+        Ok(BuildingCheckpoint(Box::new(last)))
+    }
+
+    /// Prunes old checkpoints from the queue.
+    pub fn prune(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
+        let latest = self.building(store)?.create_time();
+        let mut queue_len = self.len(store);
+        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        while let Some(oldest) = checkpoints.front(store)? {
+            // TODO: move to min_checkpoints field in config
+            if queue_len <= 10 {
+                break;
+            }
+
+            if latest - oldest.create_time() <= self.config.max_age {
+                break;
+            }
+
+            checkpoints.pop_front(store)?;
+            queue_len -= 1;
+        }
+
+        Ok(())
+    }
+
+    pub fn calc_fee_checkpoint(
+        &self,
+        store: &dyn Storage,
+        cp_index: u32,
+        timestamping_commitment: &[u8],
+    ) -> ContractResult<u64> {
+        let cp = self.get(store, cp_index)?;
+        let additional_fees = self.fee_adjustment(store, cp.fee_rate, &self.config)?;
+        let base_fee = cp.base_fee(&self.config, timestamping_commitment)?;
+        let total_fee = base_fee + additional_fees;
+
+        Ok(total_fee)
+    }
+
+    /// The active signatory set, which is the signatory set for the `Building`
+    /// checkpoint.
+    pub fn active_sigset(&self, store: &dyn Storage) -> ContractResult<SignatorySet> {
+        Ok(self.building(store)?.sigset.clone())
+    }
+
+    /// Process a batch of signatures, applying them to the checkpoint with the
+    /// given index.
+    ///
+    /// Note that signatures can be sumitted to checkpoints which are already
+    /// complete, causing them to be over-signed (which does not affect their
+    /// validity). This is useful for letting all signers submit, regardless of
+    /// whether they are faster or slower than the other signers. This is
+    /// useful, for example, in being able to check if a signer is offline.
+    ///
+    /// If the batch of signatures causes the checkpoint to be fully signed, it
+    /// will be advanced to the `Complete` state.
+    ///
+    /// This method is exempt from paying transaction fees since the amount of
+    /// signatures that can be submitted is capped and this type of transaction
+    /// cannot be used to DoS the network.
+    pub fn sign(
+        &mut self,
+        store: &mut dyn Storage,
+        xpub: &Xpub,
+        sigs: Vec<Signature>,
+        index: u32,
+        btc_height: u32,
+    ) -> ContractResult<()> {
+        let mut checkpoint = self.get(store, index)?;
+        let status = checkpoint.status.clone();
+        if matches!(status, CheckpointStatus::Building) {
+            return Err(StdError::generic_err("Checkpoint is still building").into());
+        }
+
+        checkpoint.sign(xpub, sigs, btc_height)?;
+
+        if matches!(status, CheckpointStatus::Signing) && checkpoint.signed() {
+            let checkpoint_tx = checkpoint.checkpoint_tx()?;
+            println!("Checkpoint signing complete {:?}", checkpoint_tx);
+            SigningCheckpoint(Box::new(checkpoint)).advance()?;
+        }
+
+        Ok(())
+    }
+
+    /// The signatory set for the checkpoint with the given index.
+    pub fn sigset(&self, store: &dyn Storage, index: u32) -> ContractResult<SignatorySet> {
+        Ok(self.get(store, index)?.sigset.clone())
+    }
+
+    /// Query building miner fee for checking with fee_collected
+    pub fn query_building_miner_fee(
+        &self,
+        store: &dyn Storage,
+        cp_index: u32,
+        timestamping_commitment: [u8; 32],
+    ) -> ContractResult<u64> {
+        self.calc_fee_checkpoint(store, cp_index, &timestamping_commitment)
+    }
+
+    /// The number of completed checkpoints which have not yet been confirmed on
+    /// the Bitcoin network.
+    pub fn num_unconfirmed(&self, store: &dyn Storage) -> ContractResult<u32> {
+        let has_signing = self.signing(store)?.is_some();
+        let signing_offset = has_signing as u32;
+
+        let last_completed_index = self.index.checked_sub(1 + signing_offset);
+        let last_completed_index = match last_completed_index {
+            None => return Ok(0),
+            Some(index) => index,
+        };
+
+        let confirmed_index = match self.confirmed_index {
+            None => return Ok(self.len(store) - 1 - signing_offset),
+            Some(index) => index,
+        };
+
+        Ok(last_completed_index - confirmed_index)
+    }
+
+    pub fn first_unconfirmed_index(&self, store: &dyn Storage) -> ContractResult<Option<u32>> {
+        let num_unconf = self.num_unconfirmed(store)?;
+        if num_unconf == 0 {
+            return Ok(None);
+        }
+
+        let has_signing = self.signing(store)?.is_some();
+        let signing_offset = has_signing as u32;
+
+        Ok(Some(self.index - num_unconf - signing_offset))
+    }
+
+    pub fn unconfirmed(&self, store: &dyn Storage) -> ContractResult<Vec<Checkpoint>> {
+        let first_unconf_index = self.first_unconfirmed_index(store)?;
+        if let Some(index) = first_unconf_index {
+            let mut out = vec![];
+            for i in index..=self.index {
+                let cp = self.get(store, i)?;
+                if !matches!(cp.status, CheckpointStatus::Complete) {
+                    break;
+                }
+                out.push(cp);
+            }
+            Ok(out)
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    pub fn unhandled_confirmed(&self, store: &dyn Storage) -> ContractResult<Vec<u32>> {
+        if self.confirmed_index.is_none() {
+            return Ok(vec![]);
+        }
+
+        let mut out = vec![];
+        for i in self.first_unhandled_confirmed_cp_index..=self.confirmed_index.unwrap() {
+            let cp = self.get(store, i)?;
+            if !matches!(cp.status, CheckpointStatus::Complete) {
+                println!("Existing confirmed checkpoint without 'complete' status.");
+                break;
+            }
+            out.push(i);
+        }
+        Ok(out)
+    }
+
+    pub fn unconfirmed_fees_paid(&self, store: &dyn Storage) -> ContractResult<u64> {
+        self.unconfirmed(store)?
+            .iter()
+            .map(|cp| cp.checkpoint_tx_miner_fees())
+            .try_fold(0, |fees, result: ContractResult<_>| {
+                let fee = result?;
+                Ok::<_, ContractError>(fees + fee)
+            })
+    }
+
+    pub fn unconfirmed_vbytes(&self, store: &dyn Storage, config: &Config) -> ContractResult<u64> {
+        self.unconfirmed(store)?
+            .iter()
+            .map(|cp| cp.est_vsize(config, &[0; 32])) // TODO: shouldn't need to pass fixed length commitment to est_vsize
+            .try_fold(0, |sum, result: ContractResult<_>| {
+                let vbytes = result?;
+                Ok::<_, ContractError>(sum + vbytes)
+            })
+    }
+
+    fn fee_adjustment(
+        &self,
+        store: &dyn Storage,
+        fee_rate: u64,
+        config: &Config,
+    ) -> ContractResult<u64> {
+        let unconf_fees_paid = self.unconfirmed_fees_paid(store)?;
+        let unconf_vbytes = self.unconfirmed_vbytes(store, config)?;
+        Ok((unconf_vbytes * fee_rate).saturating_sub(unconf_fees_paid))
+    }
+
+    pub fn backfill(
+        &mut self,
+        store: &mut dyn Storage,
+        first_index: u32,
+        redeem_scripts: impl Iterator<Item = Script>,
+        threshold_ratio: (u64, u64),
+    ) -> ContractResult<()> {
+        let mut index = first_index + 1;
+        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let create_time = checkpoints.get(store, 0)?.unwrap().create_time();
+
+        for script in redeem_scripts {
+            index -= 1;
+
+            if index >= self.first_index(store)? {
+                continue;
+            }
+
+            let (mut sigset, _) = SignatorySet::from_script(&script, threshold_ratio)?;
+            sigset.index = index;
+            sigset.create_time = create_time;
+            let mut cp = Checkpoint::new(sigset)?;
+            cp.status = CheckpointStatus::Complete;
+
+            checkpoints.push_front(store, &cp)?;
+        }
+
+        Ok(())
+    }
 }
 
 /// Takes a previous fee rate and returns a new fee rate, adjusted up or down by
@@ -1850,8 +1915,6 @@ mod test {
     use cosmwasm_std::testing::mock_dependencies;
 
     use crate::{signatory::Signatory, threshold_sig::Pubkey};
-
-    use std::{cell::RefCell, rc::Rc};
 
     use super::*;
 
@@ -1898,136 +1961,183 @@ mod test {
         bitcoin_tx.deduct_fee(200).unwrap();
     }
 
-    // //TODO: More fee deduction tests
+    //TODO: More fee deduction tests
 
-    // fn create_queue_with_statuses(complete: u32, signing: bool) -> CheckpointQueue {
-    //     let mut queue = CheckpointQueue::default();
-    //     let mut push = |status| {
-    //         let mut cp = Checkpoint {
-    //             status,
-    //             fee_rate: DEFAULT_FEE_RATE,
-    //             signed_at_btc_height: None,
-    //             deposits_enabled: true,
-    //             sigset: SignatorySet::default(),
-    //             fees_collected: 0,
-    //         };
-    //         cp.status = status;
-    //         queue.queue.push_back(cp).unwrap();
-    //     };
+    fn create_queue_with_statuses(
+        queue: &str,
+        store: &mut dyn Storage,
+        complete: u32,
+        signing: bool,
+    ) -> CheckpointQueue {
+        let checkpoints: Deque<Checkpoint> = Deque::new(queue);
+        let mut checkpoint_queue = CheckpointQueue::default();
+        checkpoint_queue.queue = queue.to_string();
+        let mut push = |status| {
+            let cp = Checkpoint {
+                status,
+                fee_rate: DEFAULT_FEE_RATE,
+                signed_at_btc_height: None,
+                deposits_enabled: true,
+                sigset: SignatorySet::default(),
+                fees_collected: 0,
+                pending: vec![],
+                batches: vec![],
+            };
 
-    //     queue.index = complete;
+            checkpoints.push_back(store, &cp).unwrap();
+        };
 
-    //     for _ in 0..complete {
-    //         push(CheckpointStatus::Complete);
-    //     }
-    //     if signing {
-    //         push(CheckpointStatus::Signing);
-    //         queue.index += 1;
-    //     }
-    //     push(CheckpointStatus::Building);
+        checkpoint_queue.index = complete;
 
-    //     queue
-    // }
+        for _ in 0..complete {
+            push(CheckpointStatus::Complete);
+        }
+        if signing {
+            push(CheckpointStatus::Signing);
+            checkpoint_queue.index += 1;
+        }
+        push(CheckpointStatus::Building);
 
-    // #[test]
-    // fn completed_with_signing() {
-    //     let queue = create_queue_with_statuses(10, true);
-    //     let cp = queue.completed(1).unwrap();
-    //     assert_eq!(cp.len(), 1);
-    //     assert_eq!(cp[0].status, CheckpointStatus::Complete);
-    // }
+        checkpoint_queue
+    }
 
-    // #[test]
-    // fn completed_without_signing() {
-    //     let queue = create_queue_with_statuses(10, false);
-    //     let cp = queue.completed(1).unwrap();
-    //     assert_eq!(cp.len(), 1);
-    //     assert_eq!(cp[0].status, CheckpointStatus::Complete);
-    // }
+    #[test]
+    fn completed_with_signing() {
+        let mut deps = mock_dependencies();
+        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, true);
+        let cp = queue.completed(deps.as_mut().storage, 1).unwrap();
+        assert_eq!(cp.len(), 1);
+        assert_eq!(cp[0].status, CheckpointStatus::Complete);
+    }
 
-    // #[test]
-    // fn completed_no_complete() {
-    //     let queue = create_queue_with_statuses(0, false);
-    //     let cp = queue.completed(10).unwrap();
-    //     assert_eq!(cp.len(), 0);
-    // }
+    #[test]
+    fn completed_without_signing() {
+        let mut deps = mock_dependencies();
+        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, false);
+        let cp = queue.completed(deps.as_mut().storage, 1).unwrap();
+        assert_eq!(cp.len(), 1);
+        assert_eq!(cp[0].status, CheckpointStatus::Complete);
+    }
 
-    // #[test]
-    // fn completed_zero_limit() {
-    //     let queue = create_queue_with_statuses(10, false);
-    //     let cp = queue.completed(0).unwrap();
-    //     assert_eq!(cp.len(), 0);
-    // }
+    #[test]
+    fn completed_no_complete() {
+        let mut deps = mock_dependencies();
+        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 0, false);
+        let cp = queue.completed(deps.as_mut().storage, 10).unwrap();
+        assert_eq!(cp.len(), 0);
+    }
 
-    // #[test]
-    // fn completed_oversized_limit() {
-    //     let queue = create_queue_with_statuses(10, false);
-    //     let cp = queue.completed(100).unwrap();
-    //     assert_eq!(cp.len(), 10);
-    // }
+    #[test]
+    fn completed_zero_limit() {
+        let mut deps = mock_dependencies();
+        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, false);
+        let cp = queue.completed(deps.as_mut().storage, 0).unwrap();
+        assert_eq!(cp.len(), 0);
+    }
 
-    // #[test]
-    // fn completed_pruned() {
-    //     let mut queue = create_queue_with_statuses(10, false);
-    //     queue.index += 10;
-    //     let cp = queue.completed(2).unwrap();
-    //     assert_eq!(cp.len(), 2);
-    //     assert_eq!(cp[1].status, CheckpointStatus::Complete);
-    // }
+    #[test]
+    fn completed_oversized_limit() {
+        let mut deps = mock_dependencies();
+        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, false);
+        let cp = queue.completed(deps.as_mut().storage, 100).unwrap();
+        assert_eq!(cp.len(), 10);
+    }
 
-    // #[test]
-    // fn num_unconfirmed() {
-    //     let mut queue = create_queue_with_statuses(10, false);
-    //     queue.confirmed_index = Some(5);
-    //     assert_eq!(queue.num_unconfirmed().unwrap(), 4);
+    #[test]
+    fn completed_pruned() {
+        let mut deps = mock_dependencies();
+        let mut queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, false);
+        queue.index += 10;
+        let cp = queue.completed(deps.as_mut().storage, 2).unwrap();
+        assert_eq!(cp.len(), 2);
+        assert_eq!(cp[1].status, CheckpointStatus::Complete);
+    }
 
-    //     let mut queue = create_queue_with_statuses(10, true);
-    //     queue.confirmed_index = Some(5);
-    //     assert_eq!(queue.num_unconfirmed().unwrap(), 4);
+    #[test]
+    fn num_unconfirmed() {
+        let mut deps = mock_dependencies();
+        let mut queue = create_queue_with_statuses("checkpoint1", deps.as_mut().storage, 10, false);
+        queue.confirmed_index = Some(5);
+        assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
-    //     let mut queue = create_queue_with_statuses(0, false);
-    //     queue.confirmed_index = None;
-    //     assert_eq!(queue.num_unconfirmed().unwrap(), 0);
+        let mut queue = create_queue_with_statuses("checkpoint2", deps.as_mut().storage, 10, true);
+        queue.confirmed_index = Some(5);
+        assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
-    //     let mut queue = create_queue_with_statuses(0, true);
-    //     queue.confirmed_index = None;
-    //     assert_eq!(queue.num_unconfirmed().unwrap(), 0);
+        let mut queue = create_queue_with_statuses("checkpoint3", deps.as_mut().storage, 0, false);
+        queue.confirmed_index = None;
+        assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
 
-    //     let mut queue = create_queue_with_statuses(10, false);
-    //     queue.confirmed_index = None;
-    //     assert_eq!(queue.num_unconfirmed().unwrap(), 10);
+        let mut queue = create_queue_with_statuses("checkpoint4", deps.as_mut().storage, 0, true);
+        queue.confirmed_index = None;
+        assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
 
-    //     let mut queue = create_queue_with_statuses(10, true);
-    //     queue.confirmed_index = None;
-    //     assert_eq!(queue.num_unconfirmed().unwrap(), 10);
-    // }
+        let mut queue = create_queue_with_statuses("checkpoint5", deps.as_mut().storage, 10, false);
+        queue.confirmed_index = None;
+        assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 10);
 
-    // #[test]
-    // fn first_unconfirmed_index() {
-    //     let mut queue = create_queue_with_statuses(10, false);
-    //     queue.confirmed_index = Some(5);
-    //     assert_eq!(queue.first_unconfirmed_index().unwrap(), Some(6));
+        let mut queue = create_queue_with_statuses("checkpoint6", deps.as_mut().storage, 10, true);
+        queue.confirmed_index = None;
+        assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 10);
+    }
 
-    //     let mut queue = create_queue_with_statuses(10, true);
-    //     queue.confirmed_index = Some(5);
-    //     assert_eq!(queue.first_unconfirmed_index().unwrap(), Some(6));
+    #[test]
+    fn first_unconfirmed_index() {
+        let mut deps = mock_dependencies();
+        let mut queue = create_queue_with_statuses("checkpoint1", deps.as_mut().storage, 10, false);
+        queue.confirmed_index = Some(5);
+        assert_eq!(
+            queue
+                .first_unconfirmed_index(deps.as_ref().storage)
+                .unwrap(),
+            Some(6)
+        );
 
-    //     let mut queue = create_queue_with_statuses(0, false);
-    //     queue.confirmed_index = None;
-    //     assert_eq!(queue.first_unconfirmed_index().unwrap(), None);
+        let mut queue = create_queue_with_statuses("checkpoint2", deps.as_mut().storage, 10, true);
+        queue.confirmed_index = Some(5);
+        assert_eq!(
+            queue
+                .first_unconfirmed_index(deps.as_ref().storage)
+                .unwrap(),
+            Some(6)
+        );
 
-    //     let mut queue = create_queue_with_statuses(0, true);
-    //     queue.confirmed_index = None;
-    //     assert_eq!(queue.first_unconfirmed_index().unwrap(), None);
+        let mut queue = create_queue_with_statuses("checkpoint3", deps.as_mut().storage, 0, false);
+        queue.confirmed_index = None;
+        assert_eq!(
+            queue
+                .first_unconfirmed_index(deps.as_ref().storage)
+                .unwrap(),
+            None
+        );
 
-    //     let mut queue = create_queue_with_statuses(10, false);
-    //     queue.confirmed_index = None;
-    //     assert_eq!(queue.first_unconfirmed_index().unwrap(), Some(0));
+        let mut queue = create_queue_with_statuses("checkpoint4", deps.as_mut().storage, 0, true);
+        queue.confirmed_index = None;
+        assert_eq!(
+            queue
+                .first_unconfirmed_index(deps.as_ref().storage)
+                .unwrap(),
+            None
+        );
 
-    //     let mut queue = create_queue_with_statuses(10, true);
-    //     queue.confirmed_index = None;
-    //     assert_eq!(queue.first_unconfirmed_index().unwrap(), Some(0));
-    // }
+        let mut queue = create_queue_with_statuses("checkpoint5", deps.as_mut().storage, 10, false);
+        queue.confirmed_index = None;
+        assert_eq!(
+            queue
+                .first_unconfirmed_index(deps.as_ref().storage)
+                .unwrap(),
+            Some(0)
+        );
+
+        let mut queue = create_queue_with_statuses("checkpoint6", deps.as_mut().storage, 10, true);
+        queue.confirmed_index = None;
+        assert_eq!(
+            queue
+                .first_unconfirmed_index(deps.as_ref().storage)
+                .unwrap(),
+            Some(0)
+        );
+    }
 
     #[test]
     fn adjust_fee_rate() {
@@ -2064,95 +2174,105 @@ mod test {
         sigset
     }
 
-    // #[test]
-    // fn backfill_basic() {
-    //     let mut deps = mock_dependencies();
-    //     let mut queue = CheckpointQueue::default();
-    //     queue.index = 10;
-    //     queue
-    //         .queue
-    //         .push_back(Checkpoint::new(deps.as_mut().storage, sigset(7)).unwrap())
-    //         .unwrap();
-    //     queue
-    //         .queue
-    //         .push_back(Checkpoint::new(deps.as_mut().storage, sigset(8)).unwrap())
-    //         .unwrap();
-    //     queue
-    //         .queue
-    //         .push_back(Checkpoint::new(deps.as_mut().storage, sigset(9)).unwrap())
-    //         .unwrap();
-    //     queue
-    //         .queue
-    //         .push_back(Checkpoint::new(deps.as_mut().storage, sigset(10)).unwrap())
-    //         .unwrap();
+    #[test]
+    fn backfill_basic() {
+        let mut deps = mock_dependencies();
+        let mut queue = CheckpointQueue::default();
+        queue.queue = "checkpoint".to_string();
+        queue.index = 10;
+        queue
+            .queue()
+            .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(7)).unwrap())
+            .unwrap();
+        queue
+            .queue()
+            .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(8)).unwrap())
+            .unwrap();
+        queue
+            .queue()
+            .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(9)).unwrap())
+            .unwrap();
+        queue
+            .queue()
+            .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(10)).unwrap())
+            .unwrap();
 
-    //     let backfill_data = vec![
-    //         sigset(8).redeem_script(&[0], (2, 3)).unwrap(),
-    //         sigset(7).redeem_script(&[0], (2, 3)).unwrap(),
-    //         sigset(6).redeem_script(&[0], (2, 3)).unwrap(),
-    //         sigset(5).redeem_script(&[0], (2, 3)).unwrap(),
-    //         sigset(4).redeem_script(&[0], (2, 3)).unwrap(),
-    //         sigset(3).redeem_script(&[0], (2, 3)).unwrap(),
-    //     ];
-    //     queue
-    //         .backfill(8, backfill_data.into_iter(), (2, 3))
-    //         .unwrap();
+        let backfill_data = vec![
+            sigset(8).redeem_script(&[0], (2, 3)).unwrap(),
+            sigset(7).redeem_script(&[0], (2, 3)).unwrap(),
+            sigset(6).redeem_script(&[0], (2, 3)).unwrap(),
+            sigset(5).redeem_script(&[0], (2, 3)).unwrap(),
+            sigset(4).redeem_script(&[0], (2, 3)).unwrap(),
+            sigset(3).redeem_script(&[0], (2, 3)).unwrap(),
+        ];
+        queue
+            .backfill(deps.as_mut().storage, 8, backfill_data.into_iter(), (2, 3))
+            .unwrap();
 
-    //     assert_eq!(queue.len().unwrap(), 8);
-    //     assert_eq!(queue.index, 10);
-    //     assert_eq!(
-    //         queue
-    //             .get(3)
-    //             .unwrap()
-    //             .sigset
-    //             .redeem_script(&[0], (2, 3))
-    //             .unwrap(),
-    //         sigset(3).redeem_script(&[0], (2, 3)).unwrap(),
-    //     );
-    //     assert_eq!(
-    //         queue
-    //             .get(10)
-    //             .unwrap()
-    //             .sigset
-    //             .redeem_script(&[0], (2, 3))
-    //             .unwrap(),
-    //         sigset(10).redeem_script(&[0], (2, 3)).unwrap(),
-    //     );
-    // }
+        assert_eq!(queue.len(deps.as_ref().storage), 8);
+        assert_eq!(queue.index, 10);
+        assert_eq!(
+            queue
+                .queue()
+                .get(deps.as_ref().storage, 3)
+                .unwrap()
+                .unwrap()
+                .sigset
+                .redeem_script(&[0], (2, 3))
+                .unwrap(),
+            sigset(3).redeem_script(&[0], (2, 3)).unwrap(),
+        );
+        assert_eq!(
+            queue
+                .queue()
+                .get(deps.as_ref().storage, 10)
+                .unwrap()
+                .unwrap()
+                .sigset
+                .redeem_script(&[0], (2, 3))
+                .unwrap(),
+            sigset(10).redeem_script(&[0], (2, 3)).unwrap(),
+        );
+    }
 
-    // #[test]
-    // fn backfill_with_zeroth() {
-    //     let mut queue = CheckpointQueue::default();
-    //     queue.index = 1;
-    //     queue
-    //         .queue
-    //         .push_back(Checkpoint::new(sigset(1)).unwrap())
-    //         .unwrap();
+    #[test]
+    fn backfill_with_zeroth() {
+        let mut deps = mock_dependencies();
+        let mut queue = CheckpointQueue::default();
+        queue.index = 1;
+        queue
+            .queue()
+            .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(1)).unwrap())
+            .unwrap();
 
-    //     let backfill_data = vec![sigset(0).redeem_script(&[0], (2, 3)).unwrap()];
-    //     queue
-    //         .backfill(0, backfill_data.into_iter(), (2, 3))
-    //         .unwrap();
+        let backfill_data = vec![sigset(0).redeem_script(&[0], (2, 3)).unwrap()];
+        queue
+            .backfill(deps.as_mut().storage, 0, backfill_data.into_iter(), (2, 3))
+            .unwrap();
 
-    //     assert_eq!(queue.len().unwrap(), 2);
-    //     assert_eq!(queue.index, 1);
-    //     assert_eq!(
-    //         queue
-    //             .get(0)
-    //             .unwrap()
-    //             .sigset
-    //             .redeem_script(&[0], (2, 3))
-    //             .unwrap(),
-    //         sigset(0).redeem_script(&[0], (2, 3)).unwrap(),
-    //     );
-    //     assert_eq!(
-    //         queue
-    //             .get(1)
-    //             .unwrap()
-    //             .sigset
-    //             .redeem_script(&[0], (2, 3))
-    //             .unwrap(),
-    //         sigset(1).redeem_script(&[0], (2, 3)).unwrap(),
-    //     );
-    // }
+        assert_eq!(queue.len(deps.as_ref().storage), 2);
+        assert_eq!(queue.index, 1);
+        assert_eq!(
+            queue
+                .queue()
+                .get(deps.as_ref().storage, 0)
+                .unwrap()
+                .unwrap()
+                .sigset
+                .redeem_script(&[0], (2, 3))
+                .unwrap(),
+            sigset(0).redeem_script(&[0], (2, 3)).unwrap(),
+        );
+        assert_eq!(
+            queue
+                .queue()
+                .get(deps.as_ref().storage, 1)
+                .unwrap()
+                .unwrap()
+                .sigset
+                .redeem_script(&[0], (2, 3))
+                .unwrap(),
+            sigset(1).redeem_script(&[0], (2, 3)).unwrap(),
+        );
+    }
 }

@@ -21,8 +21,9 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::StdError;
 use cosmwasm_std::StdResult;
 use ed::Encode;
+use serde::Deserialize;
+use serde::Serialize;
 
-use super::msg::ConsensusKey;
 use super::msg::Xpub;
 
 /// The maximum number of signatories in a signatory set.
@@ -39,11 +40,12 @@ use super::msg::Xpub;
 /// signatures, allowing for more signatories to be included without making an
 /// impact on script size and fees.
 pub const MAX_SIGNATORIES: u64 = 20;
-
+/// A Tendermint/CometBFT public key.
+pub type ConsensusKey = [u8; 32];
 pub const SIGSET_THRESHOLD: (u64, u64) = (2, 3);
 
 /// A signatory in a signatory set, consisting of a public key and voting power.
-#[cw_serde]
+#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
 pub struct Signatory {
     pub voting_power: u64,
     pub pubkey: Pubkey,
@@ -75,8 +77,7 @@ where
 /// Bitcoin scripts can be generated from a signatory set, which can be used to
 /// create a UTXO which can be only spent by a threshold of the signatories,
 /// based on voting power.
-#[cw_serde]
-#[derive(Default)]
+#[derive(Clone, Debug, Default, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
 pub struct SignatorySet {
     /// The time at which this signatory set was created, in seconds.
     ///
@@ -255,6 +256,16 @@ impl SignatorySet {
         assert_eq!(&sigset.redeem_script(commitment, threshold_ratio)?, script);
 
         Ok((sigset, commitment.to_vec()))
+    }
+
+    fn sort_and_truncate(&mut self) {
+        self.signatories.sort_by(|a, b| b.cmp(a));
+
+        if self.signatories.len() as u64 > MAX_SIGNATORIES {
+            for removed in self.signatories.drain(MAX_SIGNATORIES as usize..) {
+                self.present_vp -= removed.voting_power;
+            }
+        }
     }
 
     /// The voting power threshold required to spend outputs secured by this

@@ -21,7 +21,7 @@ pub type Message = [u8; MESSAGE_SIZE];
 pub struct Signature(#[serde(serialize_with = "<[_]>::serialize")] pub Vec<u8>);
 
 /// A compressed secp256k1 public key.
-#[cw_serde]
+#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
 pub struct Pubkey {
     #[serde(serialize_with = "<[_]>::serialize")]
     bytes: Vec<u8>,

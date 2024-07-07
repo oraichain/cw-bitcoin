@@ -120,6 +120,7 @@ dependencies = [
  "derive_more",
  "ed",
  "serde",
+ "sha2 0.10.8",
  "thiserror",
 ]
 
