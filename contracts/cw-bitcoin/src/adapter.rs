@@ -1,6 +1,6 @@
 use bitcoin::consensus::{Decodable, Encodable};
 use cosmwasm_std::Binary;
-use serde::{ser, Deserialize, Deserializer, Serialize};
+use serde::{de, ser, Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 
 /// A wrapper that adds core `orga` traits to types from the `bitcoin` crate.
@@ -56,8 +56,10 @@ impl<T: Encodable> Serialize for Adapter<T> {
         S: ser::Serializer,
     {
         let mut dest: Vec<u8> = Vec::new();
-        self.inner.consensus_encode(&mut dest).unwrap();
-        serializer.serialize_str(&Binary::from(dest).to_base64())
+        self.inner
+            .consensus_encode(&mut dest)
+            .map_err(ser::Error::custom)?;
+        Binary::from(dest).serialize(serializer)
     }
 }
 
@@ -65,11 +67,10 @@ impl<T: Encodable> Serialize for Adapter<T> {
 impl<'de, T: Decodable> Deserialize<'de> for Adapter<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: de::Deserializer<'de>,
     {
-        // deserializer.deserialize_bytes(AdapterVisitor(T))
-        let v = Binary::deserialize(deserializer)?.to_vec();
-        let inner: T = Decodable::consensus_decode(&mut v.as_slice()).unwrap();
+        let v = Binary::deserialize(deserializer)?;
+        let inner: T = Decodable::consensus_decode(&mut v.as_slice()).map_err(de::Error::custom)?;
         Ok(inner.into())
     }
 }

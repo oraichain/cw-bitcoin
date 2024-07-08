@@ -615,13 +615,12 @@ impl HeaderQueue {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bitcoin::hash_types::TxMerkleNode;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::sha256d::Hash;
     use bitcoin::BlockHash;
-    use bitcoin::{consensus::Decodable, hash_types::TxMerkleNode};
     use chrono::{TimeZone, Utc};
-    use cosmwasm_std::{from_binary, to_binary};
-    use cosmwasm_std::{from_slice, testing::mock_dependencies, to_vec, Binary};
+    use cosmwasm_std::{from_binary, testing::mock_dependencies, to_binary};
     use serial_test::serial;
 
     #[test]
@@ -643,9 +642,8 @@ mod test {
         };
 
         let adapter = Adapter::new(header);
-        let encoded_adapter = to_vec(&adapter).unwrap();
-
-        let decoded_adapter: Adapter<BlockHeader> = from_slice(encoded_adapter.as_slice()).unwrap();
+        let encoded_adapter = to_binary(&adapter).unwrap();
+        let decoded_adapter: Adapter<BlockHeader> = from_binary(&encoded_adapter).unwrap();
 
         assert_eq!(*decoded_adapter, header);
     }
@@ -822,14 +820,16 @@ mod test {
 
         let header = BlockHeader {
             version: 0x1,
-            prev_blockhash: BlockHash::from_hash(
-                Hash::from_hex("00000000314e90489514c787d615cea50003af2023796ccdd085b6bcc1fa28f5")
-                    .unwrap(),
-            ),
-            merkle_root: TxMerkleNode::from_hash(
-                Hash::from_hex("2f5c03ce19e9a855ac93087a1b68fe6592bcf4bd7cbb9c1ef264d886a785894e")
-                    .unwrap(),
-            ),
+            prev_blockhash: Hash::from_hex(
+                "00000000314e90489514c787d615cea50003af2023796ccdd085b6bcc1fa28f5",
+            )
+            .unwrap()
+            .into(),
+            merkle_root: Hash::from_hex(
+                "2f5c03ce19e9a855ac93087a1b68fe6592bcf4bd7cbb9c1ef264d886a785894e",
+            )
+            .unwrap()
+            .into(),
             time: stamp.timestamp() as u32,
             bits: 486_604_799,
             nonce: 2_093_702_200,
@@ -845,14 +845,23 @@ mod test {
             max_target: 0x1d00ffff,
             retargeting: true,
             min_difficulty_blocks: false,
-            trusted_header: from_slice(&[
-                1, 0, 0, 0, 139, 82, 187, 215, 44, 47, 73, 86, 144, 89, 245, 89, 193, 177, 121, 77,
-                229, 25, 46, 79, 125, 109, 43, 3, 199, 72, 43, 173, 0, 0, 0, 0, 131, 228, 248, 169,
-                213, 2, 237, 12, 65, 144, 117, 193, 171, 181, 213, 111, 135, 138, 46, 144, 121,
-                229, 97, 43, 251, 118, 162, 220, 55, 217, 196, 39, 65, 221, 104, 73, 255, 255, 0,
-                29, 43, 144, 157, 214,
-            ])
-            .unwrap(),
+            trusted_header: BlockHeader {
+                version: 1,
+                prev_blockhash: Hash::from_hex(
+                    "00000000ad2b48c7032b6d7d4f2e19e54d79b1c159f5599056492f2cd7bb528b",
+                )
+                .unwrap()
+                .into(),
+                merkle_root: Hash::from_hex(
+                    "27c4d937dca276fb2b61e579902e8a876fd5b5abc17590410ced02d5a9f8e483",
+                )
+                .unwrap()
+                .into(),
+                time: 1231609153,
+                bits: 486604799,
+                nonce: 3600650283,
+            }
+            .into(),
         };
 
         let adapter = Adapter::new(header);
@@ -893,14 +902,23 @@ mod test {
             max_target: 0x1d00ffff,
             retargeting: true,
             min_difficulty_blocks: false,
-            trusted_header: from_slice(&[
-                1, 0, 0, 0, 139, 82, 187, 215, 44, 47, 73, 86, 144, 89, 245, 89, 193, 177, 121, 77,
-                229, 25, 46, 79, 125, 109, 43, 3, 199, 72, 43, 173, 0, 0, 0, 0, 131, 228, 248, 169,
-                213, 2, 237, 12, 65, 144, 117, 193, 171, 181, 213, 111, 135, 138, 46, 144, 121,
-                229, 97, 43, 251, 118, 162, 220, 55, 217, 196, 39, 65, 221, 104, 73, 255, 255, 0,
-                29, 43, 144, 157, 214,
-            ])
-            .unwrap(),
+            trusted_header: BlockHeader {
+                version: 1,
+                prev_blockhash: Hash::from_hex(
+                    "00000000ad2b48c7032b6d7d4f2e19e54d79b1c159f5599056492f2cd7bb528b",
+                )
+                .unwrap()
+                .into(),
+                merkle_root: Hash::from_hex(
+                    "27c4d937dca276fb2b61e579902e8a876fd5b5abc17590410ced02d5a9f8e483",
+                )
+                .unwrap()
+                .into(),
+                time: 1231609153,
+                bits: 486604799,
+                nonce: 3600650283,
+            }
+            .into(),
         };
 
         let adapter = Adapter::new(header);
