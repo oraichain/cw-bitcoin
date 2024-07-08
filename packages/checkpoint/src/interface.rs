@@ -1,15 +1,11 @@
-use bitcoin::Script;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary};
-use cosmwasm_std::{Coin, Storage};
-use cw_storage_plus::Map;
+use cosmwasm_std::Addr;
+use cosmwasm_std::Coin;
 use serde::{Deserialize, Serialize};
 // use serde::{de::DeserializeOwned, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::adapter::Adapter;
 use crate::error::ContractResult;
-use crate::signatory::ConsensusKey;
 
 // pub trait DequeExtension<'a, T: Serialize + DeserializeOwned> {
 //     fn retain_unordered<F>(&self, store: &mut dyn Storage, f: F) -> StdResult<u64>
@@ -87,17 +83,6 @@ impl Dest {
         };
 
         Ok(bytes)
-    }
-
-    pub fn to_output_script(
-        store: &dyn Storage,
-        dest: String,
-        recovery_scripts: &Map<String, Adapter<Script>>,
-    ) -> ContractResult<Option<Script>> {
-        Ok(recovery_scripts
-            .load(store, dest)
-            .ok()
-            .map(|script| script.clone().into_inner()))
     }
 }
 

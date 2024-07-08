@@ -6,6 +6,7 @@ use crate::{
     adapter::Adapter,
     interface::{Accounts, Dest},
     msg::Xpub,
+    state::{to_output_script, RECOVERY_SCRIPTS},
 };
 use crate::{
     constants::DEFAULT_FEE_RATE,
@@ -1178,7 +1179,6 @@ impl BuildingCheckpoint {
         env: Env,
         store: &mut dyn Storage,
         nbtc_accounts: &Accounts,
-        recovery_scripts: &Map<String, Adapter<bitcoin::Script>>,
         reserve_outpoint: bitcoin::OutPoint,
         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         fee_rate: u64,
@@ -1204,7 +1204,7 @@ impl BuildingCheckpoint {
 
         // Create an output for every nBTC account with an associated
         // recovery script.
-        for script in recovery_scripts
+        for script in RECOVERY_SCRIPTS
             .range(store, None, None, Order::Ascending)
             .into_iter()
         {
@@ -1224,11 +1224,10 @@ impl BuildingCheckpoint {
             .pending
             .iter()
             .filter_map(|(dest, coin)| {
-                let script_pubkey =
-                    match Dest::to_output_script(store, dest.to_string(), recovery_scripts) {
-                        Err(err) => return Some(Err(err.into())),
-                        Ok(maybe_script) => maybe_script,
-                    }?;
+                let script_pubkey = match to_output_script(store, dest.to_string()) {
+                    Err(err) => return Some(Err(err.into())),
+                    Ok(maybe_script) => maybe_script,
+                }?;
                 Some(Ok::<_, ContractError>(TxOut {
                     value: (coin.amount.u128() / 1_000_000u128) as u64,
                     script_pubkey,
@@ -1430,7 +1429,6 @@ impl BuildingCheckpoint {
             env,
             store,
             nbtc_accounts,
-            recovery_scripts,
             reserve_outpoint,
             external_outputs,
             self.fee_rate,
