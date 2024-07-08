@@ -1,5 +1,5 @@
 [package]
-name = "checkpoint"
+name = "cw-bitcoin"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -29,3 +29,8 @@ bitcoin-script = "0.1.1"
 derive_more = "0.99.17"
 ed = { git = "https://github.com/nomic-io/ed", rev = "9c0e206ffdb59dacb90f083e004e8080713e6ad8" }
 sha2 = "0.10.6"
+
+
+[dev-dependencies]
+chrono = "0.4.19"
+serial_test = "2.0.0"

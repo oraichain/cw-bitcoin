@@ -1,17 +1,26 @@
 use std::ops::Deref;
 
 use bitcoin::util::bip32::ExtendedPubKey;
+use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
+use cosmwasm_std::from_slice;
 use cosmwasm_std::Addr;
 use cosmwasm_std::Coin;
 use serde::{Deserialize, Serialize};
 // use serde::{de::DeserializeOwned, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::adapter::Adapter;
 use crate::constants::MAX_CHECKPOINT_AGE;
 use crate::constants::MAX_CHECKPOINT_INTERVAL;
 use crate::constants::MAX_FEE_RATE;
+use crate::constants::MAX_LENGTH;
+use crate::constants::MAX_TARGET;
+use crate::constants::MAX_TIME_INCREASE;
 use crate::constants::MIN_FEE_RATE;
+use crate::constants::RETARGET_INTERVAL;
+use crate::constants::TARGET_SPACING;
+use crate::constants::TARGET_TIMESPAN;
 use crate::constants::USER_FEE_FACTOR;
 use crate::error::ContractResult;
 use crate::signatory::SIGSET_THRESHOLD;
@@ -319,5 +328,67 @@ impl Deref for Xpub {
 
     fn deref(&self) -> &Self::Target {
         &self.key
+    }
+}
+
+///  HeaderConfiguration parameters for Bitcoin header processing.
+// TODO: implement trait that returns constants for bitcoin::Network variants
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HeaderConfig {
+    /// The maximum number of headers that can be stored in the header queue
+    /// before pruning.
+    pub max_length: u64,
+    /// The maximum amount of time (in seconds) that can pass between the
+    /// timestamp of the last header in the header queue and the timestamp of
+    /// the next header to be added.
+    pub max_time_increase: u32,
+    /// The height of the trusted header.
+    pub trusted_height: u32,
+    /// The interval (in blocks) at which the difficulty target is adjusted.
+    pub retarget_interval: u32,
+    /// The target time interval (in seconds) between blocks.
+    pub target_spacing: u32,
+    /// The target amount of time (in seconds) that should pass between the
+    /// timestamps of the first and last header in a retargeting period. This
+    /// should be equivalent to `retarget_interval * target_spacing`.
+    // TODO: derive from `retarget_interval` and `target_spacing`
+    pub target_timespan: u32,
+    /// The maximum target value.
+    pub max_target: u32,
+    /// Whether or not the header queue should retarget difficulty.
+    pub retargeting: bool,
+    /// Whether or not the header queue should drop back down to the minimum
+    /// difficulty after a certain amount of time has passed (used in Bitcoin
+    /// testnet).
+    pub min_difficulty_blocks: bool,
+    /// The trusted header (the header which populates the queue when it is
+    /// newly created), as encoded bytes.
+    pub trusted_header: Adapter<BlockHeader>,
+}
+
+impl Default for HeaderConfig {
+    fn default() -> Self {
+        HeaderConfig::mainnet()
+    }
+}
+
+impl HeaderConfig {
+    pub fn mainnet() -> Self {
+        let checkpoint_json = include_bytes!("./checkpoint.json");
+        let checkpoint: (u32, BlockHeader) = from_slice(checkpoint_json).unwrap();
+        let (height, header) = checkpoint;
+
+        Self {
+            max_length: MAX_LENGTH,
+            max_time_increase: MAX_TIME_INCREASE,
+            trusted_height: height,
+            retarget_interval: RETARGET_INTERVAL,
+            target_spacing: TARGET_SPACING,
+            target_timespan: TARGET_TIMESPAN,
+            max_target: MAX_TARGET,
+            trusted_header: header.into(),
+            retargeting: true,
+            min_difficulty_blocks: false,
+        }
     }
 }
