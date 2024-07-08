@@ -1,8 +1,17 @@
 use bitcoin::Script;
 use cosmwasm_std::Storage;
-use cw_storage_plus::Map;
+use cw_storage_plus::{Item, Map};
 
-use crate::{adapter::Adapter, error::ContractResult, msg::Xpub};
+use crate::{
+    adapter::Adapter,
+    error::ContractResult,
+    interface::{BitcoinConfig, CheckpointConfig},
+    msg::Xpub,
+};
+
+pub const CHECKPOINT_CONFIG: Item<CheckpointConfig> = Item::new("checkpoint_config");
+
+pub const BITCOIN_CONFIG: Item<BitcoinConfig> = Item::new("bitcoin_config");
 
 pub const RECOVERY_SCRIPTS: Map<String, Adapter<bitcoin::Script>> = Map::new("recovery_scripts");
 

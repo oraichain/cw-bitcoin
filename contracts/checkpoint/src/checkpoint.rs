@@ -2,21 +2,16 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::{Signature, ThresholdSig},
 };
+use crate::signatory::derive_pubkey;
 use crate::{
     adapter::Adapter,
-    interface::{Accounts, BitcoinConfig, Dest},
+    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
     msg::Xpub,
     state::{to_output_script, RECOVERY_SCRIPTS},
 };
 use crate::{
     constants::DEFAULT_FEE_RATE,
     error::{ContractError, ContractResult},
-};
-use crate::{
-    constants::{
-        MAX_CHECKPOINT_AGE, MAX_CHECKPOINT_INTERVAL, MAX_FEE_RATE, MIN_FEE_RATE, USER_FEE_FACTOR,
-    },
-    signatory::derive_pubkey,
 };
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
@@ -25,8 +20,6 @@ use cosmwasm_std::{Coin, Env, Order, StdError, Storage};
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
-
-use crate::signatory::SIGSET_THRESHOLD;
 
 // use std::convert::TryFrom;
 use std::ops::{Deref, DerefMut};
@@ -709,12 +702,20 @@ impl Checkpoint {
         Ok(fees)
     }
 
-    pub fn base_fee(&self, config: &Config, timestamping_commitment: &[u8]) -> ContractResult<u64> {
+    pub fn base_fee(
+        &self,
+        config: &CheckpointConfig,
+        timestamping_commitment: &[u8],
+    ) -> ContractResult<u64> {
         let est_vsize = self.est_vsize(config, timestamping_commitment)?;
         Ok(est_vsize * self.fee_rate)
     }
 
-    fn est_vsize(&self, config: &Config, timestamping_commitment: &[u8]) -> ContractResult<u64> {
+    fn est_vsize(
+        &self,
+        config: &CheckpointConfig,
+        timestamping_commitment: &[u8],
+    ) -> ContractResult<u64> {
         let batch = self.batches.get(BatchType::Checkpoint as usize).unwrap();
         let cp = batch.get(0).unwrap();
         let mut tx = cp.to_bitcoin_tx()?;
@@ -739,7 +740,10 @@ impl Checkpoint {
     }
 
     // This function will return total input amount and output amount in checkpoint transaction
-    pub fn calc_total_input_and_output(&self, config: &Config) -> ContractResult<(u64, u64)> {
+    pub fn calc_total_input_and_output(
+        &self,
+        config: &CheckpointConfig,
+    ) -> ContractResult<(u64, u64)> {
         let mut in_amount = 0;
         let checkpoint_batch = self
             .batches
@@ -768,7 +772,7 @@ impl Checkpoint {
 
     fn additional_outputs(
         &self,
-        config: &Config,
+        config: &CheckpointConfig,
         timestamping_commitment: &[u8],
     ) -> ContractResult<Vec<bitcoin::TxOut>> {
         // The reserve output is the first output of the checkpoint tx, and
@@ -788,148 +792,6 @@ impl Checkpoint {
         };
 
         Ok(vec![reserve_out, timestamping_commitment_out])
-    }
-}
-
-/// Configuration parameters used in processing checkpoints.
-#[cw_serde]
-pub struct Config {
-    /// The minimum amount of time between the creation of checkpoints, in
-    /// seconds.
-    ///
-    /// If a checkpoint is to be created, but less than this time has passed
-    /// since the last checkpoint was created (in the `Building` state), the
-    /// current `Building` checkpoint will be delayed in advancing to `Signing`.
-    pub min_checkpoint_interval: u64,
-
-    /// The maximum amount of time between the creation of checkpoints, in
-    /// seconds.
-    ///
-    /// If a checkpoint would otherwise not be created, but this amount of time
-    /// has passed since the last checkpoint was created (in the `Building`
-    /// state), the current `Building` checkpoint will be advanced to `Signing`
-    /// and a new `Building` checkpoint will be added.
-    pub max_checkpoint_interval: u64,
-
-    /// The maximum number of inputs allowed in a checkpoint transaction.
-    ///
-    /// This is used to prevent the checkpoint transaction from being too large
-    /// to be accepted by the Bitcoin network.
-    ///
-    /// If a checkpoint has more inputs than this when advancing from `Building`
-    /// to `Signing`, the excess inputs will be moved to the suceeding,
-    /// newly-created `Building` checkpoint.
-    pub max_inputs: u64,
-
-    /// The maximum number of outputs allowed in a checkpoint transaction.
-    ///
-    /// This is used to prevent the checkpoint transaction from being too large
-    /// to be accepted by the Bitcoin network.
-    ///
-    /// If a checkpoint has more outputs than this when advancing from `Building`
-    /// to `Signing`, the excess outputs will be moved to the suceeding,
-    /// newly-created `Building` checkpoint.∑
-    pub max_outputs: u64,
-
-    /// The default fee rate to use when creating the first checkpoint of the
-    /// network, in satoshis per virtual byte.    
-    pub fee_rate: u64,
-
-    /// The maximum age of a checkpoint to retain, in seconds.
-    ///
-    /// Checkpoints older than this will be pruned from the state, down to a
-    /// minimum of 10 checkpoints in the checkpoint queue.
-    pub max_age: u64,
-
-    /// The number of blocks to target for confirmation of the checkpoint
-    /// transaction.
-    ///
-    /// This is used to adjust the fee rate of the checkpoint transaction, to
-    /// ensure it is confirmed within the target number of blocks. The fee rate
-    /// will be adjusted up if the checkpoint transaction is not confirmed
-    /// within the target number of blocks, and will be adjusted down if the
-    /// checkpoint transaction faster than the target.    
-    pub target_checkpoint_inclusion: u32,
-
-    /// The lower bound to use when adjusting the fee rate of the checkpoint
-    /// transaction, in satoshis per virtual byte.    
-    pub min_fee_rate: u64,
-
-    /// The upper bound to use when adjusting the fee rate of the checkpoint
-    /// transaction, in satoshis per virtual byte.    
-    pub max_fee_rate: u64,
-
-    /// The value (in basis points) to multiply by when calculating the miner
-    /// fee to deduct from a user's deposit or withdrawal. This value should be
-    /// at least 1 (10,000 basis points).
-    ///
-    /// The difference in the fee deducted and the fee paid in the checkpoint
-    /// transaction is added to the fee pool, to help the network pay for
-    /// its own miner fees.    
-    pub user_fee_factor: u64,
-
-    /// The threshold of signatures required to spend reserve scripts, as a
-    /// ratio represented by a tuple, `(numerator, denominator)`.
-    ///
-    /// For example, `(9, 10)` means the threshold is 90% of the signatory set.    
-    pub sigset_threshold: (u64, u64),
-
-    /// The minimum amount of nBTC an account must hold to be eligible for an
-    /// output in the emergency disbursal.    
-    pub emergency_disbursal_min_tx_amt: u64,
-
-    /// The amount of time between the creation of a checkpoint and when the
-    /// associated emergency disbursal transactions can be spent, in seconds.    
-    pub emergency_disbursal_lock_time_interval: u32,
-
-    /// The maximum size of a final emergency disbursal transaction, in virtual
-    /// bytes.
-    ///
-    /// The outputs to be included in final emergency disbursal transactions
-    /// will be distributed across multiple transactions around this size.    
-    pub emergency_disbursal_max_tx_size: u64,
-
-    /// The maximum number of unconfirmed checkpoints before the network will
-    /// stop creating new checkpoints.
-    ///
-    /// If there is a long chain of unconfirmed checkpoints, there is possibly
-    /// an issue causing the transactions to not be included on Bitcoin (e.g. an
-    /// invalid transaction was created, the fee rate is too low even after
-    /// adjustments, Bitcoin miners are censoring the transactions, etc.), in
-    /// which case the network should evaluate and fix the issue before creating
-    /// more checkpoints.
-    ///
-    /// This will also stop the fee rate from being adjusted too high if the
-    /// issue is simply with relayers failing to report the confirmation of the
-    /// checkpoint transactions.    
-    pub max_unconfirmed_checkpoints: u32,
-}
-
-impl Config {
-    fn bitcoin() -> Self {
-        Self {
-            min_checkpoint_interval: 60 * 5,
-            max_checkpoint_interval: MAX_CHECKPOINT_INTERVAL,
-            max_inputs: 40,
-            max_outputs: 200,
-            max_age: MAX_CHECKPOINT_AGE,
-            target_checkpoint_inclusion: 2,
-            min_fee_rate: MIN_FEE_RATE, // relay threshold is 1 sat/vbyte
-            max_fee_rate: MAX_FEE_RATE,
-            user_fee_factor: USER_FEE_FACTOR, // 2.7x
-            sigset_threshold: SIGSET_THRESHOLD,
-            emergency_disbursal_min_tx_amt: 1000,
-            emergency_disbursal_lock_time_interval: 60 * 60 * 24 * 7 * 8, // 8 weeks
-            emergency_disbursal_max_tx_size: 50_000,
-            max_unconfirmed_checkpoints: 15,
-            fee_rate: 0,
-        }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Config::bitcoin()
     }
 }
 
@@ -966,7 +828,7 @@ pub struct CheckpointQueue {
     pub first_unhandled_confirmed_cp_index: u32,
 
     /// Configuration parameters used in processing checkpoints.
-    pub config: Config,
+    pub config: CheckpointConfig,
 
     /// The checkpoints in the queue, in order from oldest to newest. The last
     /// checkpoint is the checkpoint currently being built, and has the index
@@ -1183,7 +1045,7 @@ impl BuildingCheckpoint {
         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         fee_rate: u64,
         reserve_value: u64,
-        config: &Config,
+        config: &CheckpointConfig,
     ) -> ContractResult<()> {
         // TODO: Use tree structure instead of single-intermediate, many-final,
         // since the intermediate tx may grow too large
@@ -1353,7 +1215,7 @@ impl BuildingCheckpoint {
         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         timestamping_commitment: Vec<u8>,
         cp_fees: u64,
-        config: &Config,
+        config: &CheckpointConfig,
     ) -> ContractResult<BuildingAdvanceRes> {
         self.0.status = CheckpointStatus::Signing;
 
@@ -1466,12 +1328,12 @@ impl CheckpointQueue {
     }
 
     /// Set the queue's configuration parameters.
-    pub fn configure(&mut self, config: Config) {
+    pub fn configure(&mut self, config: CheckpointConfig) {
         self.config = config;
     }
 
     /// The queue's current configuration parameters.
-    pub fn config(&self) -> Config {
+    pub fn config(&self) -> CheckpointConfig {
         self.config.clone()
     }
 
@@ -2169,7 +2031,11 @@ impl CheckpointQueue {
             })
     }
 
-    pub fn unconfirmed_vbytes(&self, store: &dyn Storage, config: &Config) -> ContractResult<u64> {
+    pub fn unconfirmed_vbytes(
+        &self,
+        store: &dyn Storage,
+        config: &CheckpointConfig,
+    ) -> ContractResult<u64> {
         self.unconfirmed(store)?
             .iter()
             .map(|cp| cp.est_vsize(config, &[0; 32])) // TODO: shouldn't need to pass fixed length commitment to est_vsize
@@ -2183,7 +2049,7 @@ impl CheckpointQueue {
         &self,
         store: &dyn Storage,
         fee_rate: u64,
-        config: &Config,
+        config: &CheckpointConfig,
     ) -> ContractResult<u64> {
         let unconf_fees_paid = self.unconfirmed_fees_paid(store)?;
         let unconf_vbytes = self.unconfirmed_vbytes(store, config)?;
@@ -2224,7 +2090,7 @@ impl CheckpointQueue {
 /// Takes a previous fee rate and returns a new fee rate, adjusted up or down by
 /// 25%. The new fee rate is capped at the maximum and minimum fee rates
 /// specified in the given config.
-pub fn adjust_fee_rate(prev_fee_rate: u64, up: bool, config: &Config) -> u64 {
+pub fn adjust_fee_rate(prev_fee_rate: u64, up: bool, config: &CheckpointConfig) -> u64 {
     if up {
         (prev_fee_rate * 5 / 4).max(prev_fee_rate + 1)
     } else {
@@ -2465,7 +2331,7 @@ mod test {
 
     #[test]
     fn adjust_fee_rate() {
-        let config = Config::default();
+        let config = CheckpointConfig::default();
         assert_eq!(super::adjust_fee_rate(100, true, &config), 125);
         assert_eq!(super::adjust_fee_rate(100, false, &config), 75);
         assert_eq!(super::adjust_fee_rate(2, true, &config), 40);
