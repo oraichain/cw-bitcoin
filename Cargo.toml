@@ -1,7 +1,7 @@
 [workspace]
 resolver = '2'
 
-members = ["packages/*"]
+members = ["contracts/*"]
 
 
 [workspace.package]
@@ -32,8 +32,7 @@ cw20-base = { version = "1.0.1" }
 cw-storage-plus = { version = "1.0.1" }
 cw-multi-test = "0.16.6"
 cw-utils = "0.16.0"
-
-checkpoint = { path = "./packages/checkpoint" }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 
 [profile.release]
 opt-level = 3
