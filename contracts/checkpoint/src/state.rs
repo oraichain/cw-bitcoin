@@ -5,8 +5,8 @@ use cw_storage_plus::{Item, Map};
 use crate::{
     adapter::Adapter,
     error::ContractResult,
+    interface::Xpub,
     interface::{BitcoinConfig, CheckpointConfig},
-    msg::Xpub,
 };
 
 pub const CHECKPOINT_CONFIG: Item<CheckpointConfig> = Item::new("checkpoint_config");
@@ -23,5 +23,5 @@ pub fn to_output_script(store: &dyn Storage, dest: String) -> ContractResult<Opt
     Ok(RECOVERY_SCRIPTS
         .load(store, dest)
         .ok()
-        .map(|script| script.clone().into_inner()))
+        .map(|script| script.into_inner()))
 }

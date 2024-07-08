@@ -10,12 +10,19 @@ documentation = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# use library feature to disable all instantiate/execute/query exports
+library = []
 
 [dependencies]
 thiserror = { workspace = true }
 cosmwasm-schema = { workspace = true }
 cw-storage-plus = { workspace = true }
 serde = { workspace = true }
+cw2 = { workspace = true }
+
 cosmwasm-std = { workspace = true, features = ["ibc3"] }
 bitcoin = { version = "0.29.2", features = ["serde"] }
 bitcoin-script = "0.1.1"

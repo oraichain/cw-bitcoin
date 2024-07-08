@@ -5,8 +5,8 @@ use super::{
 use crate::signatory::derive_pubkey;
 use crate::{
     adapter::Adapter,
+    interface::Xpub,
     interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
-    msg::Xpub,
     state::{to_output_script, RECOVERY_SCRIPTS},
 };
 use crate::{

@@ -9,3 +9,5 @@ mod msg;
 mod signatory;
 mod state;
 mod threshold_sig;
+
+pub mod contract;

@@ -35,7 +35,7 @@ use ed::Encode;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::msg::Xpub;
+use super::interface::Xpub;
 
 /// The maximum number of signatories in a signatory set.
 ///
