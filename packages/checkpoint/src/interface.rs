@@ -1,13 +1,15 @@
 use bitcoin::Script;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, Binary};
 use cosmwasm_std::{Coin, Storage};
 use cw_storage_plus::Map;
+use serde::{Deserialize, Serialize};
 // use serde::{de::DeserializeOwned, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::adapter::Adapter;
 use crate::error::ContractResult;
+use crate::signatory::ConsensusKey;
 
 // pub trait DequeExtension<'a, T: Serialize + DeserializeOwned> {
 //     fn retain_unordered<F>(&self, store: &mut dyn Storage, f: F) -> StdResult<u64>
@@ -97,4 +99,10 @@ impl Dest {
             .ok()
             .map(|script| script.clone().into_inner()))
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Validator {
+    pub pubkey: Vec<u8>,
+    pub power: u64,
 }

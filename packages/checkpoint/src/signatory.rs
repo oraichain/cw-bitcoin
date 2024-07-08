@@ -3,9 +3,14 @@
 
 use std::cmp::Ordering;
 
+use crate::interface::Validator;
+use crate::state::SIG_KEYS;
+use crate::state::VALIDATORS;
+
 use super::error::ContractError;
 use super::error::ContractResult;
 use super::threshold_sig::Pubkey;
+use bitcoin::blockdata::block;
 use bitcoin::blockdata::opcodes::all::{
     OP_ADD, OP_CHECKSIG, OP_DROP, OP_ELSE, OP_ENDIF, OP_GREATERTHAN, OP_IF, OP_SWAP,
 };
@@ -15,11 +20,17 @@ use bitcoin::secp256k1::Context as SecpContext;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::Verification;
+use bitcoin::util::bip32::ChildNumber;
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
 use cosmwasm_schema::cw_serde;
+use cosmwasm_std::Binary;
+use cosmwasm_std::Env;
+use cosmwasm_std::Order;
 use cosmwasm_std::StdError;
 use cosmwasm_std::StdResult;
+use cosmwasm_std::Storage;
+use cw_storage_plus::Map;
 use ed::Encode;
 use serde::Deserialize;
 use serde::Serialize;
@@ -103,6 +114,52 @@ pub struct SignatorySet {
 }
 
 impl SignatorySet {
+    /// Creates a signatory set based on the current validator set.
+    pub fn from_validator_ctx(store: &dyn Storage, env: Env, index: u32) -> ContractResult<Self> {
+        let time = env.block.time;
+
+        let mut sigset = SignatorySet {
+            create_time: time.seconds(),
+            present_vp: 0,
+            possible_vp: 0,
+            index,
+            signatories: vec![],
+        };
+
+        let val_set: Vec<Validator> = VALIDATORS
+            .range_raw(store, None, None, Order::Ascending)
+            .map(|item| {
+                let (k, v) = item?;
+                Ok(Validator {
+                    power: v,
+                    pubkey: k,
+                })
+            })
+            .collect::<StdResult<_>>()?;
+
+        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
+        let derive_path = [ChildNumber::from_normal_idx(index)?];
+
+        for entry in &val_set {
+            sigset.possible_vp += entry.power;
+
+            let signatory_key = match SIG_KEYS.load(store, &entry.pubkey) {
+                Ok(xpub) => xpub.derive_pub(&secp, &derive_path)?.public_key.into(),
+                _ => continue,
+            };
+
+            let signatory = Signatory {
+                voting_power: entry.power,
+                pubkey: signatory_key,
+            };
+            sigset.insert(signatory);
+        }
+
+        sigset.sort_and_truncate();
+
+        Ok(sigset)
+    }
+
     pub fn from_script(
         script: &bitcoin::Script,
         threshold_ratio: (u64, u64),
@@ -256,6 +313,11 @@ impl SignatorySet {
         assert_eq!(&sigset.redeem_script(commitment, threshold_ratio)?, script);
 
         Ok((sigset, commitment.to_vec()))
+    }
+
+    fn insert(&mut self, signatory: Signatory) {
+        self.present_vp += signatory.voting_power;
+        self.signatories.push(signatory);
     }
 
     fn sort_and_truncate(&mut self) {
