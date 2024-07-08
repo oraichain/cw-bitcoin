@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     adapter::Adapter,
-    interface::{Accounts, Dest},
+    interface::{Accounts, BitcoinConfig, Dest},
     msg::Xpub,
     state::{to_output_script, RECOVERY_SCRIPTS},
 };
@@ -22,7 +22,7 @@ use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, T
 use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Coin, Env, Order, StdError, Storage};
-use cw_storage_plus::{Deque, Map};
+use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
@@ -1344,15 +1344,12 @@ impl BuildingCheckpoint {
     /// This step freezes the checkpoint, and no further changes can be made to
     /// it other than adding signatures. This means at this point all
     /// transactions contained within have a known transaction id which will not
-    /// change.
-    #[allow(unused_variables)]
+    /// change.    
     pub fn advance(
         mut self,
         env: Env,
         store: &mut dyn Storage,
-        key: u64,
         nbtc_accounts: &Accounts,
-        recovery_scripts: &Map<String, Adapter<bitcoin::Script>>,
         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         timestamping_commitment: Vec<u8>,
         cp_fees: u64,
@@ -1690,6 +1687,158 @@ impl CheckpointQueue {
         Ok(BuildingCheckpoint(Box::new(last)))
     }
 
+    /// Advances the checkpoint queue state machine.
+    ///
+    /// This method is called once per sidechain block, and will handle adding
+    /// new checkpoints to the queue, advancing the `Building` checkpoint to
+    /// `Signing`, and adjusting the checkpoint fee rates.
+    ///
+    /// If the `Building` checkpoint was advanced to `Signing` and a new
+    /// `Building` checkpoint was created, this method will return `Ok(true)`.
+    /// Otherwise, it will return `Ok(false)`.
+    ///
+    /// **Parameters:**
+    ///
+    /// - `sig_keys`: a map of consensus keys to their corresponding xpubs. This
+    /// is used to determine which keys should be used in the signatory set,
+    /// getting the set participation from the current validator set.
+    /// - `nbtc_accounts`: a map of nBTC accounts to their corresponding
+    /// balances. This is used along with to create outputs for the emergency
+    /// disbursal transactions by getting the recovery script for each account
+    /// from the `recovery_scripts` parameter.
+    /// - `recovery_scripts`: a map of nBTC account addresses to their
+    /// corresponding recovery scripts (account holders' desired destinations
+    /// for the emergency disbursal).
+    /// - `external_outputs`: an iterator of Bitcoin transaction outputs which
+    /// should be included in the emergency disbursal transactions. This allows
+    /// higher level modules the ability to create outputs for their own
+    /// purposes.
+    /// - `btc_height`: the current Bitcoin block height.
+    /// - `should_allow_deposits`: whether or not deposits should be allowed in
+    ///   any newly-created checkpoints.
+    /// - `timestamping_commitment`: the data to be timestamped by the
+    ///  checkpoint's timestamping commitment output (included as `OP_RETURN`
+    ///  data in the checkpoint transaction to timestamp on the Bitcoin
+    ///  blockchain for proof-of-work security).    
+    #[allow(clippy::too_many_arguments)]
+    pub fn maybe_step(
+        &mut self,
+        env: Env,
+        store: &mut dyn Storage,
+        nbtc_accounts: &Accounts,
+        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
+        btc_height: u32,
+        should_allow_deposits: bool,
+        timestamping_commitment: Vec<u8>,
+        fee_pool: &mut i64,
+        parent_config: &BitcoinConfig,
+    ) -> ContractResult<bool> {
+        if !self.should_push(env.clone(), store, &timestamping_commitment, btc_height)? {
+            return Ok(false);
+        }
+
+        if self
+            .maybe_push(env.clone(), store, should_allow_deposits)?
+            .is_none()
+        {
+            return Ok(false);
+        }
+
+        self.prune(store)?;
+
+        if self.index > 0 {
+            let prev_index = self.index - 1;
+            let cp_fees = self.calc_fee_checkpoint(store, prev_index, &timestamping_commitment)?;
+
+            let config = self.config();
+            let prev = self.get(store, prev_index)?;
+            let sigset = prev.sigset.clone();
+            let prev_fee_rate = prev.fee_rate;
+
+            let (reserve_outpoint, reserve_value, fees_paid, excess_inputs, excess_outputs) =
+                BuildingCheckpoint(Box::new(prev)).advance(
+                    env,
+                    store,
+                    nbtc_accounts,
+                    external_outputs,
+                    timestamping_commitment,
+                    cp_fees,
+                    &config,
+                )?;
+            *fee_pool -= (fees_paid * parent_config.units_per_sat) as i64;
+
+            // Adjust the fee rate for the next checkpoint based on whether past
+            // checkpoints have been confirmed in greater or less than the
+            // target number of Bitcoin blocks.
+            let fee_rate = if let Some(first_unconf_index) = self.first_unconfirmed_index(store)? {
+                // There are unconfirmed checkpoints.
+
+                let first_unconf = self.get(store, first_unconf_index)?;
+                let btc_blocks_since_first =
+                    btc_height - first_unconf.signed_at_btc_height.unwrap_or(0);
+                let miners_excluded_cps =
+                    btc_blocks_since_first >= config.target_checkpoint_inclusion;
+
+                let last_unconf_index = self.last_completed_index(store)?;
+                let last_unconf = self.get(store, last_unconf_index)?;
+                let btc_blocks_since_last =
+                    btc_height - last_unconf.signed_at_btc_height.unwrap_or(0);
+                let block_was_mined = btc_blocks_since_last > 0;
+
+                if miners_excluded_cps && block_was_mined {
+                    // Blocks were mined since a signed checkpoint, but it was
+                    // not included.
+                    adjust_fee_rate(prev_fee_rate, true, &config)
+                } else {
+                    prev_fee_rate
+                }
+            } else {
+                let has_completed = self.last_completed_index(store).is_ok();
+                if has_completed {
+                    // No unconfirmed checkpoints.
+                    adjust_fee_rate(prev_fee_rate, false, &config)
+                } else {
+                    // This case only happens at start of chain - having no
+                    // unconfs doesn't mean anything.
+                    prev_fee_rate
+                }
+            };
+
+            let mut building = self.building(store)?;
+            building.fee_rate = fee_rate;
+            let building_checkpoint_batch = building
+                .batches
+                .get_mut(BatchType::Checkpoint as usize)
+                .unwrap();
+            let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
+
+            // The new checkpoint tx's first input is the reserve output from
+            // the previous checkpoint.
+            let input = Input::new(
+                reserve_outpoint,
+                &sigset,
+                &[0u8], // TODO: double-check safety
+                reserve_value,
+                config.sigset_threshold,
+            )?;
+            checkpoint_tx.input.push(input);
+
+            // Add any excess inputs and outputs from the previous checkpoint to
+            // the new checkpoint.
+            for input in excess_inputs {
+                let shares = input.signatures.shares();
+                let mut data = input.clone();
+                data.signatures = ThresholdSig::from_shares(shares);
+                checkpoint_tx.input.push(data);
+            }
+            for output in excess_outputs {
+                checkpoint_tx.output.push(output);
+            }
+        }
+
+        Ok(true)
+    }
+
     /// Prunes old checkpoints from the queue.
     pub fn prune(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
         let latest = self.building(store)?.create_time();
@@ -1712,6 +1861,127 @@ impl CheckpointQueue {
         Ok(())
     }
 
+    pub fn should_push(
+        &mut self,
+        env: Env,
+        store: &dyn Storage,
+        timestamping_commitment: &[u8],
+        btc_height: u32,
+    ) -> ContractResult<bool> {
+        // Do not push if there is a checkpoint in the `Signing` state. There
+        // should only ever be at most one checkpoint in this state.
+        if self.signing(store)?.is_some() {
+            return Ok(false);
+        }
+
+        if !self.queue.is_empty() {
+            let now = env.block.time.seconds();
+            let elapsed = now - self.building(store)?.create_time();
+
+            // Do not push if the minimum checkpoint interval has not elapsed
+            // since creating the current `Building` checkpoint.
+            if elapsed < self.config.min_checkpoint_interval {
+                return Ok(false);
+            }
+
+            // Do not push if Bitcoin headers are being backfilled (e.g. the
+            // current latest height is less than the height at which the last
+            // confirmed checkpoint was signed).
+            if let Ok(last_completed_index) = self.last_completed_index(store) {
+                let last_completed = self.get(store, last_completed_index)?;
+                let last_signed_height = last_completed.signed_at_btc_height.unwrap_or(0);
+                if btc_height < last_signed_height {
+                    return Ok(false);
+                }
+            }
+            let cp_miner_fees =
+                self.calc_fee_checkpoint(store, self.index, timestamping_commitment)?;
+            let building = self.building(store)?;
+
+            // Don't push if there are no pending deposits, withdrawals, or
+            // transfers, or if not enough has been collected to pay for the
+            // miner fee, unless the maximum checkpoint interval has elapsed
+            // since creating the current `Building` checkpoint.
+            if elapsed < self.config.max_checkpoint_interval || self.index == 0 {
+                let checkpoint_tx = building.checkpoint_tx()?;
+                let has_pending_deposit = if self.index == 0 {
+                    !checkpoint_tx.input.is_empty()
+                } else {
+                    checkpoint_tx.input.len() > 1
+                };
+
+                let has_pending_withdrawal = !checkpoint_tx.output.is_empty();
+                let has_pending_transfers = building.pending.iter().next().is_some();
+
+                if !has_pending_deposit && !has_pending_withdrawal && !has_pending_transfers {
+                    return Ok(false);
+                }
+
+                if building.fees_collected < cp_miner_fees {
+                    println!(
+                        "Not enough collected to pay miner fee: {} < {}",
+                        building.fees_collected, cp_miner_fees,
+                    );
+                    return Ok(false);
+                }
+            }
+
+            // Do not push if the reserve value is not enough to spend the output & miner fees
+            let (input_amount, output_amount) =
+                building.calc_total_input_and_output(&self.config)?;
+            if input_amount < output_amount + cp_miner_fees {
+                println!(
+                    "Total reserve value is not enough to spend the output + miner fee: {} < {}. Output amount: {}; cp_miner_fees: {}",
+                    input_amount,
+                    output_amount + cp_miner_fees,
+                    output_amount,
+                    cp_miner_fees
+                );
+                return Ok(false);
+            }
+        }
+
+        // Do not push if there are too many unconfirmed checkpoints.
+        //
+        // If there is a long chain of unconfirmed checkpoints, there is possibly an
+        // issue causing the transactions to not be included on Bitcoin (e.g. an
+        // invalid transaction was created, the fee rate is too low even after
+        // adjustments, Bitcoin miners are censoring the transactions, etc.), in
+        // which case the network should evaluate and fix the issue before creating
+        // more checkpoints.
+        //
+        // This will also stop the fee rate from being adjusted too high if the
+        // issue is simply with relayers failing to report the confirmation of the
+        // checkpoint transactions.
+        let unconfs = self.num_unconfirmed(store)?;
+        if unconfs >= self.config.max_unconfirmed_checkpoints {
+            return Ok(false);
+        }
+
+        // Increment the index. For the first checkpoint, leave the index at
+        // zero.
+        let mut index = self.index;
+        if !self.queue.is_empty() {
+            index += 1;
+        }
+
+        // Build the signatory set for the new checkpoint based on the current
+        // validator set.
+        let sigset = SignatorySet::from_validator_ctx(store, env, index)?;
+        // Do not push if there are no validators in the signatory set.
+        if sigset.possible_vp() == 0 {
+            return Ok(false);
+        }
+
+        // Do not push if the signatory set does not have a quorum.
+        if !sigset.has_quorum() {
+            return Ok(false);
+        }
+
+        // Otherwise, push a new checkpoint.
+        Ok(true)
+    }
+
     pub fn calc_fee_checkpoint(
         &self,
         store: &dyn Storage,
@@ -1724,6 +1994,42 @@ impl CheckpointQueue {
         let total_fee = base_fee + additional_fees;
 
         Ok(total_fee)
+    }
+
+    pub fn maybe_push(
+        &mut self,
+        env: Env,
+        store: &mut dyn Storage,
+        deposits_enabled: bool,
+    ) -> ContractResult<Option<BuildingCheckpoint>> {
+        // Increment the index. For the first checkpoint, leave the index at
+        // zero.
+        let mut index = self.index;
+        if !self.queue.is_empty() {
+            index += 1;
+        }
+
+        // Build the signatory set for the new checkpoint based on the current
+        // validator set.
+        let sigset = SignatorySet::from_validator_ctx(store, env, index)?;
+
+        // Do not push if there are no validators in the signatory set.
+        if sigset.possible_vp() == 0 {
+            return Ok(None);
+        }
+
+        // Do not push if the signatory set does not have a quorum.
+        if !sigset.has_quorum() {
+            return Ok(None);
+        }
+
+        self.index = index;
+        self.queue().push_back(store, &Checkpoint::new(sigset)?)?;
+
+        let mut building = self.building(store)?;
+        building.deposits_enabled = deposits_enabled;
+
+        Ok(Some(building))
     }
 
     /// The active signatory set, which is the signatory set for the `Building`

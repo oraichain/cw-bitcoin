@@ -91,3 +91,54 @@ pub struct Validator {
     pub pubkey: Vec<u8>,
     pub power: u64,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BitcoinConfig {
+    /// The minimum number of checkpoints that must be produced before
+    /// withdrawals are enabled.
+    pub min_withdrawal_checkpoints: u32,
+    /// The minimum amount of BTC a deposit must send to be honored, in
+    /// satoshis.
+    pub min_deposit_amount: u64,
+    /// The minimum amount of BTC a withdrawal must withdraw, in satoshis.
+    pub min_withdrawal_amount: u64,
+    /// TODO: remove this, not used
+    pub max_withdrawal_amount: u64,
+    /// The maximum length of a withdrawal output script, in bytes.
+    pub max_withdrawal_script_length: u64,
+    /// The fee charged for an nBTC transfer, in micro-satoshis.
+    pub transfer_fee: u64,
+    /// The minimum number of confirmations a Bitcoin block must have before it
+    /// is considered finalized. Note that in the current implementation, the
+    /// actual number of confirmations required is `min_confirmations + 1`.
+    pub min_confirmations: u32,
+    /// The number which amounts in satoshis are multiplied by to get the number
+    /// of units held in nBTC accounts. In other words, the amount of
+    /// subdivisions of satoshis which nBTC accounting uses.
+    pub units_per_sat: u64,
+
+    // (These fields were moved to `checkpoint::Config`)
+    pub emergency_disbursal_min_tx_amt: u64,
+
+    pub emergency_disbursal_lock_time_interval: u32,
+
+    pub emergency_disbursal_max_tx_size: u64,
+
+    /// If a signer does not submit signatures for this many consecutive
+    /// checkpoints, they are considered offline and are removed from the
+    /// signatory set (jailed) and slashed.    
+    pub max_offline_checkpoints: u32,
+    /// The minimum number of confirmations a checkpoint must have on the
+    /// Bitcoin network before it is considered confirmed. Note that in the
+    /// current implementation, the actual number of confirmations required is
+    /// `min_checkpoint_confirmations + 1`.    
+    pub min_checkpoint_confirmations: u32,
+    /// The maximum amount of BTC that can be held in the network, in satoshis.    
+    pub capacity_limit: u64,
+
+    pub max_deposit_age: u64,
+
+    pub fee_pool_target_balance: u64,
+
+    pub fee_pool_reward_split: (u64, u64),
+}

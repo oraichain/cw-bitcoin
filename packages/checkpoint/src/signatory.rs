@@ -51,8 +51,8 @@ use super::msg::Xpub;
 /// signatures, allowing for more signatories to be included without making an
 /// impact on script size and fees.
 pub const MAX_SIGNATORIES: u64 = 20;
-/// A Tendermint/CometBFT public key.
-pub type ConsensusKey = [u8; 32];
+// /// A Tendermint/CometBFT public key.
+// pub type ConsensusKey = [u8; 32];
 pub const SIGSET_THRESHOLD: (u64, u64) = (2, 3);
 
 /// A signatory in a signatory set, consisting of a public key and voting power.
