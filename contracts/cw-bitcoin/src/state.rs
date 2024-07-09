@@ -41,3 +41,9 @@ pub fn to_output_script(store: &dyn Storage, dest: String) -> ContractResult<Opt
 pub const HEADERS: DequeExtension<WorkHeader> = DequeExtension::new("headers");
 
 pub const RECOVERY_TXS: DequeExtension<RecoveryTx> = DequeExtension::new("recovery_txs");
+
+/// A queue of outpoints to expire, sorted by expiration timestamp.
+pub const EXPIRATION_QUEUE: Map<(u64, &str), ()> = Map::new("expiration_queue");
+
+/// A set of outpoints.
+pub const OUTPOINTS: Map<&str, ()> = Map::new("outpoints");

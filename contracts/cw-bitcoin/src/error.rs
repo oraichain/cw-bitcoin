@@ -1,3 +1,4 @@
+use bitcoin::blockdata::transaction::ParseOutPointError;
 use cosmwasm_std::StdError;
 use std::env::VarError;
 
@@ -13,6 +14,8 @@ pub enum ContractError {
     Address(String),
     #[error(transparent)]
     Bitcoin(#[from] bitcoin::Error),
+    #[error(transparent)]
+    ParseOutPoint(#[from] ParseOutPointError),
     #[error(transparent)]
     BitcoinAddress(#[from] bitcoin::util::address::Error),
     #[error(transparent)]
