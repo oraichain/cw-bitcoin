@@ -161,27 +161,27 @@ impl SignatorySet {
             Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
         >;
 
-        fn take_instruction<'a>(ins: &mut impl Iter<'a>) -> StdResult<Instruction<'a>> {
+        fn take_instruction<'a>(ins: &mut impl Iter<'a>) -> ContractResult<Instruction<'a>> {
             ins.next()
-                .ok_or_else(|| StdError::generic_err("Unexpected end of script"))?
-                .map_err(|_| StdError::generic_err("Failed to read script").into())
+                .ok_or_else(|| ContractError::App("Unexpected end of script".into()))?
+                .map_err(|_| ContractError::App("Failed to read script".into()))
         }
 
-        fn take_bytes<'a>(ins: &mut impl Iter<'a>) -> StdResult<&'a [u8]> {
+        fn take_bytes<'a>(ins: &mut impl Iter<'a>) -> ContractResult<&'a [u8]> {
             let instruction = take_instruction(ins)?;
 
             let Instruction::PushBytes(bytes) = instruction else {
-                return Err(StdError::generic_err("Expected OP_PUSHBYTES"));
+                return Err(ContractError::App("Expected OP_PUSHBYTES".into()));
             };
 
             Ok(bytes)
         }
 
-        fn take_key<'a>(ins: &mut impl Iter<'a>) -> StdResult<Pubkey> {
+        fn take_key<'a>(ins: &mut impl Iter<'a>) -> ContractResult<Pubkey> {
             let bytes = take_bytes(ins)?;
 
             if bytes.len() != 33 {
-                return Err(StdError::generic_err("Expected 33 bytes"));
+                return Err(ContractError::App("Expected 33 bytes".into()));
             }
 
             Ok(Pubkey::try_from_slice(bytes)?)
@@ -189,24 +189,23 @@ impl SignatorySet {
 
         fn take_number<'a>(ins: &mut impl Iter<'a>) -> ContractResult<i64> {
             let bytes = take_bytes(ins)?;
-            read_scriptint(bytes)
-                .map_err(|_| StdError::generic_err("Failed to read scriptint").into())
+            read_scriptint(bytes).map_err(|_| ContractError::App("Failed to read scriptint".into()))
         }
 
         fn take_op<'a>(
             ins: &mut impl Iter<'a>,
             expected_op: opcodes::All,
-        ) -> StdResult<opcodes::All> {
+        ) -> ContractResult<opcodes::All> {
             let instruction = take_instruction(ins)?;
 
             let op = match instruction {
                 Instruction::Op(op) => op,
                 Instruction::PushBytes(&[]) => OP_FALSE,
-                _ => return Err(StdError::generic_err(format!("Expected {:?}", expected_op))),
+                _ => return Err(ContractError::App(format!("Expected {:?}", expected_op))),
             };
 
             if op != expected_op {
-                return Err(StdError::generic_err(format!("Expected {:?}", expected_op)));
+                return Err(ContractError::App(format!("Expected {:?}", expected_op)));
             }
 
             Ok(op)
@@ -259,9 +258,9 @@ impl SignatorySet {
         loop {
             let next = ins
                 .peek()
-                .ok_or_else(|| StdError::generic_err("Unexpected end of script"))?
+                .ok_or_else(|| ContractError::App("Unexpected end of script".into()))?
                 .clone()
-                .map_err(|_| StdError::generic_err("Failed to read script"))?;
+                .map_err(|_| ContractError::App("Failed to read script".into()))?;
 
             if let Instruction::Op(opcodes::all::OP_SWAP) = next {
                 sigs.push(take_nth_signatory(&mut ins)?);
@@ -389,7 +388,7 @@ impl SignatorySet {
 
         // First signatory
         let signatory = iter.next().ok_or_else(|| {
-            StdError::generic_err("Cannot create redeem script for empty signatory set".to_string())
+            ContractError::App("Cannot create redeem script for empty signatory set".to_string())
         })?;
         let truncated_voting_power = signatory.voting_power >> truncation;
         // Push the pubkey onto the stack, check the signature against it, and

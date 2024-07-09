@@ -1,4 +1,4 @@
-use crate::error::ContractResult;
+use crate::error::{ContractError, ContractResult};
 
 use super::signatory::{SignatorySet, SIGSET_THRESHOLD};
 use bitcoin::blockdata::transaction::EcdsaSighashType;
@@ -40,10 +40,10 @@ impl Pubkey {
     ///
     /// This will error if the bytes are not a valid compressed secp256k1 public
     /// key.
-    pub fn new(pubkey: [u8; PUBLIC_KEY_SIZE]) -> StdResult<Self> {
+    pub fn new(pubkey: [u8; PUBLIC_KEY_SIZE]) -> ContractResult<Self> {
         // Verify bytes are a valid compressed secp256k1 public key
         secp256k1::PublicKey::from_slice(pubkey.as_slice()).map_err(|err| {
-            StdError::generic_err(format!(
+            ContractError::App(format!(
                 "Error deserializing public key from slice: {}",
                 err
             ))
@@ -58,9 +58,9 @@ impl Pubkey {
     ///
     /// This will error if the bytes are not a valid compressed secp256k1 public
     /// key.
-    pub fn try_from_slice(bytes: &[u8]) -> StdResult<Self> {
+    pub fn try_from_slice(bytes: &[u8]) -> ContractResult<Self> {
         if bytes.len() != PUBLIC_KEY_SIZE {
-            return Err(StdError::generic_err("Incorrect length"));
+            return Err(ContractError::App("Incorrect length".into()));
         }
 
         let mut buf = [0; PUBLIC_KEY_SIZE];
@@ -244,7 +244,7 @@ impl ThresholdSig {
             .1;
 
         if share.sig.is_some() {
-            return Err(StdError::generic_err("Pubkey already signed"))?;
+            return Err(ContractError::App("Pubkey already signed".into()))?;
         }
 
         let msg = secp256k1::Message::from_slice(self.message.as_slice())?;

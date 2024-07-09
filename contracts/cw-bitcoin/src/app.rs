@@ -330,7 +330,8 @@ impl Bitcoin {
             .building(store)?
             .insert_pending(dest, nbtc)?;
 
-        self.checkpoints.set(store, &**building_mut)?;
+        self.checkpoints
+            .set(store, self.checkpoints.index, &**building_mut)?;
 
         Ok(())
     }
@@ -468,7 +469,8 @@ impl Bitcoin {
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.output.push(Adapter::new(output));
 
-        self.checkpoints.set(store, &checkpoint)?;
+        self.checkpoints
+            .set(store, self.checkpoints.index, &checkpoint)?;
         // TODO: push to excess if full
 
         Ok(())
@@ -493,7 +495,8 @@ impl Bitcoin {
 
         checkpoint.insert_pending(dest, coins)?;
 
-        self.checkpoints.set(store, &checkpoint)?;
+        self.checkpoints
+            .set(store, self.checkpoints.index, &checkpoint)?;
 
         Ok(())
     }
@@ -637,20 +640,18 @@ impl Bitcoin {
         };
 
         let btc_height = self.headers.height(store)?;
-        let pushed = self
-            .checkpoints
-            .maybe_step(
-                env,
-                store,
-                &self.accounts,
-                external_outputs,
-                btc_height,
-                !reached_capacity_limit,
-                timestamping_commitment,
-                &mut self.fee_pool,
-                &self.config,
-            )
-            .map_err(|err| ContractError::App(err.to_string()))?;
+
+        let pushed = self.checkpoints.maybe_step(
+            env,
+            store,
+            &self.accounts,
+            external_outputs,
+            btc_height,
+            !reached_capacity_limit,
+            timestamping_commitment,
+            &mut self.fee_pool,
+            &self.config,
+        )?;
 
         // TODO: remove expired outpoints from processed_outpoints
 
@@ -731,7 +732,7 @@ impl Bitcoin {
             confirmed_dests.push(checkpoint.pending);
             // clear pending
             checkpoint.pending = vec![];
-            self.checkpoints.set(store, &checkpoint)?;
+            self.checkpoints.set(store, *confirmed_index, &checkpoint)?;
         }
         if let Some(last_index) = unhandled_confirmed_cps.last() {
             self.checkpoints.first_unhandled_confirmed_cp_index = *last_index + 1;
@@ -767,7 +768,7 @@ impl Bitcoin {
             let mut checkpoint = self.checkpoints.get(store, checkpoint_index)?;
             completed_dests.push(checkpoint.pending);
             checkpoint.pending = vec![]; // clear pointer
-            self.checkpoints.set(store, &checkpoint)?;
+            self.checkpoints.set(store, checkpoint_index, &checkpoint)?;
         }
         Ok(completed_dests)
     }
@@ -784,7 +785,8 @@ impl Bitcoin {
         self.fee_pool += amount as i64;
         let mut checkpoint = self.checkpoints.building(store)?;
         checkpoint.fees_collected += amount / self.config.units_per_sat;
-        self.checkpoints.set(store, &checkpoint)?;
+        self.checkpoints
+            .set(store, self.checkpoints.index, &checkpoint)?;
 
         Ok(())
     }
@@ -965,19 +967,20 @@ mod tests {
         ];
 
         let push_deposit = |store: &mut dyn Storage| {
+            let btc = btc.borrow();
             let input = Input::new(
                 OutPoint {
                     txid: Txid::from_slice(&[0; 32]).unwrap(),
                     vout: 0,
                 },
-                &btc.borrow().checkpoints.building(store).unwrap().sigset,
+                &btc.checkpoints.building(store).unwrap().sigset,
                 &[0u8],
                 100_000_000,
                 (9, 10),
             )
             .unwrap();
 
-            let mut building_mut = btc.borrow().checkpoints.building(store).unwrap();
+            let mut building_mut = btc.checkpoints.building(store).unwrap();
             building_mut.fees_collected = 100_000_000;
             let building_checkpoint_batch = building_mut
                 .batches
@@ -985,9 +988,8 @@ mod tests {
                 .unwrap();
             let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
             checkpoint_tx.input.push(input);
-            btc.borrow()
-                .checkpoints
-                .set(store, &**building_mut)
+            btc.checkpoints
+                .set(store, btc.checkpoints.index, &**building_mut)
                 .unwrap();
         };
 
@@ -1002,7 +1004,9 @@ mod tests {
 
             let mut building_mut = btc.checkpoints.building(store).unwrap();
             building_mut.fees_collected = 100_000_000;
-            btc.checkpoints.set(store, &**building_mut).unwrap();
+            btc.checkpoints
+                .set(store, btc.checkpoints.index, &**building_mut)
+                .unwrap();
         };
 
         let sign_batch = |store: &mut dyn Storage, btc_height| {
@@ -1054,59 +1058,78 @@ mod tests {
 
         assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 2);
 
-        // set_time(2000);
-        // push_deposit();
-        // maybe_step();
-        // let change_rates = btc.borrow().change_rates(2000, 2100, 0)?;
-        // assert_eq!(change_rates.withdrawal, 0);
-        // assert_eq!(change_rates.sigset_change, 0);
-        // sign_cp(10);
+        let env = set_time(2000);
+        push_deposit(deps.as_mut().storage);
+        maybe_step(env, deps.as_mut().storage);
+        let change_rates = btc
+            .borrow()
+            .change_rates(deps.as_mut().storage, 2000, 2100, 0)?;
+        assert_eq!(change_rates.withdrawal, 0);
+        assert_eq!(change_rates.sigset_change, 0);
+        sign_cp(deps.as_mut().storage, 10);
 
-        // assert_eq!(btc.borrow().checkpoints.len()?, 3);
+        assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 3);
 
-        // // Change the sigset
-        // let vals = Context::resolve::<Validators>().unwrap();
-        // vals.set_voting_power([1; 32], 100);
+        // Change the sigset
+        VALIDATORS.save(deps.as_mut().storage, &consensus_key2, &100)?;
 
-        // set_time(3000);
-        // push_deposit();
-        // maybe_step();
-        // let change_rates = btc.borrow().change_rates(3000, 3100, 0)?;
-        // assert_eq!(change_rates.withdrawal, 0);
-        // assert_eq!(change_rates.sigset_change, 0);
-        // sign_cp(10);
+        let env = set_time(3000);
+        push_deposit(deps.as_mut().storage);
+        maybe_step(env, deps.as_mut().storage);
+        let change_rates = btc
+            .borrow()
+            .change_rates(deps.as_mut().storage, 3000, 3100, 0)?;
+        assert_eq!(change_rates.withdrawal, 0);
+        assert_eq!(change_rates.sigset_change, 0);
+        sign_cp(deps.as_mut().storage, 10);
 
-        // assert_eq!(btc.borrow().checkpoints.len()?, 4);
+        assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 4);
 
-        // set_time(4000);
-        // push_deposit();
-        // maybe_step();
-        // let change_rates = btc.borrow().change_rates(3000, 4100, 0)?;
-        // assert_eq!(change_rates.withdrawal, 0);
-        // assert_eq!(change_rates.sigset_change, 4090);
-        // assert_eq!(btc.borrow().checkpoints.len()?, 5);
+        let env = set_time(4000);
+        push_deposit(deps.as_mut().storage);
+        maybe_step(env, deps.as_mut().storage);
+        let change_rates = btc
+            .borrow()
+            .change_rates(deps.as_mut().storage, 3000, 4100, 0)?;
+        assert_eq!(change_rates.withdrawal, 0);
+        assert_eq!(change_rates.sigset_change, 4090);
+        assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 5);
 
-        // sign_cp(10);
+        sign_cp(deps.as_mut().storage, 10);
 
-        // set_time(5000);
-        // push_deposit();
-        // maybe_step();
-        // let change_rates = btc.borrow().change_rates(3000, 5100, 0)?;
-        // assert_eq!(change_rates.withdrawal, 0);
-        // assert_eq!(change_rates.sigset_change, 4090);
-        // assert_eq!(btc.borrow().checkpoints.len()?, 6);
-        // sign_cp(10);
+        let env = set_time(5000);
+        push_deposit(deps.as_mut().storage);
+        maybe_step(env, deps.as_mut().storage);
+        let change_rates = btc
+            .borrow()
+            .change_rates(deps.as_mut().storage, 3000, 5100, 0)?;
+        assert_eq!(change_rates.withdrawal, 0);
+        assert_eq!(change_rates.sigset_change, 4090);
+        assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 6);
+        sign_cp(deps.as_mut().storage, 10);
 
-        // set_time(6000);
-        // push_withdrawal();
-        // maybe_step();
-        // let change_rates = btc.borrow().change_rates(3000, 5100, 0)?;
-        // assert_eq!(change_rates.withdrawal, 8664);
-        // assert_eq!(change_rates.sigset_change, 4090);
-        // assert_eq!(btc.borrow().checkpoints.signing()?.unwrap().sigset.index, 5);
-        // let change_rates = btc.borrow().change_rates(3000, 5100, 5)?;
-        // assert_eq!(change_rates.withdrawal, 0);
-        // assert_eq!(change_rates.sigset_change, 0);
+        let env = set_time(6000);
+        push_withdrawal(deps.as_mut().storage);
+        maybe_step(env, deps.as_mut().storage);
+        let change_rates = btc
+            .borrow()
+            .change_rates(deps.as_mut().storage, 3000, 5100, 0)?;
+        assert_eq!(change_rates.withdrawal, 8664);
+        assert_eq!(change_rates.sigset_change, 4090);
+        assert_eq!(
+            btc.borrow()
+                .checkpoints
+                .signing(deps.as_ref().storage)?
+                .unwrap()
+                .sigset
+                .index,
+            5
+        );
+        let change_rates = btc
+            .borrow()
+            .change_rates(deps.as_mut().storage, 3000, 5100, 5)?;
+        assert_eq!(change_rates.withdrawal, 0);
+        assert_eq!(change_rates.sigset_change, 0);
 
         Ok(())
     }

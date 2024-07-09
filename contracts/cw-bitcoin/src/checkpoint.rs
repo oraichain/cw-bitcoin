@@ -5,7 +5,9 @@ use super::{
 use crate::{
     adapter::Adapter,
     interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest, Xpub},
-    state::{next_checkpoint_queue_id, to_output_script, RECOVERY_SCRIPTS},
+    state::{
+        next_checkpoint_queue_id, to_output_script, CHECKPOINT_QUEUE_ID_PREFIX, RECOVERY_SCRIPTS,
+    },
 };
 use crate::{
     constants::DEFAULT_FEE_RATE,
@@ -15,7 +17,7 @@ use crate::{interface::DequeExtension, signatory::derive_pubkey};
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Coin, Env, Order, StdError, Storage};
+use cosmwasm_std::{Coin, Env, Order, Storage};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
@@ -524,7 +526,9 @@ impl Checkpoint {
                     // signatory supplied less signatures than we require from
                     // them.
                     if sig_index >= sigs.len() {
-                        return Err(StdError::generic_err("Not enough signatures supplied").into());
+                        return Err(ContractError::Checkpoint(
+                            "Not enough signatures supplied".into(),
+                        ));
                     }
                     let sig = &sigs[sig_index];
                     sig_index += 1;
@@ -558,7 +562,9 @@ impl Checkpoint {
         // Error if there are remaining supplied signatures - the signatory
         // supplied more signatures than we require from them.
         if sig_index != sigs.len() {
-            return Err(StdError::generic_err("Excess signatures supplied").into());
+            return Err(ContractError::Checkpoint(
+                "Excess signatures supplied".into(),
+            ));
         }
 
         // If these signatures made the checkpoint fully signed, record the
@@ -748,18 +754,22 @@ impl Checkpoint {
         config: &CheckpointConfig,
     ) -> ContractResult<(u64, u64)> {
         let mut in_amount = 0;
-        let checkpoint_batch = self
-            .batches
-            .get(BatchType::Checkpoint as usize)
-            .ok_or(StdError::generic_err("Cannot get batch checkpoint"))?;
+        let checkpoint_batch =
+            self.batches
+                .get(BatchType::Checkpoint as usize)
+                .ok_or(ContractError::Checkpoint(
+                    "Cannot get batch checkpoint".into(),
+                ))?;
         let checkpoint_tx = checkpoint_batch
             .get(0)
-            .ok_or(StdError::generic_err("Cannot get checkpoint tx"))?;
+            .ok_or(ContractError::Checkpoint("Cannot get checkpoint tx".into()))?;
         for i in 0..config.max_inputs.min(checkpoint_tx.input.len() as u64) {
             let input = checkpoint_tx
                 .input
                 .get(i as usize)
-                .ok_or(StdError::generic_err("Cannot get checkpoint tx input"))?;
+                .ok_or(ContractError::Checkpoint(
+                    "Cannot get checkpoint tx input".into(),
+                ))?;
             in_amount += input.amount;
         }
         let mut out_amount = 0;
@@ -767,7 +777,9 @@ impl Checkpoint {
             let output = checkpoint_tx
                 .output
                 .get(i as usize)
-                .ok_or(StdError::generic_err("Cannot get checkpoint tx output"))?;
+                .ok_or(ContractError::Checkpoint(
+                    "Cannot get checkpoint tx output".into(),
+                ))?;
             out_amount += output.value;
         }
         Ok((in_amount, out_amount))
@@ -836,14 +848,18 @@ pub struct CheckpointQueue {
     /// The checkpoints in the queue, in order from oldest to newest. The last
     /// checkpoint is the checkpoint currently being built, and has the index
     /// contained in the `index` field.
-    pub queue: String,
+    pub queue_id: String,
 }
 
 impl CheckpointQueue {
     pub fn new(store: &mut dyn Storage) -> ContractResult<Self> {
-        let queue = format!("checkpoint{}s", next_checkpoint_queue_id(store)?);
+        let queue_id = format!(
+            "{}{}s",
+            CHECKPOINT_QUEUE_ID_PREFIX,
+            next_checkpoint_queue_id(store)?
+        );
         Ok(Self {
-            queue,
+            queue_id,
             ..Default::default()
         })
     }
@@ -1214,7 +1230,7 @@ impl BuildingCheckpoint {
     /// transactions contained within have a known transaction id which will not
     /// change.    
     pub fn advance(
-        mut self,
+        &mut self,
         env: Env,
         store: &mut dyn Storage,
         nbtc_accounts: &Accounts,
@@ -1264,7 +1280,7 @@ impl BuildingCheckpoint {
         // Deduct the outgoing amount and calculated fee amount from the reserve
         // input amount, to set the resulting reserve output value.
         let reserve_value = in_amount.checked_sub(out_amount + cp_fees).ok_or_else(|| {
-            StdError::generic_err("Insufficient reserve value to cover miner fees")
+            ContractError::Checkpoint("Insufficient reserve value to cover miner fees".into())
         })?;
         let reserve_out = checkpoint_tx.output.get_mut(0).unwrap();
         reserve_out.value = reserve_value;
@@ -1330,7 +1346,7 @@ impl BuildingCheckpoint {
 
 impl CheckpointQueue {
     pub fn queue(&self) -> DequeExtension<Checkpoint> {
-        DequeExtension::new(&self.queue)
+        DequeExtension::new(&self.queue_id)
     }
 
     /// Set the queue's configuration parameters.
@@ -1346,7 +1362,7 @@ impl CheckpointQueue {
     /// Removes all checkpoints from the queue and resets the index to zero.
     pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
         self.index = 0;
-        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
+        let checkpoints = self.queue();
         while !checkpoints.is_empty(store)? {
             checkpoints.pop_back(store)?;
         }
@@ -1358,17 +1374,22 @@ impl CheckpointQueue {
     ///
     /// If the index is out of bounds or was pruned, an error is returned.
     pub fn get(&self, store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {
-        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
+        let checkpoints = self.queue();
         let queue_len = checkpoints.len(store)?;
         let index = self.get_deque_index(index, queue_len)?;
         let checkpoint = checkpoints.get(store, index)?.unwrap();
         Ok(checkpoint)
     }
 
-    pub fn set(&self, store: &mut dyn Storage, checkpoint: &Checkpoint) -> ContractResult<()> {
-        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
+    pub fn set(
+        &self,
+        store: &mut dyn Storage,
+        index: u32,
+        checkpoint: &Checkpoint,
+    ) -> ContractResult<()> {
+        let checkpoints = self.queue();
         let queue_len = checkpoints.len(store)?;
-        let index = self.get_deque_index(self.index, queue_len)?;
+        let index = self.get_deque_index(index, queue_len)?;
         checkpoints.set(store, index, checkpoint)?;
         Ok(())
     }
@@ -1384,7 +1405,7 @@ impl CheckpointQueue {
     fn get_deque_index(&self, index: u32, queue_len: u32) -> ContractResult<u32> {
         let start = self.index + 1 - queue_len;
         if index > self.index || index < start {
-            Err(StdError::generic_err("Index out of bounds").into())
+            Err(ContractError::App("Index out of bounds".into()))
         } else {
             Ok(index - start)
         }
@@ -1399,7 +1420,7 @@ impl CheckpointQueue {
     // is_empty is defined
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self, store: &dyn Storage) -> ContractResult<u32> {
-        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
+        let checkpoints = self.queue();
         let queue_len = checkpoints.len(store)?;
         Ok(queue_len)
     }
@@ -1425,7 +1446,7 @@ impl CheckpointQueue {
     pub fn all(&self, store: &dyn Storage) -> ContractResult<Vec<(u32, Checkpoint)>> {
         // TODO: return iterator
         // TODO: use DequeExtension iterator
-        let checkpoints = DequeExtension::new(&self.queue);
+        let checkpoints = self.queue();
         let queue_len = checkpoints.len(store)?;
         let mut out = Vec::with_capacity(queue_len as usize);
 
@@ -1630,9 +1651,9 @@ impl CheckpointQueue {
             let prev = self.get(store, prev_index)?;
             let sigset = prev.sigset.clone();
             let prev_fee_rate = prev.fee_rate;
-
+            let mut building_checkpoint = BuildingCheckpoint(Box::new(prev));
             let (reserve_outpoint, reserve_value, fees_paid, excess_inputs, excess_outputs) =
-                BuildingCheckpoint(Box::new(prev)).advance(
+                building_checkpoint.advance(
                     env,
                     store,
                     nbtc_accounts,
@@ -1641,6 +1662,9 @@ impl CheckpointQueue {
                     cp_fees,
                     &config,
                 )?;
+            // update checkpoint
+            self.set(store, prev_index, &**building_checkpoint)?;
+
             *fee_pool -= (fees_paid * parent_config.units_per_sat) as i64;
 
             // Adjust the fee rate for the next checkpoint based on whether past
@@ -1711,7 +1735,7 @@ impl CheckpointQueue {
                 checkpoint_tx.output.push(output);
             }
 
-            self.set(store, &**building)?;
+            self.set(store, self.index, &**building)?;
         }
 
         Ok(true)
@@ -1720,7 +1744,7 @@ impl CheckpointQueue {
     /// Prunes old checkpoints from the queue.
     pub fn prune(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
         let latest = self.building(store)?.create_time();
-        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
+        let checkpoints = self.queue();
         let mut queue_len = checkpoints.len(store)?;
         while let Some(oldest) = checkpoints.front(store)? {
             // TODO: move to min_checkpoints field in config
@@ -1751,8 +1775,8 @@ impl CheckpointQueue {
         if self.signing(store)?.is_some() {
             return Ok(false);
         }
-
-        if !self.queue.is_empty() {
+        let checkpoints = self.queue();
+        if !checkpoints.is_empty(store)? {
             let now = env.block.time.seconds();
             let elapsed = now - self.building(store)?.create_time();
 
@@ -1839,7 +1863,7 @@ impl CheckpointQueue {
         // Increment the index. For the first checkpoint, leave the index at
         // zero.
         let mut index = self.index;
-        if !self.queue.is_empty() {
+        if !checkpoints.is_empty(store)? {
             index += 1;
         }
 
@@ -1882,8 +1906,9 @@ impl CheckpointQueue {
     ) -> ContractResult<Option<BuildingCheckpoint>> {
         // Increment the index. For the first checkpoint, leave the index at
         // zero.
+        let checkpoints = DequeExtension::new(&self.queue_id);
         let mut index = self.index;
-        if !self.queue.is_empty() {
+        if !checkpoints.is_empty(store)? {
             index += 1;
         }
 
@@ -1902,11 +1927,12 @@ impl CheckpointQueue {
         }
 
         self.index = index;
-        self.queue().push_back(store, &Checkpoint::new(sigset)?)?;
+
+        checkpoints.push_back(store, &Checkpoint::new(sigset)?)?;
 
         let mut building = self.building(store)?;
         building.deposits_enabled = deposits_enabled;
-        self.set(store, &**building)?;
+        self.set(store, self.index, &**building)?;
 
         Ok(Some(building))
     }
@@ -1943,7 +1969,9 @@ impl CheckpointQueue {
         let mut checkpoint = self.get(store, index)?;
         let status = checkpoint.status.clone();
         if matches!(status, CheckpointStatus::Building) {
-            return Err(StdError::generic_err("Checkpoint is still building").into());
+            return Err(ContractError::Checkpoint(
+                "Checkpoint is still building".into(),
+            ));
         }
 
         checkpoint.sign(xpub, sigs, btc_height)?;
@@ -1955,7 +1983,7 @@ impl CheckpointQueue {
             checkpoint.status = CheckpointStatus::Complete
         }
 
-        self.set(store, &checkpoint)?;
+        self.set(store, index, &checkpoint)?;
 
         Ok(())
     }
@@ -2084,7 +2112,7 @@ impl CheckpointQueue {
         threshold_ratio: (u64, u64),
     ) -> ContractResult<()> {
         let mut index = first_index + 1;
-        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
+        let checkpoints = self.queue();
         let create_time = checkpoints.get(store, 0)?.unwrap().create_time();
 
         for script in redeem_scripts {
@@ -2384,8 +2412,8 @@ mod test {
     #[test]
     fn backfill_basic() {
         let mut deps = mock_dependencies();
-        let mut queue = CheckpointQueue::default();
-        queue.queue = "checkpoint".to_string();
+        let mut queue = CheckpointQueue::new(deps.as_mut().storage).unwrap();
+
         queue.index = 10;
         queue
             .queue()

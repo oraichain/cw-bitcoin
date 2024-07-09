@@ -57,6 +57,8 @@ pub const OUTPOINTS: Map<&str, ()> = Map::new("outpoints");
 
 pub const CHECKPOINT_QUEUE_ID: Item<u64> = Item::new("cp_queue_id");
 
+pub const CHECKPOINT_QUEUE_ID_PREFIX: &str = "checkpoint";
+
 pub fn next_checkpoint_queue_id(store: &mut dyn Storage) -> ContractResult<u64> {
     let id: u64 = last_checkpoint_queue_id(store)? + 1;
     CHECKPOINT_QUEUE_ID.save(store, &id)?;
