@@ -1,7 +1,7 @@
 #![feature(trait_alias)]
 
 mod adapter;
-// mod bitcoin;
+mod bitcoin;
 mod checkpoint;
 mod constants;
 mod error;

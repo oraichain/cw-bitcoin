@@ -1085,7 +1085,7 @@ impl BuildingCheckpoint {
             .pending
             .iter()
             .filter_map(|(dest, coin)| {
-                let script_pubkey = match to_output_script(store, dest.to_string()) {
+                let script_pubkey = match to_output_script(store, dest) {
                     Err(err) => return Some(Err(err.into())),
                     Ok(maybe_script) => maybe_script,
                 }?;
@@ -1356,6 +1356,14 @@ impl CheckpointQueue {
         let index = self.get_deque_index(index, queue_len)?;
         let checkpoint = checkpoints.get(store, index)?.unwrap();
         Ok(checkpoint)
+    }
+
+    pub fn set(&self, store: &mut dyn Storage, checkpoint: &Checkpoint) -> ContractResult<()> {
+        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
+        let queue_len = checkpoints.len(store)?;
+        let index = self.get_deque_index(self.index, queue_len)?;
+        checkpoints.set(store, index, checkpoint)?;
+        Ok(())
     }
 
     /// Calculates the index within the deque based on the given checkpoint

@@ -7,16 +7,16 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::from_slice;
 use cosmwasm_std::to_vec;
 use cosmwasm_std::Addr;
+use cosmwasm_std::Binary;
 use cosmwasm_std::Coin;
 use cosmwasm_std::StdResult;
 use cosmwasm_std::Storage;
 use cw_storage_plus::Deque;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-// use serde::{de::DeserializeOwned, Serialize};
+use serde::{de, ser, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::adapter::Adapter;
+use crate::bitcoin::ConsensusKey;
 use crate::constants::MAX_CHECKPOINT_AGE;
 use crate::constants::MAX_CHECKPOINT_INTERVAL;
 use crate::constants::MAX_FEE_RATE;
@@ -39,7 +39,7 @@ pub struct DequeExtension<'a, T> {
     queue: Deque<'a, T>,
 }
 
-impl<'a, T: Serialize + DeserializeOwned> DequeExtension<'a, T> {
+impl<'a, T: Serialize + de::DeserializeOwned> DequeExtension<'a, T> {
     pub const fn new(prefix: &'a str) -> Self {
         Self {
             namespace: prefix.as_bytes(),
@@ -152,7 +152,7 @@ impl Dest {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Validator {
-    pub pubkey: Vec<u8>,
+    pub pubkey: ConsensusKey,
     pub power: u64,
 }
 
@@ -351,10 +351,9 @@ impl Default for CheckpointConfig {
 
 /// A Bitcoin extended public key, used to derive Bitcoin public keys which
 /// signatories sign transactions with.
-// #[derive(Call, Query, Clone, Debug, Client, PartialEq, Serialize)]
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
 pub struct Xpub {
-    key: ExtendedPubKey,
+    pub key: ExtendedPubKey,
 }
 
 impl Xpub {
@@ -374,6 +373,41 @@ impl Deref for Xpub {
 
     fn deref(&self) -> &Self::Target {
         &self.key
+    }
+}
+
+impl From<ExtendedPubKey> for Xpub {
+    fn from(key: ExtendedPubKey) -> Self {
+        Xpub { key }
+    }
+}
+
+impl From<&ExtendedPubKey> for Xpub {
+    fn from(key: &ExtendedPubKey) -> Self {
+        Xpub { key: *key }
+    }
+}
+
+/// Serializes as a string
+impl Serialize for Xpub {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: ser::Serializer,
+    {
+        let dest = self.key.encode();
+        Binary::from(dest).serialize(serializer)
+    }
+}
+
+/// Deserializes as string
+impl<'de> Deserialize<'de> for Xpub {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        let v = Binary::deserialize(deserializer)?;
+        let inner = ExtendedPubKey::decode(v.as_slice()).map_err(de::Error::custom)?;
+        Ok(inner.into())
     }
 }
 
@@ -438,3 +472,28 @@ impl HeaderConfig {
         }
     }
 }
+
+// pub const XPUB_LENGTH: usize = 78;
+// impl Encode for Xpub {
+//     fn encode_into<W: std::io::Write>(&self, dest: &mut W) -> ed::Result<()> {
+//         let bytes = self.key.encode();
+//         dest.write_all(&bytes)?;
+//         Ok(())
+//     }
+
+//     fn encoding_length(&self) -> ed::Result<usize> {
+//         Ok(XPUB_LENGTH)
+//     }
+// }
+
+// impl Decode for Xpub {
+//     fn decode<R: std::io::Read>(mut input: R) -> ed::Result<Self> {
+//         let mut bytes = [0; XPUB_LENGTH];
+//         input.read_exact(&mut bytes)?;
+//         let key = ExtendedPubKey::decode(&bytes).map_err(|_| ed::Error::UnexpectedByte(32))?;
+//         Ok(Xpub { key })
+//     }
+// }
+
+#[test]
+fn test() {}

@@ -3,9 +3,11 @@
 
 use std::cmp::Ordering;
 
+use crate::bitcoin::ConsensusKey;
 use crate::interface::Validator;
 use crate::state::SIG_KEYS;
 use crate::state::VALIDATORS;
+use crate::state::XPUBS;
 
 use super::error::ContractError;
 use super::error::ContractResult;
@@ -51,8 +53,7 @@ use super::interface::Xpub;
 /// signatures, allowing for more signatories to be included without making an
 /// impact on script size and fees.
 pub const MAX_SIGNATORIES: u64 = 20;
-// /// A Tendermint/CometBFT public key.
-// pub type ConsensusKey = [u8; 32];
+
 pub const SIGSET_THRESHOLD: (u64, u64) = (2, 3);
 
 /// A signatory in a signatory set, consisting of a public key and voting power.
@@ -127,7 +128,7 @@ impl SignatorySet {
         };
 
         let val_set: Vec<Validator> = VALIDATORS
-            .range_raw(store, None, None, Order::Ascending)
+            .range(store, None, None, Order::Ascending)
             .map(|item| {
                 let (k, v) = item?;
                 Ok(Validator {
@@ -493,110 +494,69 @@ impl SignatorySet {
     }
 }
 
+/// A collection storing the signatory extended public keys of each validator
+/// who has submitted one.
+///
+/// The collection also includes an set of all signatory extended public keys,
+/// which is used to prevent duplicate keys from being submitted.
+#[cw_serde]
+pub struct SignatoryKeys {}
+
+impl SignatoryKeys {
+    /// Clears the collection.
+    pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
+        let mut xpubs = vec![];
+        for entry in SIG_KEYS.range_raw(store, None, None, Order::Ascending) {
+            let (_, v) = entry?;
+            xpubs.push(v);
+        }
+        for xpub in xpubs {
+            XPUBS.remove(store, &xpub.encode());
+        }
+
+        SIG_KEYS.clear(store);
+
+        Ok(())
+    }
+
+    /// Adds a signatory extended public key to the collection, associated with
+    /// the given consensus key.
+    pub fn insert(
+        &mut self,
+        store: &mut dyn Storage,
+        consensus_key: ConsensusKey,
+        xpub: Xpub,
+    ) -> ContractResult<()> {
+        let mut normalized_xpub = xpub;
+        normalized_xpub.key.child_number = 0.into();
+        normalized_xpub.key.depth = 0;
+        normalized_xpub.key.parent_fingerprint = Default::default();
+        let xpub_key = &normalized_xpub.encode();
+        if XPUBS.has(store, xpub_key) {
+            return Err(ContractError::App("Duplicate signatory key".to_string()).into());
+        }
+
+        SIG_KEYS.save(store, &consensus_key, &xpub)?;
+        XPUBS.save(store, xpub_key, &())?;
+
+        Ok(())
+    }
+
+    /// Returns the signatory extended public key associated with the given
+    /// consensus key, if one exists.    
+    pub fn get(&self, store: &dyn Storage, cons_key: ConsensusKey) -> ContractResult<Option<Xpub>> {
+        Ok(SIG_KEYS.may_load(store, &cons_key)?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // #[test]
-    // #[should_panic(expected = "Cannot build script for empty signatory set")]
-    // fn redeem_script_empty() {
-    //     let sigs = SignatorySet::new();
-    //     sigs.redeem_script(vec![1, 2, 3]);
-    // }
-
-    // #[test]
-    // fn redeem_script_fixture() {
-    //     let mut signatories = SignatorySet::new();
-    //     signatories.set(mock_signatory(1, 5_000_000));
-    //     signatories.set(mock_signatory(2, 15_000_000));
-    //     signatories.set(mock_signatory(3, 20_000_000));
-    //     signatories.set(mock_signatory(4, 60_000_000));
-    //     let script = redeem_script(&signatories, vec![1, 2, 3]);
-
-    //     assert_eq!(
-    //         script,
-    //         script! {
-    //             0x03462779ad4aad39514614751a71085f2f10e1c7a593e4e030efb5b8721ce55b0b OP_CHECKSIG
-    //             OP_IF
-    //                 3750000
-    //             OP_ELSE
-    //                 0
-    //             OP_ENDIF
-
-    //             OP_SWAP
-    //             0x02531fe6068134503d2723133227c867ac8fa6c83c537e9a44c3c5bdbdcb1fe337 OP_CHECKSIG
-    //             OP_IF
-    //                 1250000 OP_ADD
-    //             OP_ENDIF
-
-    //             OP_SWAP
-    //             0x024d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766 OP_CHECKSIG
-    //             OP_IF
-    //                 937500 OP_ADD
-    //             OP_ENDIF
-
-    //             OP_SWAP
-    //             0x031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f OP_CHECKSIG
-    //             OP_IF
-    //                 312500 OP_ADD
-    //             OP_ENDIF
-
-    //             4166666 OP_GREATERTHAN
-
-    //             0x010203 OP_DROP
-    //         }
-    //     );
-
-    //     assert_eq!(
-    //         script.into_bytes(),
-    //         vec![
-    //             33, 3, 70, 39, 121, 173, 74, 173, 57, 81, 70, 20, 117, 26, 113, 8, 95, 47, 16, 225,
-    //             199, 165, 147, 228, 224, 48, 239, 181, 184, 114, 28, 229, 91, 11, 172, 99, 3, 112,
-    //             56, 57, 103, 0, 104, 124, 33, 2, 83, 31, 230, 6, 129, 52, 80, 61, 39, 35, 19, 50,
-    //             39, 200, 103, 172, 143, 166, 200, 60, 83, 126, 154, 68, 195, 197, 189, 189, 203,
-    //             31, 227, 55, 172, 99, 3, 208, 18, 19, 147, 104, 124, 33, 2, 77, 75, 108, 209, 54,
-    //             16, 50, 202, 155, 210, 174, 185, 217, 0, 170, 77, 69, 217, 234, 216, 10, 201, 66,
-    //             51, 116, 196, 81, 167, 37, 77, 7, 102, 172, 99, 3, 28, 78, 14, 147, 104, 124, 33,
-    //             3, 27, 132, 197, 86, 123, 18, 100, 64, 153, 93, 62, 213, 170, 186, 5, 101, 215, 30,
-    //             24, 52, 96, 72, 25, 255, 156, 23, 245, 233, 213, 221, 7, 143, 172, 99, 3, 180, 196,
-    //             4, 147, 104, 3, 10, 148, 63, 160, 3, 1, 2, 3, 117
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn output_script_fixture() {
-    //     let script = output_script(&mock_signatory_set(4), vec![1, 2, 3]);
-
-    //     assert_eq!(
-    //         script,
-    //         bitcoin_script! {
-    //             0 0x73155f74ccee5011c3c62776c15abcc0d4e19eb3e1764609cf3e90e7cb81db4a
-    //         }
-    //     );
-    //     assert_eq!(
-    //         script.into_bytes(),
-    //         vec![
-    //             0, 32, 115, 21, 95, 116, 204, 238, 80, 17, 195, 198, 39, 118, 193, 90, 188, 192,
-    //             212, 225, 158, 179, 225, 118, 70, 9, 207, 62, 144, 231, 203, 129, 219, 74
-    //         ]
-    //     );
-    // }
-
-    // #[test]
-    // fn truncation() {
-    //     // total less than target precision (10, 4 bits)
-    //     let mut signatories = SignatorySet::new();
-    //     signatories.set(mock_signatory(1, 10));
-    //     assert_eq!(get_truncation(&signatories, 23), 0);
-
-    //     // total greater than target precision (100M, 27 bits)
-    //     let mut signatories = SignatorySet::new();
-    //     signatories.set(mock_signatory(1, 100_000_000));
-    //     assert_eq!(get_truncation(&signatories, 23), 4);
-    // }
-
-    use bitcoin::hashes::hex::FromHex;
+    use bitcoin::{
+        hashes::hex::FromHex,
+        util::bip32::{ExtendedPrivKey, ExtendedPubKey},
+    };
+    use cosmwasm_std::{from_slice, to_vec};
 
     use crate::{signatory::Signatory, threshold_sig::Pubkey};
 
