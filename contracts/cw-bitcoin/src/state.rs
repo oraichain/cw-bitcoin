@@ -1,5 +1,5 @@
 use bitcoin::Script;
-use cosmwasm_std::Storage;
+use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
     bitcoin::ConsensusKey,
     error::ContractResult,
     header::WorkHeader,
-    interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Validator, Xpub},
     recovery::RecoveryTx,
 };
 
@@ -34,13 +34,6 @@ pub const SIG_KEYS: Map<&ConsensusKey, Xpub> = Map::new("sig_keys");
 /// xpubs Map<Xpub::encode(), ()>
 pub const XPUBS: Map<&[u8], ()> = Map::new("xpubs");
 
-pub fn to_output_script(store: &dyn Storage, dest: &str) -> ContractResult<Option<Script>> {
-    Ok(RECOVERY_SCRIPTS
-        .load(store, dest)
-        .ok()
-        .map(|script| script.into_inner()))
-}
-
 /// A queue of Bitcoin block headers, along with the total estimated amount of
 /// work (measured in hashes) done in the headers included in the queue.
 ///
@@ -61,3 +54,23 @@ pub const EXPIRATION_QUEUE: Map<(u64, &str), ()> = Map::new("expiration_queue");
 
 /// A set of outpoints.
 pub const OUTPOINTS: Map<&str, ()> = Map::new("outpoints");
+
+pub fn to_output_script(store: &dyn Storage, dest: &str) -> ContractResult<Option<Script>> {
+    Ok(RECOVERY_SCRIPTS
+        .load(store, dest)
+        .ok()
+        .map(|script| script.into_inner()))
+}
+
+pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
+    VALIDATORS
+        .range(store, None, None, Order::Ascending)
+        .map(|item| {
+            let (k, v) = item?;
+            Ok(Validator {
+                power: v,
+                pubkey: k,
+            })
+        })
+        .collect()
+}

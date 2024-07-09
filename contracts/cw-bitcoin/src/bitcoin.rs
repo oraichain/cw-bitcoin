@@ -1,7 +1,7 @@
-use crate::checkpoint::Checkpoint;
-use crate::interface::{Accounts, Dest, Validator, Xpub};
+use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
-use crate::state::{RECOVERY_SCRIPTS, SIGNERS, VALIDATORS};
+use crate::state::{get_validators, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS};
+use crate::threshold_sig;
 
 use super::checkpoint::Input;
 use super::recovery::{RecoveryTxInput, RecoveryTxs};
@@ -10,107 +10,18 @@ use super::threshold_sig::Signature;
 use super::adapter::Adapter;
 use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
-use super::constants::{MAX_DEPOSIT_AGE, MIN_DEPOSIT_AMOUNT, MIN_WITHDRAWAL_AMOUNT, TRANSFER_FEE};
 use super::error::{ContractError, ContractResult};
 use super::header::HeaderQueue;
-use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::ChildNumber;
-use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use cosmwasm_std::{Addr, Coin, Env, Order, StdResult, Storage, Uint128};
+use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
-use serde::Serialize;
 use std::collections::HashMap;
-use std::ops::Deref;
 
 pub const NETWORK: ::bitcoin::Network = ::bitcoin::Network::Bitcoin;
-
-/// The configuration parameters for the Bitcoin module.
-pub struct BitcoinConfig {
-    /// The minimum number of checkpoints that must be produced before
-    /// withdrawals are enabled.
-    pub min_withdrawal_checkpoints: u32,
-    /// The minimum amount of BTC a deposit must send to be honored, in
-    /// satoshis.
-    pub min_deposit_amount: u64,
-    /// The minimum amount of BTC a withdrawal must withdraw, in satoshis.
-    pub min_withdrawal_amount: u64,
-    /// TODO: remove this, not used
-    pub max_withdrawal_amount: u64,
-    /// The maximum length of a withdrawal output script, in bytes.
-    pub max_withdrawal_script_length: u64,
-    /// The fee charged for an nBTC transfer, in micro-satoshis.
-    pub transfer_fee: u64,
-    /// The minimum number of confirmations a Bitcoin block must have before it
-    /// is considered finalized. Note that in the current implementation, the
-    /// actual number of confirmations required is `min_confirmations + 1`.
-    pub min_confirmations: u32,
-    /// The number which amounts in satoshis are multiplied by to get the number
-    /// of units held in nBTC accounts. In other words, the amount of
-    /// subdivisions of satoshis which nBTC accounting uses.
-    pub units_per_sat: u64,
-
-    // (These fields were moved to `checkpoint::Config`)
-    pub emergency_disbursal_min_tx_amt: u64,
-
-    pub emergency_disbursal_lock_time_interval: u32,
-
-    pub emergency_disbursal_max_tx_size: u64,
-
-    /// If a signer does not submit signatures for this many consecutive
-    /// checkpoints, they are considered offline and are removed from the
-    /// signatory set (jailed) and slashed.    
-    pub max_offline_checkpoints: u32,
-    /// The minimum number of confirmations a checkpoint must have on the
-    /// Bitcoin network before it is considered confirmed. Note that in the
-    /// current implementation, the actual number of confirmations required is
-    /// `min_checkpoint_confirmations + 1`.    
-    pub min_checkpoint_confirmations: u32,
-    /// The maximum amount of BTC that can be held in the network, in satoshis.
-    pub capacity_limit: u64,
-
-    pub max_deposit_age: u64,
-
-    pub fee_pool_target_balance: u64,
-
-    pub fee_pool_reward_split: (u64, u64),
-}
-
-impl BitcoinConfig {
-    fn bitcoin() -> Self {
-        Self {
-            min_withdrawal_checkpoints: 4,
-            min_deposit_amount: MIN_DEPOSIT_AMOUNT,
-            min_withdrawal_amount: MIN_WITHDRAWAL_AMOUNT,
-            max_withdrawal_amount: 64,
-            max_withdrawal_script_length: 64,
-            transfer_fee: TRANSFER_FEE,
-            min_confirmations: 1,
-            units_per_sat: 1_000_000,
-            max_offline_checkpoints: 20,
-            min_checkpoint_confirmations: 0,
-            capacity_limit: 21 * 100_000_000,     // 21 BTC
-            max_deposit_age: MAX_DEPOSIT_AGE, // 2 weeks. Initially there may not be many deposits & withdraws
-            fee_pool_target_balance: 100_000_000, // 1 BTC
-            fee_pool_reward_split: (1, 10),
-            emergency_disbursal_min_tx_amt: 1000,
-            emergency_disbursal_lock_time_interval: 60 * 60 * 24 * 7 * 8, // 8 weeks
-            emergency_disbursal_max_tx_size: 50_000,
-        }
-    }
-}
-
-impl Default for BitcoinConfig {
-    fn default() -> Self {
-        match NETWORK {
-            bitcoin::Network::Testnet | bitcoin::Network::Bitcoin => Self::bitcoin(),
-            _ => unimplemented!(),
-        }
-    }
-}
 
 /// Calculates the bridge fee for a deposit of the given amount of BTC, in
 /// satoshis.
@@ -371,25 +282,22 @@ impl Bitcoin {
         let input_size = input.est_vsize();
         // mint token_factory here
         // let mut nbtc = Nbtc::mint(output.value * self.config.units_per_sat);
-        let nbtc = Coin {
+        let mut nbtc = Coin {
             denom: "oraibtc".to_string(),
             amount: (output.value * self.config.units_per_sat).into(),
         };
         let fee_amount = self.calc_minimum_deposit_fees(input_size, checkpoint.fee_rate);
         let deposit_fees = calc_deposit_fee(nbtc.amount);
-        let fee = nbtc
-            .amount
-            .checked_sub((fee_amount + deposit_fees).into())
-            .map_err(|_| {
-                ContractError::App(
-                    "Deposit amount is too small to pay its spending fee".to_string(),
-                )
-            })?;
+        let fee = (fee_amount + deposit_fees).into();
+        nbtc.amount = nbtc.amount.checked_sub(fee).map_err(|_| {
+            ContractError::App("Deposit amount is too small to pay its spending fee".to_string())
+        })?;
         println!(
             "Relay deposit with output value: {}, input size: {}, checkpoint fee rate: {}",
             output.value, input_size, checkpoint.fee_rate
         );
 
+        self.give_miner_fee(store, fee)?;
         // TODO: record as excess collected if inputs are full
 
         let mut building_mut = self.checkpoints.building(store)?;
@@ -413,188 +321,189 @@ impl Bitcoin {
         Ok(())
     }
 
-    //     /// Records proof that a checkpoint produced by the network has been
-    //     /// confirmed into a Bitcoin block.
-    //     #[call]
-    //     pub fn relay_checkpoint(
-    //         &mut self,
-    //         btc_height: u32,
-    //         btc_proof: Adapter<PartialMerkleTree>,
-    //         cp_index: u32,
-    //     ) -> ContractResult<()> {
-    //         exempt_from_fee()?;
+    /// Records proof that a checkpoint produced by the network has been
+    /// confirmed into a Bitcoin block.    
+    pub fn relay_checkpoint(
+        &mut self,
+        store: &mut dyn Storage,
+        btc_height: u32,
+        btc_proof: Adapter<PartialMerkleTree>,
+        cp_index: u32,
+    ) -> ContractResult<()> {
+        if let Some(conf_index) = self.checkpoints.confirmed_index {
+            if cp_index <= conf_index {
+                return Err(ContractError::App(
+                    "Checkpoint has already been relayed".to_string(),
+                ))?;
+            }
+        }
 
-    //         if let Some(conf_index) = self.checkpoints.confirmed_index {
-    //             if cp_index <= conf_index {
-    //                 return Err(ContractError::App(
-    //                     "Checkpoint has already been relayed".to_string(),
-    //                 ))?;
-    //             }
-    //         }
+        let btc_header = self
+            .headers
+            .get_by_height(store, btc_height)?
+            .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
 
-    //         let btc_header = self
-    //             .headers
-    //             .get_by_height(btc_height)?
-    //             .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
+        if self.headers.height(store)? - btc_height < self.config.min_checkpoint_confirmations {
+            return Err(
+                ContractError::App("Block is not sufficiently confirmed".to_string()).into(),
+            );
+        }
 
-    //         if self.headers.height()? - btc_height < self.config.min_checkpoint_confirmations {
-    //             return Err(ContractError::App("Block is not sufficiently confirmed".to_string()).into());
-    //         }
+        let mut txids = vec![];
+        let mut block_indexes = vec![];
+        let proof_merkle_root = btc_proof
+            .extract_matches(&mut txids, &mut block_indexes)
+            .map_err(|_| ContractError::BitcoinMerkleBlockError)?;
+        if proof_merkle_root != btc_header.merkle_root() {
+            return Err(ContractError::App(
+                "Bitcoin merkle proof does not match header".to_string(),
+            ))?;
+        }
+        if txids.len() != 1 {
+            return Err(ContractError::App(
+                "Bitcoin merkle proof contains an invalid number of txids".to_string(),
+            ))?;
+        }
 
-    //         let mut txids = vec![];
-    //         let mut block_indexes = vec![];
-    //         let proof_merkle_root = btc_proof
-    //             .extract_matches(&mut txids, &mut block_indexes)
-    //             .map_err(|_| Error::BitcoinMerkleBlockError)?;
-    //         if proof_merkle_root != btc_header.merkle_root() {
-    //             return Err(ContractError::App(
-    //                 "Bitcoin merkle proof does not match header".to_string(),
-    //             ))?;
-    //         }
-    //         if txids.len() != 1 {
-    //             return Err(ContractError::App(
-    //                 "Bitcoin merkle proof contains an invalid number of txids".to_string(),
-    //             ))?;
-    //         }
+        let btc_tx = self.checkpoints.get(store, cp_index)?.checkpoint_tx()?;
+        if txids[0] != btc_tx.txid() {
+            return Err(ContractError::App(
+                "Bitcoin merkle proof does not match transaction".to_string(),
+            ))?;
+        }
 
-    //         let btc_tx = self.checkpoints.get(cp_index)?.checkpoint_tx()?;
-    //         if txids[0] != btc_tx.txid() {
-    //             return Err(ContractError::App(
-    //                 "Bitcoin merkle proof does not match transaction".to_string(),
-    //             ))?;
-    //         }
+        self.checkpoints.confirmed_index = Some(cp_index);
+        println!(
+            "Checkpoint {} confirmed at Bitcoin height {}",
+            cp_index, btc_height
+        );
 
-    //         self.checkpoints.confirmed_index = Some(cp_index);
-    //         log::info!(
-    //             "Checkpoint {} confirmed at Bitcoin height {}",
-    //             cp_index,
-    //             btc_height
-    //         );
+        Ok(())
+    }
 
-    //         Ok(())
-    //     }
+    /// Initiates a withdrawal, adding an output to the current `Building`
+    /// checkpoint to be paid out once the checkpoint is fully signed.
+    pub fn withdraw(
+        &mut self,
+        store: &mut dyn Storage,
+        signer: Addr,
+        script_pubkey: Adapter<Script>,
+        amount: Uint128,
+    ) -> ContractResult<()> {
+        let coins = self.accounts.withdraw(signer, amount)?;
 
-    //     /// Initiates a withdrawal, adding an output to the current `Building`
-    //     /// checkpoint to be paid out once the checkpoint is fully signed.
-    //     pub fn withdraw(&mut self, script_pubkey: Adapter<Script>, amount: Amount) -> ContractResult<()> {
-    //         exempt_from_fee()?;
+        self.add_withdrawal(store, script_pubkey, coins)
+    }
 
-    //         let signer = self
-    //             .context::<Signer>()
-    //             .ok_or_else(|| Error::Orga(ContractError::App("No Signer context available".into())))?
-    //             .signer
-    //             .ok_or_else(|| Error::Orga(ContractError::App("Call must be signed".into())))?;
+    /// Adds an output to the current `Building` checkpoint to be paid out once
+    /// the checkpoint is fully signed.
+    pub fn add_withdrawal(
+        &mut self,
+        store: &mut dyn Storage,
+        script_pubkey: Adapter<Script>,
+        mut coins: Coin,
+    ) -> ContractResult<()> {
+        if script_pubkey.len() as u64 > self.config.max_withdrawal_script_length {
+            return Err(ContractError::App("Script exceeds maximum length".to_string()).into());
+        }
 
-    //         let coins = self.accounts.withdraw(signer, amount)?;
+        if self.checkpoints.len(store)? < self.config.min_withdrawal_checkpoints {
+            return Err(ContractError::App(format!(
+                "Withdrawals are disabled until the network has produced at least {} checkpoints",
+                self.config.min_withdrawal_checkpoints
+            ))
+            .into());
+        }
 
-    //         self.add_withdrawal(script_pubkey, coins)
-    //     }
+        let fee_amount = self.calc_minimum_withdrawal_fees(
+            script_pubkey.len() as u64,
+            self.checkpoints.building(store)?.fee_rate,
+        );
+        let fee = fee_amount.into();
+        coins.amount = coins.amount.checked_sub(fee).map_err(|_| {
+            ContractError::App("Withdrawal is too small to pay its miner fee".to_string())
+        })?;
 
-    //     /// Adds an output to the current `Building` checkpoint to be paid out once
-    //     /// the checkpoint is fully signed.
-    //     pub fn add_withdrawal(
-    //         &mut self,
-    //         script_pubkey: Adapter<Script>,
-    //         mut coins: Coin<Nbtc>,
-    //     ) -> ContractResult<()> {
-    //         if script_pubkey.len() as u64 > self.config.max_withdrawal_script_length {
-    //             return Err(ContractError::App("Script exceeds maximum length".to_string()).into());
-    //         }
+        self.give_miner_fee(store, fee)?;
+        // TODO: record as collected for excess if full
 
-    //         if self.checkpoints.len()? < self.config.min_withdrawal_checkpoints {
-    //             return Err(ContractError::App(format!(
-    //                 "Withdrawals are disabled until the network has produced at least {} checkpoints",
-    //                 self.config.min_withdrawal_checkpoints
-    //             ))
-    //             .into());
-    //         }
+        let value = (coins.amount.u128() as u64) / self.config.units_per_sat;
+        // if value < self.config.min_withdrawal_amount {
+        //     return Err(ContractError::App(
+        //         "Withdrawal is smaller than than minimum amount".to_string(),
+        //     )
+        //     .into());
+        // }
+        if bitcoin::Amount::from_sat(value) <= script_pubkey.dust_value() {
+            return Err(ContractError::App(
+                "Withdrawal is too small to pay its dust limit".to_string(),
+            )
+            .into());
+        }
 
-    //         let fee_amount = self.calc_minimum_withdrawal_fees(
-    //             script_pubkey.len() as u64,
-    //             self.checkpoints.building()?.fee_rate,
-    //         );
-    //         let fee = coins.take(fee_amount).map_err(|_| {
-    //             ContractError::App("Withdrawal is too small to pay its miner fee".to_string())
-    //         })?;
-    //         self.give_miner_fee(fee)?;
-    //         // TODO: record as collected for excess if full
+        let output = bitcoin::TxOut {
+            script_pubkey: script_pubkey.into_inner(),
+            value,
+        };
 
-    //         let value = Into::<u64>::into(coins.amount) / self.config.units_per_sat;
-    //         // if value < self.config.min_withdrawal_amount {
-    //         //     return Err(ContractError::App(
-    //         //         "Withdrawal is smaller than than minimum amount".to_string(),
-    //         //     )
-    //         //     .into());
-    //         // }
-    //         if bitcoin::Amount::from_sat(value) <= script_pubkey.dust_value() {
-    //             return Err(ContractError::App(
-    //                 "Withdrawal is too small to pay its dust limit".to_string(),
-    //             )
-    //             .into());
-    //         }
+        let mut checkpoint = self.checkpoints.building(store)?;
+        let building_checkpoint_batch = checkpoint
+            .batches
+            .get_mut(BatchType::Checkpoint as usize)
+            .unwrap();
+        let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
+        checkpoint_tx.output.push(Adapter::new(output));
 
-    //         let output = bitcoin::TxOut {
-    //             script_pubkey: script_pubkey.into_inner(),
-    //             value,
-    //         };
+        self.checkpoints.set(store, &checkpoint)?;
+        // TODO: push to excess if full
 
-    //         let mut checkpoint = self.checkpoints.building_mut()?;
-    //         let mut building_checkpoint_batch = checkpoint
-    //             .batches
-    //             .get_mut(BatchType::Checkpoint as u64)?
-    //             .unwrap();
-    //         let mut checkpoint_tx = building_checkpoint_batch.get_mut(0)?.unwrap();
-    //         checkpoint_tx.output.push_back(Adapter::new(output))?;
-    //         // TODO: push to excess if full
+        Ok(())
+    }
 
-    //         Ok(())
-    //     }
+    /// Transfers nBTC to another account.    
+    pub fn transfer(
+        &mut self,
+        store: &mut dyn Storage,
+        signer: Addr,
+        to: Addr,
+        amount: Uint128,
+    ) -> ContractResult<()> {
+        // let transfer_fee = self
+        //     .accounts
+        //     .withdraw(signer, self.config.transfer_fee.into())?;
+        // self.give_rewards(transfer_fee)?;
 
-    //     /// Transfers nBTC to another account.
-    //     #[call]
-    //     pub fn transfer(&mut self, to: Address, amount: Amount) -> ContractResult<()> {
-    //         exempt_from_fee()?;
+        let dest = Dest::Address(to);
+        let coins = self.accounts.withdraw(signer, amount)?;
+        let mut checkpoint = self.checkpoints.building(store)?;
 
-    //         let signer = self
-    //             .context::<Signer>()
-    //             .ok_or_else(|| Error::Orga(ContractError::App("No Signer context available".into())))?
-    //             .signer
-    //             .ok_or_else(|| Error::Orga(ContractError::App("Call must be signed".into())))?;
+        checkpoint.insert_pending(dest, coins)?;
 
-    //         // let transfer_fee = self
-    //         //     .accounts
-    //         //     .withdraw(signer, self.config.transfer_fee.into())?;
-    //         // self.give_rewards(transfer_fee)?;
+        self.checkpoints.set(store, &checkpoint)?;
 
-    //         let dest = Dest::Address(to);
-    //         let coins = self.accounts.withdraw(signer, amount)?;
-    //         self.checkpoints
-    //             .building_mut()?
-    //             .insert_pending(dest, coins)?;
+        Ok(())
+    }
 
-    //         Ok(())
-    //     }
+    /// Called by signatories to submit their signatures for the current
+    /// `Signing` checkpoint.    
+    pub fn sign(
+        &mut self,
+        store: &mut dyn Storage,
+        xpub: &Xpub,
+        sigs: Vec<Signature>,
+        cp_index: u32,
+    ) -> ContractResult<()> {
+        let btc_height = self.headers.height(store)?;
+        self.checkpoints
+            .sign(store, xpub, sigs, cp_index, btc_height)
+    }
 
-    //     /// Called by signatories to submit their signatures for the current
-    //     /// `Signing` checkpoint.
-    //     #[call]
-    //     pub fn sign(
-    //         &mut self,
-    //         xpub: Xpub,
-    //         sigs: LengthVec<u16, Signature>,
-    //         cp_index: u32,
-    //     ) -> ContractResult<()> {
-    //         self.checkpoints
-    //             .sign(xpub, sigs, cp_index, self.headers.height()?)
-    //     }
-
-    //     /// The amount of BTC in the reserve output of the most recent fully-signed
-    //     /// checkpoint.
-    //     #[query]
-    //     pub fn value_locked(&self) -> ContractResult<u64> {
-    //         let last_completed = self.checkpoints.last_completed()?;
-    //         Ok(last_completed.reserve_output()?.unwrap().value)
-    //     }
+    /// The amount of BTC in the reserve output of the most recent fully-signed
+    /// checkpoint.    
+    pub fn value_locked(&self, store: &dyn Storage) -> ContractResult<u64> {
+        let last_completed = self.checkpoints.last_completed(store)?;
+        Ok(last_completed.reserve_output()?.unwrap().value)
+    }
 
     /// The network (e.g. Bitcoin testnet vs mainnet) which is currently
     /// configured.
@@ -602,356 +511,319 @@ impl Bitcoin {
         self.headers.network()
     }
 
-    //     /// Gets the rate of change of the reserve output and signatory set over the
-    //     /// given interval, in basis points (1/100th of a percent).
-    //     ///
-    //     /// This is used by signers to implement a "circuit breaker" mechanism,
-    //     /// temporarily halting signing if funds are leaving the reserve too quickly
-    //     /// or if the signatory set is changing too quickly.
-    //     #[query]
-    //     pub fn change_rates(&self, interval: u64, now: u64, reset_index: u32) -> ContractResult<ChangeRates> {
-    //         let signing = self
-    //             .checkpoints
-    //             .signing()?
-    //             .ok_or_else(|| ContractError::App("No checkpoint to be signed".to_string()))?;
+    /// Gets the rate of change of the reserve output and signatory set over the
+    /// given interval, in basis points (1/100th of a percent).
+    ///
+    /// This is used by signers to implement a "circuit breaker" mechanism,
+    /// temporarily halting signing if funds are leaving the reserve too quickly
+    /// or if the signatory set is changing too quickly.    
+    pub fn change_rates(
+        &self,
+        store: &dyn Storage,
+        interval: u64,
+        now: u64,
+        reset_index: u32,
+    ) -> ContractResult<ChangeRates> {
+        let signing = self
+            .checkpoints
+            .signing(store)?
+            .ok_or_else(|| ContractError::App("No checkpoint to be signed".to_string()))?;
 
-    //         if now > interval && now - interval > signing.create_time()
-    //             || reset_index >= signing.sigset.index
-    //         {
-    //             return Ok(ChangeRates::default());
-    //         }
-    //         let now = signing.create_time().max(now);
+        if now > interval && now - interval > signing.create_time()
+            || reset_index >= signing.sigset.index
+        {
+            return Ok(ChangeRates::default());
+        }
+        let now = signing.create_time().max(now);
 
-    //         let completed = self
-    //             .checkpoints
-    //             .completed((interval / self.checkpoints.config.min_checkpoint_interval) as u32 + 1)?;
-    //         if completed.is_empty() {
-    //             return Ok(ChangeRates::default());
-    //         }
+        let completed = self.checkpoints.completed(
+            store,
+            (interval / self.checkpoints.config.min_checkpoint_interval) as u32 + 1,
+        )?;
+        if completed.is_empty() {
+            return Ok(ChangeRates::default());
+        }
 
-    //         let prev_index = completed
-    //             .iter()
-    //             .rposition(|c| (now - c.create_time()) > interval || c.sigset.index <= reset_index)
-    //             .unwrap_or(0);
+        let prev_index = completed
+            .iter()
+            .rposition(|c| (now - c.create_time()) > interval || c.sigset.index <= reset_index)
+            .unwrap_or(0);
 
-    //         let prev_checkpoint = completed.get(prev_index).unwrap();
+        let prev_checkpoint = completed.get(prev_index).unwrap();
 
-    //         let amount_prev = prev_checkpoint.reserve_output()?.unwrap().value;
-    //         let amount_now = signing.reserve_output()?.unwrap().value;
+        let amount_prev = prev_checkpoint.reserve_output()?.unwrap().value;
+        let amount_now = signing.reserve_output()?.unwrap().value;
 
-    //         let reserve_decrease = amount_prev.saturating_sub(amount_now);
+        let reserve_decrease = amount_prev.saturating_sub(amount_now);
 
-    //         let vp_shares = |sigset: &SignatorySet| -> ContractResult<_> {
-    //             let secp = bitcoin::secp256k1::Secp256k1::verification_only();
-    //             let sigset_index = sigset.index();
-    //             let total_vp = sigset.present_vp() as f64;
-    //             let sigset_fractions: HashMap<_, _> = sigset
-    //                 .iter()
-    //                 .map(|v| (v.pubkey.as_slice(), v.voting_power as f64 / total_vp))
-    //                 .collect();
-    //             let mut sigset: HashMap<_, _> = Default::default();
-    //             for entry in self.signatory_keys.map().iter()? {
-    //                 let (_, xpub) = entry?;
-    //                 let derive_path = [ChildNumber::from_normal_idx(sigset_index)?];
-    //                 let pubkey: threshold_sig::Pubkey =
-    //                     xpub.derive_pub(&secp, &derive_path)?.public_key.into();
-    //                 sigset.insert(
-    //                     xpub.inner().encode(),
-    //                     *sigset_fractions.get(pubkey.as_slice()).unwrap_or(&0.0),
-    //                 );
-    //             }
+        let vp_shares = |sigset: &SignatorySet| -> ContractResult<_> {
+            let secp = bitcoin::secp256k1::Secp256k1::verification_only();
+            let sigset_index = sigset.index();
+            let total_vp = sigset.present_vp() as f64;
+            let sigset_fractions: HashMap<_, _> = sigset
+                .iter()
+                .map(|v| (v.pubkey.as_slice(), v.voting_power as f64 / total_vp))
+                .collect();
+            let mut sigset: HashMap<_, _> = Default::default();
+            for entry in SIG_KEYS.range_raw(store, None, None, Order::Ascending) {
+                let (_, xpub) = entry?;
+                let derive_path = [ChildNumber::from_normal_idx(sigset_index)?];
+                let pubkey: threshold_sig::Pubkey =
+                    xpub.derive_pub(&secp, &derive_path)?.public_key.into();
+                sigset.insert(
+                    xpub.inner().encode(),
+                    *sigset_fractions.get(pubkey.as_slice()).unwrap_or(&0.0),
+                );
+            }
 
-    //             Ok(sigset)
-    //         };
+            Ok(sigset)
+        };
 
-    //         let now_sigset = vp_shares(&signing.sigset)?;
-    //         let prev_sigset = vp_shares(&prev_checkpoint.sigset)?;
-    //         let sigset_change = now_sigset.iter().fold(0.0, |acc, (k, v)| {
-    //             let prev_share = prev_sigset.get(k).unwrap_or(&0.0);
-    //             if v > prev_share {
-    //                 acc + (v - prev_share)
-    //             } else {
-    //                 acc
-    //             }
-    //         });
-    //         let sigset_change = (sigset_change * 10_000.0) as u16;
+        let now_sigset = vp_shares(&signing.sigset)?;
+        let prev_sigset = vp_shares(&prev_checkpoint.sigset)?;
+        let sigset_change = now_sigset.iter().fold(0.0, |acc, (k, v)| {
+            let prev_share = prev_sigset.get(k).unwrap_or(&0.0);
+            if v > prev_share {
+                acc + (v - prev_share)
+            } else {
+                acc
+            }
+        });
+        let sigset_change = (sigset_change * 10_000.0) as u16;
 
-    //         Ok(ChangeRates {
-    //             withdrawal: (reserve_decrease * 10_000 / amount_prev) as u16,
-    //             sigset_change,
-    //         })
-    //     }
+        Ok(ChangeRates {
+            withdrawal: (reserve_decrease * 10_000 / amount_prev) as u16,
+            sigset_change,
+        })
+    }
 
-    //     /// Called once per sidechain block to advance the checkpointing process.
-    //     #[cfg(feature = "full")]
-    //     pub fn begin_block_step(
-    //         &mut self,
-    //         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
-    //         timestamping_commitment: Vec<u8>,
-    //     ) -> ContractResult<Vec<ConsensusKey>> {
-    //         let has_completed_cp = if let Err(Error::Orga(ContractError::App(err))) =
-    //             self.checkpoints.last_completed_index()
-    //         {
-    //             if err == "No completed checkpoints yet" {
-    //                 false
-    //             } else {
-    //                 return Err(Error::Orga(ContractError::App(err)));
-    //             }
-    //         } else {
-    //             true
-    //         };
+    /// Called once per sidechain block to advance the checkpointing process.        
+    pub fn begin_block_step(
+        &mut self,
+        env: Env,
+        store: &mut dyn Storage,
+        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
+        timestamping_commitment: Vec<u8>,
+    ) -> ContractResult<Vec<ConsensusKey>> {
+        let has_completed_cp =
+            if let Err(ContractError::App(err)) = self.checkpoints.last_completed_index(store) {
+                if err == "No completed checkpoints yet" {
+                    false
+                } else {
+                    return Err(ContractError::App(err));
+                }
+            } else {
+                true
+            };
 
-    //         let reached_capacity_limit = if has_completed_cp {
-    //             self.value_locked()? >= self.config.capacity_limit
-    //         } else {
-    //             false
-    //         };
+        let reached_capacity_limit = if has_completed_cp {
+            self.value_locked(store)? >= self.config.capacity_limit
+        } else {
+            false
+        };
 
-    //         let pushed = self
-    //             .checkpoints
-    //             .maybe_step(
-    //                 self.signatory_keys.map(),
-    //                 &self.accounts,
-    //                 &self.recovery_scripts,
-    //                 external_outputs,
-    //                 self.headers.height()?,
-    //                 !reached_capacity_limit,
-    //                 timestamping_commitment,
-    //                 &mut self.fee_pool,
-    //                 &self.config,
-    //             )
-    //             .map_err(|err| ContractError::App(err.to_string()))?;
+        let btc_height = self.headers.height(store)?;
+        let pushed = self
+            .checkpoints
+            .maybe_step(
+                env,
+                store,
+                &self.accounts,
+                external_outputs,
+                btc_height,
+                !reached_capacity_limit,
+                timestamping_commitment,
+                &mut self.fee_pool,
+                &self.config,
+            )
+            .map_err(|err| ContractError::App(err.to_string()))?;
 
-    //         // TODO: remove expired outpoints from processed_outpoints
+        // TODO: remove expired outpoints from processed_outpoints
 
-    //         if pushed {
-    //             self.offline_signers()
-    //         } else {
-    //             Ok(vec![])
-    //         }
-    //     }
+        if pushed {
+            self.offline_signers(store)
+        } else {
+            Ok(vec![])
+        }
+    }
 
-    //     /// Returns the consensus keys of signers who have not submitted signatures
-    //     /// for the last `max_offline_checkpoints` checkpoints.
-    //     ///
-    //     /// This should be used to punish offline signers, by e.g. removing them
-    //     /// from the validator set and slashing their stake.
-    //     #[cfg(feature = "full")]
-    //     fn offline_signers(&mut self) -> ContractResult<Vec<ConsensusKey>> {
-    //         use orga::plugins::ValidatorEntry;
+    /// Returns the consensus keys of signers who have not submitted signatures
+    /// for the last `max_offline_checkpoints` checkpoints.
+    ///
+    /// This should be used to punish offline signers, by e.g. removing them
+    /// from the validator set and slashing their stake.    
+    fn offline_signers(&mut self, store: &mut dyn Storage) -> ContractResult<Vec<ConsensusKey>> {
+        let mut validators = get_validators(store)?;
+        validators.sort_by(|a, b| b.power.cmp(&a.power));
 
-    //         let mut validators = self
-    //             .context::<Validators>()
-    //             .ok_or_else(|| ContractError::App("No validator context found".to_string()))?
-    //             .entries()?;
-    //         validators.sort_by(|a, b| b.power.cmp(&a.power));
+        let offline_threshold = self.config.max_offline_checkpoints;
+        let sigset = self.checkpoints.active_sigset(store)?;
+        let lowest_power = sigset.signatories.last().unwrap().voting_power;
+        let completed = self.checkpoints.completed(store, offline_threshold)?;
+        if completed.len() < offline_threshold as usize {
+            return Ok(vec![]);
+        }
+        let mut offline_signers = vec![];
+        for Validator {
+            power,
+            pubkey: cons_key,
+        } in validators
+        {
+            if power < lowest_power {
+                break;
+            }
 
-    //         let offline_threshold = self.config.max_offline_checkpoints;
-    //         let sigset = self.checkpoints.active_sigset()?;
-    //         let lowest_power = sigset.signatories.last().unwrap().voting_power;
-    //         let completed = self.checkpoints.completed(offline_threshold)?;
-    //         if completed.len() < offline_threshold as usize {
-    //             return Ok(vec![]);
-    //         }
-    //         let mut offline_signers = vec![];
-    //         for ValidatorEntry {
-    //             power,
-    //             pubkey: cons_key,
-    //         } in validators
-    //         {
-    //             if power < lowest_power {
-    //                 break;
-    //             }
+            let xpub = if let Some(xpub) = self.signatory_keys.get(store, cons_key)? {
+                xpub
+            } else {
+                continue;
+            };
 
-    //             let xpub = if let Some(xpub) = self.signatory_keys.get(cons_key)? {
-    //                 xpub
-    //             } else {
-    //                 continue;
-    //             };
+            let mut offline = true;
+            for checkpoint in completed.iter().rev() {
+                if checkpoint.to_sign(&xpub)?.is_empty() {
+                    offline = false;
+                    break;
+                }
+            }
 
-    //             let mut offline = true;
-    //             for checkpoint in completed.iter().rev() {
-    //                 if checkpoint.to_sign(xpub)?.is_empty() {
-    //                     offline = false;
-    //                     break;
-    //                 }
-    //             }
+            if offline {
+                offline_signers.push(cons_key);
+            }
+        }
 
-    //             if offline {
-    //                 offline_signers.push(cons_key);
-    //             }
-    //         }
+        Ok(offline_signers)
+    }
 
-    //         Ok(offline_signers)
-    //     }
+    /// Takes the pending nBTC transfers from the most recent fully-signed
+    /// checkpoint, leaving the vector empty after calling.
+    ///
+    /// This should be used to process the pending transfers, crediting each of
+    /// them now that the checkpoint has been fully signed.
+    #[allow(clippy::type_complexity)]
+    pub fn take_pending(
+        &mut self,
+        store: &mut dyn Storage,
+    ) -> ContractResult<Vec<Vec<(String, Coin)>>> {
+        let unhandled_confirmed_cps = match self.checkpoints.unhandled_confirmed(store) {
+            Err(_) => return Ok(vec![]),
+            Ok(val) => val,
+        };
+        let mut confirmed_dests = vec![];
 
-    //     /// Takes the pending nBTC transfers from the most recent fully-signed
-    //     /// checkpoint, leaving the vector empty after calling.
-    //     ///
-    //     /// This should be used to process the pending transfers, crediting each of
-    //     /// them now that the checkpoint has been fully signed.
-    //     #[allow(clippy::type_complexity)]
-    //     pub fn take_pending(&mut self) -> ContractResult<Vec<Vec<(Dest, Coin<Nbtc>)>>> {
-    //         if self.checkpoints.unhandled_confirmed().err().is_some() {
-    //             return Ok(vec![]);
-    //         }
+        // TODO: drain iter
+        for confirmed_index in &unhandled_confirmed_cps {
+            let mut checkpoint = self.checkpoints.get(store, *confirmed_index)?;
+            confirmed_dests.push(checkpoint.pending);
+            // clear pending
+            checkpoint.pending = vec![];
+            self.checkpoints.set(store, &checkpoint)?;
+        }
+        if let Some(last_index) = unhandled_confirmed_cps.last() {
+            self.checkpoints.first_unhandled_confirmed_cp_index = *last_index + 1;
+        }
+        Ok(confirmed_dests)
+    }
 
-    //         // TODO: drain iter
-    //         let mut confirmed_dests = vec![];
-    //         let unhandled_confirmed_cps = self.checkpoints.unhandled_confirmed()?;
-    //         for confirmed_index in unhandled_confirmed_cps.clone() {
-    //             let mut dests = vec![];
-    //             let pending = &mut self.checkpoints.get_mut(confirmed_index)?.pending;
-    //             let keys = pending
-    //                 .iter()?
-    //                 .map(|entry| entry.map(|(dest, _)| dest.clone()).map_err(Error::from))
-    //                 .collect::<Result<Vec<Dest>>>()?;
-    //             for dest in keys {
-    //                 let coins = pending.remove(dest.clone())?.unwrap().into_inner();
-    //                 dests.push((dest, coins));
-    //             }
-    //             confirmed_dests.push(dests);
-    //         }
-    //         if let Some(last_index) = unhandled_confirmed_cps.last() {
-    //             self.checkpoints.first_unhandled_confirmed_cp_index = *last_index + 1;
-    //         }
-    //         Ok(confirmed_dests)
-    //     }
+    /// Takes the pending nBTC transfers from the most recent fully-signed
+    /// checkpoint, leaving the vector empty after calling.
+    ///
+    /// This should be used to process the pending transfers, crediting each of
+    /// them now that the checkpoint has been fully signed.
+    #[allow(clippy::type_complexity)]
+    pub fn take_pending_completed(
+        &mut self,
+        store: &mut dyn Storage,
+    ) -> ContractResult<Vec<Vec<(String, Coin)>>> {
+        let last_completed_index = match self.checkpoints.last_completed_index(store) {
+            Err(err) => {
+                if let ContractError::App(err_str) = &err {
+                    if err_str == "No completed checkpoints yet" {
+                        return Ok(vec![]);
+                    }
+                }
+                return Err(err);
+            }
+            Ok(val) => val,
+        };
 
-    //     /// Takes the pending nBTC transfers from the most recent fully-signed
-    //     /// checkpoint, leaving the vector empty after calling.
-    //     ///
-    //     /// This should be used to process the pending transfers, crediting each of
-    //     /// them now that the checkpoint has been fully signed.
-    //     #[allow(clippy::type_complexity)]
-    //     pub fn take_pending_completed(&mut self) -> ContractResult<Vec<Vec<(Dest, Coin<Nbtc>)>>> {
-    //         if let Err(Error::Orga(ContractError::App(err))) = self.checkpoints.last_completed_index() {
-    //             if err == "No completed checkpoints yet" {
-    //                 return Ok(vec![]);
-    //             }
-    //         }
-    //         let confirmed_index = self.checkpoints.confirmed_index.unwrap_or_default();
-    //         let last_completed_index = self.checkpoints.last_completed_index()?;
+        let confirmed_index = self.checkpoints.confirmed_index.unwrap_or_default();
+        let mut completed_dests = vec![];
+        for checkpoint_index in confirmed_index..=last_completed_index {
+            let mut checkpoint = self.checkpoints.get(store, checkpoint_index)?;
+            completed_dests.push(checkpoint.pending);
+            checkpoint.pending = vec![]; // clear pointer
+            self.checkpoints.set(store, &checkpoint)?;
+        }
+        Ok(completed_dests)
+    }
 
-    //         let mut completed_dests = vec![];
-    //         for checkpoint_index in confirmed_index..=last_completed_index {
-    //             let mut dests: Vec<(Dest, Coin<Nbtc>)> = vec![];
-    //             let pending = &mut self.checkpoints.get_mut(checkpoint_index)?.pending;
-    //             let keys = pending
-    //                 .iter()?
-    //                 .map(|entry| entry.map(|(dest, _)| dest.clone()).map_err(Error::from))
-    //                 .collect::<Result<Vec<Dest>>>()?;
-    //             for dest in keys {
-    //                 let coins = pending.remove(dest.clone())?.unwrap().into_inner();
-    //                 dests.push((dest, coins));
-    //             }
-    //             completed_dests.push(dests);
-    //         }
-    //         Ok(completed_dests)
-    //     }
+    pub fn give_miner_fee(
+        &mut self,
+        store: &mut dyn Storage,
+        amount: Uint128,
+    ) -> ContractResult<()> {
+        let amount: u64 = amount.u128() as u64;
+        // TODO: burn via token factory
+        // coin.burn();
 
-    //     pub fn give_miner_fee(&mut self, coin: Coin<Nbtc>) -> ContractResult<()> {
-    //         let amount: u64 = coin.amount.into();
-    //         coin.burn();
+        self.fee_pool += amount as i64;
+        let mut checkpoint = self.checkpoints.building(store)?;
+        checkpoint.fees_collected += amount / self.config.units_per_sat;
+        self.checkpoints.set(store, &checkpoint)?;
 
-    //         self.fee_pool += amount as i64;
-    //         self.checkpoints.building_mut()?.fees_collected += amount / self.config.units_per_sat;
+        Ok(())
+    }
 
-    //         Ok(())
-    //     }
+    pub fn give_rewards(&mut self, store: &mut dyn Storage, amount: Uint128) -> ContractResult<()> {
+        if self.fee_pool < (self.config.fee_pool_target_balance * self.config.units_per_sat) as i64
+        {
+            let amount: u64 = amount.u128() as u64;
+            // TODO:// tokenfactory coin.burn();
 
-    //     pub fn give_rewards(&mut self, coin: Coin<Nbtc>) -> ContractResult<()> {
-    //         if self.fee_pool < (self.config.fee_pool_target_balance * self.config.units_per_sat) as i64
-    //         {
-    //             let amount: u64 = coin.amount.into();
-    //             coin.burn();
+            let reward_amount = (amount as u128 * self.config.fee_pool_reward_split.0 as u128
+                / self.config.fee_pool_reward_split.1 as u128)
+                as u64;
+            let fee_amount = amount - reward_amount;
 
-    //             let reward_amount = (amount as u128 * self.config.fee_pool_reward_split.0 as u128
-    //                 / self.config.fee_pool_reward_split.1 as u128)
-    //                 as u64;
-    //             let fee_amount = amount - reward_amount;
+            // self.reward_pool.give(Coin::mint(reward_amount))?;
+            self.reward_pool.amount = self.reward_pool.amount.checked_sub(reward_amount.into())?;
+            self.give_miner_fee(store, fee_amount.into())?;
 
-    //             self.reward_pool.give(Coin::mint(reward_amount))?;
-    //             self.give_miner_fee(Coin::mint(fee_amount))?;
+            assert_eq!(reward_amount + fee_amount, amount);
+        } else {
+            // self.reward_pool.give(coin)?;
+            self.reward_pool.amount = self.reward_pool.amount.checked_sub(amount)?;
+        }
 
-    //             assert_eq!(reward_amount + fee_amount, amount);
-    //         } else {
-    //             self.reward_pool.give(coin)?;
-    //         }
+        Ok(())
+    }
 
-    //         Ok(())
-    //     }
+    pub fn give_funding_to_fee_pool(
+        &mut self,
+        store: &mut dyn Storage,
+        amount: Uint128,
+    ) -> ContractResult<()> {
+        // TODO: update total paid?
+        self.give_miner_fee(store, amount)
+    }
 
-    //     #[call]
-    //     pub fn give_funding_to_fee_pool(&mut self, amount: Amount) -> ContractResult<()> {
-    //         let taken_coins = self
-    //             .context::<Paid>()
-    //             .ok_or_else(|| orga::Error::Coins("No Paid context found".into()))?
-    //             .take(amount)?;
+    pub fn transfer_to_fee_pool(
+        &mut self,
+        store: &mut dyn Storage,
+        signer: Addr,
+        amount: Uint128,
+    ) -> ContractResult<()> {
+        if amount < (100 * self.config.units_per_sat).into() {
+            return Err(ContractError::App(
+                "Minimum transfer to fee pool is 100 sat".into(),
+            ));
+        }
 
-    //         self.give_miner_fee(taken_coins)
-    //     }
-
-    //     #[call]
-    //     pub fn transfer_to_fee_pool(&mut self, amount: Amount) -> ContractResult<()> {
-    //         if amount < 100 * self.config.units_per_sat {
-    //             return Err(Error::Orga(ContractError::App(
-    //                 "Minimum transfer to fee pool is 100 sat".into(),
-    //             )));
-    //         }
-
-    //         exempt_from_fee()?;
-
-    //         let signer = self
-    //             .context::<Signer>()
-    //             .ok_or_else(|| Error::Orga(ContractError::App("No Signer context available".into())))?
-    //             .signer
-    //             .ok_or_else(|| Error::Orga(ContractError::App("Call must be signed".into())))?;
-
-    //         let coins = self.accounts.withdraw(signer, amount)?;
-    //         self.give_miner_fee(coins)
-    //     }
+        let coins = self.accounts.withdraw(signer, amount)?;
+        self.give_miner_fee(store, coins.amount)
+    }
 }
-
-// /// The current rates of change of the reserve output and signatory set, in
-// /// basis points (1/100th of a percent).
-// #[orga]
-// #[derive(Debug, Clone)]
-// pub struct ChangeRates {
-//     pub withdrawal: u16,
-//     pub sigset_change: u16,
-// }
-
-// /// Iterates through the given map and removes all entries.
-// fn clear_map<K, V>(map: &mut Map<K, V>) -> OrgaResult<()>
-// where
-//     K: Encode + Decode + Terminated + Next + Clone + Send + Sync + 'static,
-//     V: State,
-// {
-//     let mut keys = vec![];
-//     for entry in map.iter()? {
-//         let (k, _v) = entry?;
-//         keys.push(k.clone());
-//     }
-
-//     for key in keys {
-//         map.remove(key)?;
-//     }
-
-//     Ok(())
-// }
-
-// /// Iterates through the given deque and removes all entries.
-// fn clear_deque<V>(deque: &mut Deque<V>) -> OrgaResult<()>
-// where
-//     V: State,
-// {
-//     while !deque.is_empty() {
-//         deque.pop_back()?;
-//     }
-
-//     Ok(())
-// }
 
 // #[cfg(test)]
 // mod tests {

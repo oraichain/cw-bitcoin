@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 
 use crate::bitcoin::ConsensusKey;
 use crate::interface::Validator;
+use crate::state::get_validators;
 use crate::state::SIG_KEYS;
 use crate::state::VALIDATORS;
 use crate::state::XPUBS;
@@ -127,16 +128,7 @@ impl SignatorySet {
             signatories: vec![],
         };
 
-        let val_set: Vec<Validator> = VALIDATORS
-            .range(store, None, None, Order::Ascending)
-            .map(|item| {
-                let (k, v) = item?;
-                Ok(Validator {
-                    power: v,
-                    pubkey: k,
-                })
-            })
-            .collect::<StdResult<_>>()?;
+        let val_set = get_validators(store)?;
 
         let secp = bitcoin::secp256k1::Secp256k1::verification_only();
         let derive_path = [ChildNumber::from_normal_idx(index)?];

@@ -474,6 +474,11 @@ impl Checkpoint {
         Ok(checkpoint)
     }
 
+    /// Changes the status of the checkpoint to `Complete`.
+    pub fn advance(&mut self) {
+        self.status = CheckpointStatus::Complete;
+    }
+
     /// Processes a batch of signatures from a signatory, applying them to the
     /// inputs of transaction batches which are ready to be signed.
     ///
@@ -859,13 +864,6 @@ impl SigningCheckpoint {
         btc_height: u32,
     ) -> ContractResult<()> {
         self.0.sign(&xpub, sigs, btc_height)?;
-        Ok(())
-    }
-
-    /// Changes the status of the checkpoint to `Complete`.
-    pub fn advance(&mut self) -> ContractResult<()> {
-        self.status = CheckpointStatus::Complete;
-
         Ok(())
     }
 }
@@ -1941,8 +1939,11 @@ impl CheckpointQueue {
         if matches!(status, CheckpointStatus::Signing) && checkpoint.signed() {
             let checkpoint_tx = checkpoint.checkpoint_tx()?;
             println!("Checkpoint signing complete {:?}", checkpoint_tx);
-            SigningCheckpoint(Box::new(checkpoint)).advance()?;
+            checkpoint.advance();
+            checkpoint.status = CheckpointStatus::Complete
         }
+
+        self.set(store, &checkpoint)?;
 
         Ok(())
     }

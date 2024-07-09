@@ -1,5 +1,5 @@
 use bitcoin::blockdata::transaction::ParseOutPointError;
-use cosmwasm_std::StdError;
+use cosmwasm_std::{OverflowError, StdError};
 use std::env::VarError;
 
 #[derive(thiserror::Error, Debug)]
@@ -10,10 +10,14 @@ pub enum ContractError {
     Ed(#[from] ed::Error),
     #[error("{0}")]
     Account(String),
+    #[error("Coins Error: {0}")]
+    Coins(String),
     #[error("{0}")]
     Address(String),
     #[error(transparent)]
     Bitcoin(#[from] bitcoin::Error),
+    #[error(transparent)]
+    Overflow(#[from] OverflowError),
     #[error(transparent)]
     ParseOutPoint(#[from] ParseOutPointError),
     #[error(transparent)]

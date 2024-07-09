@@ -2,6 +2,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 
 use bitcoin::util::bip32::ExtendedPubKey;
+use bitcoin::Amount;
 use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::from_slice;
@@ -11,23 +12,30 @@ use cosmwasm_std::Binary;
 use cosmwasm_std::Coin;
 use cosmwasm_std::StdResult;
 use cosmwasm_std::Storage;
+use cosmwasm_std::Uint128;
 use cw_storage_plus::Deque;
 use serde::{de, ser, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::adapter::Adapter;
 use crate::bitcoin::ConsensusKey;
+use crate::bitcoin::NETWORK;
 use crate::constants::MAX_CHECKPOINT_AGE;
 use crate::constants::MAX_CHECKPOINT_INTERVAL;
+use crate::constants::MAX_DEPOSIT_AGE;
 use crate::constants::MAX_FEE_RATE;
 use crate::constants::MAX_LENGTH;
 use crate::constants::MAX_TARGET;
 use crate::constants::MAX_TIME_INCREASE;
+use crate::constants::MIN_DEPOSIT_AMOUNT;
 use crate::constants::MIN_FEE_RATE;
+use crate::constants::MIN_WITHDRAWAL_AMOUNT;
 use crate::constants::RETARGET_INTERVAL;
 use crate::constants::TARGET_SPACING;
 use crate::constants::TARGET_TIMESPAN;
+use crate::constants::TRANSFER_FEE;
 use crate::constants::USER_FEE_FACTOR;
+use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::signatory::SIGSET_THRESHOLD;
 
@@ -111,6 +119,18 @@ impl Accounts {
             .iter()
             .find(|item| item.0 == address)
             .map(|item| item.1.clone())
+    }
+
+    pub fn withdraw(&mut self, address: Addr, amount: Uint128) -> ContractResult<Coin> {
+        if let Some((_, coin)) = self
+            .accounts
+            .iter_mut()
+            .find(|acc| acc.0.eq(address.as_str()))
+        {
+            coin.amount.checked_sub(amount)?;
+            return Ok(coin.clone());
+        }
+        Err(ContractError::Coins("Insufficient funds".into()))
     }
 }
 
@@ -205,6 +225,39 @@ pub struct BitcoinConfig {
     pub fee_pool_target_balance: u64,
 
     pub fee_pool_reward_split: (u64, u64),
+}
+
+impl BitcoinConfig {
+    fn bitcoin() -> Self {
+        Self {
+            min_withdrawal_checkpoints: 4,
+            min_deposit_amount: MIN_DEPOSIT_AMOUNT,
+            min_withdrawal_amount: MIN_WITHDRAWAL_AMOUNT,
+            max_withdrawal_amount: 64,
+            max_withdrawal_script_length: 64,
+            transfer_fee: TRANSFER_FEE,
+            min_confirmations: 1,
+            units_per_sat: 1_000_000,
+            max_offline_checkpoints: 20,
+            min_checkpoint_confirmations: 0,
+            capacity_limit: 21 * 100_000_000,     // 21 BTC
+            max_deposit_age: MAX_DEPOSIT_AGE, // 2 weeks. Initially there may not be many deposits & withdraws
+            fee_pool_target_balance: 100_000_000, // 1 BTC
+            fee_pool_reward_split: (1, 10),
+            emergency_disbursal_min_tx_amt: 1000,
+            emergency_disbursal_lock_time_interval: 60 * 60 * 24 * 7 * 8, // 8 weeks
+            emergency_disbursal_max_tx_size: 50_000,
+        }
+    }
+}
+
+impl Default for BitcoinConfig {
+    fn default() -> Self {
+        match NETWORK {
+            bitcoin::Network::Testnet | bitcoin::Network::Bitcoin => Self::bitcoin(),
+            _ => unimplemented!(),
+        }
+    }
 }
 
 /// Configuration parameters used in processing checkpoints.
@@ -473,27 +526,8 @@ impl HeaderConfig {
     }
 }
 
-// pub const XPUB_LENGTH: usize = 78;
-// impl Encode for Xpub {
-//     fn encode_into<W: std::io::Write>(&self, dest: &mut W) -> ed::Result<()> {
-//         let bytes = self.key.encode();
-//         dest.write_all(&bytes)?;
-//         Ok(())
-//     }
-
-//     fn encoding_length(&self) -> ed::Result<usize> {
-//         Ok(XPUB_LENGTH)
-//     }
-// }
-
-// impl Decode for Xpub {
-//     fn decode<R: std::io::Read>(mut input: R) -> ed::Result<Self> {
-//         let mut bytes = [0; XPUB_LENGTH];
-//         input.read_exact(&mut bytes)?;
-//         let key = ExtendedPubKey::decode(&bytes).map_err(|_| ed::Error::UnexpectedByte(32))?;
-//         Ok(Xpub { key })
-//     }
-// }
-
-#[test]
-fn test() {}
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ChangeRates {
+    pub withdrawal: u16,
+    pub sigset_change: u16,
+}
