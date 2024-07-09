@@ -8,11 +8,11 @@ pub enum ContractError {
     Std(#[from] StdError),
     #[error(transparent)]
     Ed(#[from] ed::Error),
-    #[error("{0}")]
+    #[error("Account Error: {0}")]
     Account(String),
     #[error("Coins Error: {0}")]
     Coins(String),
-    #[error("{0}")]
+    #[error("Address Error: {0}")]
     Address(String),
     #[error(transparent)]
     Bitcoin(#[from] bitcoin::Error),
@@ -42,7 +42,7 @@ pub enum ContractError {
     Sighash(#[from] bitcoin::util::sighash::Error),
     #[error(transparent)]
     TryFrom(#[from] std::num::TryFromIntError),
-    #[error("{0}")]
+    #[error("App Error: {0}")]
     App(String),
     #[error(transparent)]
     Secp(#[from] bitcoin::secp256k1::Error),

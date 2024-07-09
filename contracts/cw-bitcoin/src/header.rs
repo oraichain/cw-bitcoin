@@ -180,28 +180,28 @@ impl WorkHeader {
 /// contains more work than the current chain, however it can not process reorgs
 /// that are deeper than the length of the queue (the length will be at the
 /// configured pruning level based on the `max_length` config parameter).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct HeaderQueue {
     pub(crate) current_work: Adapter<Uint256>,
     pub(crate) config: HeaderConfig,
 }
 
-impl Default for HeaderQueue {
-    fn default() -> Self {
+impl HeaderQueue {
+    pub fn new(store: &mut dyn Storage) -> ContractResult<Self> {
         let config = HeaderConfig::default();
         let decoded_adapter: Adapter<BlockHeader> = config.trusted_header.into();
         let wrapped_header = WrappedHeader::new(decoded_adapter, config.trusted_height);
         let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
         let current_work = Adapter::new(work_header.work());
 
-        Self {
+        HEADERS.push_back(store, &work_header)?;
+
+        Ok(Self {
             current_work,
             config,
-        }
+        })
     }
-}
 
-impl HeaderQueue {
     /// Verify and add a list of headers to the header queue.
     ///
     /// The headers must be consecutive and must bring the chain to a final
@@ -808,7 +808,7 @@ mod test {
             }
             .into(),
         };
-        let mut q = HeaderQueue::default();
+        let mut q = HeaderQueue::new(deps.as_mut().storage).unwrap();
         q.configure(deps.as_mut().storage, test_config).unwrap();
         q.add(deps.as_mut().storage, header_list.into()).unwrap();
     }
@@ -866,7 +866,7 @@ mod test {
 
         let adapter = Adapter::new(header);
         let header_list = [WrappedHeader::new(adapter, 43)];
-        let mut q = HeaderQueue::default();
+        let mut q = HeaderQueue::new(deps.as_mut().storage).unwrap();
         q.configure(deps.as_mut().storage, test_config).unwrap();
         q.add_into_iter(deps.as_mut().storage, header_list).unwrap();
     }
@@ -923,7 +923,7 @@ mod test {
 
         let adapter = Adapter::new(header);
         let header_list = [WrappedHeader::new(adapter, 43)];
-        let mut q = HeaderQueue::default();
+        let mut q = HeaderQueue::new(deps.as_mut().storage).unwrap();
         q.configure(deps.as_mut().storage, test_config).unwrap();
         q.add_into_iter(deps.as_mut().storage, header_list).unwrap();
     }

@@ -3,7 +3,7 @@
 
 use std::cmp::Ordering;
 
-use crate::bitcoin::ConsensusKey;
+use crate::app::ConsensusKey;
 use crate::interface::Validator;
 use crate::state::get_validators;
 use crate::state::SIG_KEYS;
@@ -491,7 +491,7 @@ impl SignatorySet {
 ///
 /// The collection also includes an set of all signatory extended public keys,
 /// which is used to prevent duplicate keys from being submitted.
-#[cw_serde]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SignatoryKeys {}
 
 impl SignatoryKeys {

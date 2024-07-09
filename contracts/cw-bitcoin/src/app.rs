@@ -1,6 +1,6 @@
 use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
-use crate::state::{get_validators, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS};
+use crate::state::{get_validators, HEADERS, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS};
 use crate::threshold_sig;
 
 use super::checkpoint::Input;
@@ -16,6 +16,7 @@ use bitcoin::util::bip32::ChildNumber;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
+use serde::{Deserialize, Serialize};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -36,6 +37,7 @@ pub fn calc_deposit_fee(_: Uint128) -> u64 {
 /// blockchain headers, relay deposit transactions, maintain nBTC accounts, and
 /// coordinate the checkpointing process to manage the BTC reserve on the
 /// Bitcoin blockchain.
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Bitcoin {
     /// A light client of the Bitcoin blockchain, keeping track of the headers
     /// of the highest-work chain.    
@@ -75,6 +77,16 @@ pub struct Bitcoin {
 pub type ConsensusKey = [u8; 32];
 
 impl Bitcoin {
+    pub fn new(store: &mut dyn Storage) -> ContractResult<Self> {
+        let headers = HeaderQueue::new(store)?;
+        let app = Self {
+            headers,
+            ..Default::default()
+        };
+
+        Ok(app)
+    }
+
     /// Sets the configuration parameters to the given values.
     pub fn configure(&mut self, config: BitcoinConfig) {
         self.config = config;
@@ -825,494 +837,502 @@ impl Bitcoin {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use std::{cell::RefCell, rc::Rc};
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, rc::Rc};
 
-//     use bitcoin::{
-//         secp256k1::Secp256k1, util::bip32::ExtendedPrivKey, BlockHash, BlockHeader, OutPoint,
-//         TxMerkleNode, Txid,
-//     };
-//     use orga::{
-//         collections::EntryMap,
-//         ibc::ibc_rs::core::ics24_host::identifier::{ChannelId, PortId},
-//     };
+    use adapter::Adapter;
+    use app::Bitcoin;
+    use bitcoin::hashes::Hash;
+    use bitcoin::util::merkleblock::PartialMerkleTree;
+    use bitcoin::util::uint;
+    use bitcoin::Transaction;
+    use bitcoin::{
+        secp256k1::Secp256k1, util::bip32::ExtendedPrivKey, BlockHash, BlockHeader, OutPoint,
+        TxMerkleNode, Txid,
+    };
+    use cosmwasm_std::testing::{mock_dependencies, mock_env};
+    use cosmwasm_std::Addr;
+    use interface::Dest;
+    use state::HEADERS;
 
-//     use crate::app::IbcDest;
+    use crate::interface::IbcDest;
 
-//     use super::{
-//         header_queue::{WorkHeader, WrappedHeader},
-//         *,
-//     };
+    use crate::{
+        header::{WorkHeader, WrappedHeader},
+        *,
+    };
 
-//     #[serial_test::serial]
-//     #[test]
-//     fn relay_height_validity() {
-//         Context::add(Paid::default());
-//         Context::add(Time::from_seconds(0));
+    #[serial_test::serial]
+    #[test]
+    fn relay_height_validity() {
+        let mut deps = mock_dependencies();
+        let mut btc = Bitcoin::new(deps.as_mut().storage).unwrap();
 
-//         let mut btc = Bitcoin::default();
+        for _ in 0..10 {
+            let btc_height = btc.headers.height(deps.as_ref().storage).unwrap();
+            HEADERS
+                .push_back(
+                    deps.as_mut().storage,
+                    &WorkHeader::new(
+                        WrappedHeader::new(
+                            Adapter::new(BlockHeader {
+                                bits: 0,
+                                merkle_root: TxMerkleNode::all_zeros(),
+                                nonce: 0,
+                                prev_blockhash: BlockHash::all_zeros(),
+                                time: 0,
+                                version: 0,
+                            }),
+                            btc_height + 1,
+                        ),
+                        uint::Uint256([0, 0, 0, 0]),
+                    ),
+                )
+                .unwrap();
+        }
 
-//         for _ in 0..10 {
-//             btc.headers
-//                 .deque
-//                 .push_back(WorkHeader::new(
-//                     WrappedHeader::new(
-//                         Adapter::new(BlockHeader {
-//                             bits: 0,
-//                             merkle_root: TxMerkleNode::all_zeros(),
-//                             nonce: 0,
-//                             prev_blockhash: BlockHash::all_zeros(),
-//                             time: 0,
-//                             version: 0,
-//                         }),
-//                         btc.headers.height().unwrap() + 1,
-//                     ),
-//                     bitcoin::util::uint::Uint256([0, 0, 0, 0]),
-//                 ))
-//                 .unwrap();
-//         }
+        let h = btc.headers.height(deps.as_ref().storage).unwrap();
+        let mut try_relay = |height| {
+            // TODO: make test cases not fail at irrelevant steps in relay_deposit
+            // (either by passing in valid input, or by handling other error paths)
 
-//         let h = btc.headers.height().unwrap();
-//         let mut try_relay = |height| {
-//             // TODO: make test cases not fail at irrelevant steps in relay_deposit
-//             // (either by passing in valid input, or by handling other error paths)
-//             btc.relay_deposit(
-//                 Adapter::new(Transaction {
-//                     input: vec![],
-//                     lock_time: bitcoin::PackedLockTime(0),
-//                     output: vec![],
-//                     version: 0,
-//                 }),
-//                 height,
-//                 Adapter::new(PartialMerkleTree::from_txids(&[Txid::all_zeros()], &[true])),
-//                 0,
-//                 0,
-//                 Dest::Address(Address::NULL),
-//             )
-//         };
+            btc.relay_deposit(
+                mock_env(),
+                deps.as_mut().storage,
+                Adapter::new(Transaction {
+                    input: vec![],
+                    lock_time: bitcoin::PackedLockTime(0),
+                    output: vec![],
+                    version: 0,
+                }),
+                height,
+                Adapter::new(PartialMerkleTree::from_txids(&[Txid::all_zeros()], &[true])),
+                0,
+                0,
+                Dest::Address(Addr::unchecked("")),
+            )
+        };
 
-//         assert_eq!(
-//             try_relay(h + 100).unwrap_err().to_string(),
-//             "App Error: Invalid bitcoin block height",
-//         );
-//         assert_eq!(
-//             try_relay(h - 100).unwrap_err().to_string(),
-//             "Passed index is greater than initial height. Referenced header does not exist on the Header Queue",
-//         );
+        assert_eq!(
+            try_relay(h + 100).unwrap_err().to_string(),
+            "App Error: Invalid bitcoin block height",
+        );
+        assert_eq!(
+            try_relay(h - 100).unwrap_err().to_string(),
+            "Passed index is greater than initial height. Referenced header does not exist on the Header Queue",
+        );
+    }
 
-//         Context::remove::<Paid>();
-//     }
+    // #[test]
+    // #[serial_test::serial]
+    // fn check_change_rates() -> ContractResult<()> {
+    //     // use checkpoint::*;
+    //     let paid = orga::plugins::Paid::default();
+    //     Context::add(paid);
 
-//     #[test]
-//     #[serial_test::serial]
-//     fn check_change_rates() -> ContractResult<()> {
-//         // use checkpoint::*;
-//         let paid = orga::plugins::Paid::default();
-//         Context::add(paid);
+    //     let mut vals = orga::plugins::Validators::new(
+    //         Rc::new(RefCell::new(Some(EntryMap::new()))),
+    //         Rc::new(RefCell::new(Some(Map::new()))),
+    //     );
+    //     let addr = vec![Address::from_pubkey([0; 33]), Address::from_pubkey([1; 33])];
+    //     vals.set_voting_power([0; 32], 100);
+    //     vals.set_operator([0; 32], addr[0])?;
+    //     vals.set_voting_power([1; 32], 10);
+    //     vals.set_operator([1; 32], addr[1])?;
+    //     Context::add(vals);
 
-//         let mut vals = orga::plugins::Validators::new(
-//             Rc::new(RefCell::new(Some(EntryMap::new()))),
-//             Rc::new(RefCell::new(Some(Map::new()))),
-//         );
-//         let addr = vec![Address::from_pubkey([0; 33]), Address::from_pubkey([1; 33])];
-//         vals.set_voting_power([0; 32], 100);
-//         vals.set_operator([0; 32], addr[0])?;
-//         vals.set_voting_power([1; 32], 10);
-//         vals.set_operator([1; 32], addr[1])?;
-//         Context::add(vals);
+    //     let set_signer = |addr| {
+    //         Context::add(Signer { signer: Some(addr) });
+    //     };
+    //     let set_time = |time| {
+    //         let time = orga::plugins::Time::from_seconds(time);
+    //         Context::add(time);
+    //     };
 
-//         let set_signer = |addr| {
-//             Context::add(Signer { signer: Some(addr) });
-//         };
-//         let set_time = |time| {
-//             let time = orga::plugins::Time::from_seconds(time);
-//             Context::add(time);
-//         };
+    //     let btc = Rc::new(RefCell::new(Bitcoin::default()));
+    //     let secp = Secp256k1::new();
+    //     let network = btc.borrow().network();
+    //     let xpriv = vec![
+    //         ExtendedPrivKey::new_master(network, &[0]).unwrap(),
+    //         ExtendedPrivKey::new_master(network, &[1]).unwrap(),
+    //     ];
+    //     let xpub = vec![
+    //         ExtendedPubKey::from_priv(&secp, &xpriv[0]),
+    //         ExtendedPubKey::from_priv(&secp, &xpriv[1]),
+    //     ];
 
-//         let btc = Rc::new(RefCell::new(Bitcoin::default()));
-//         let secp = Secp256k1::new();
-//         let network = btc.borrow().network();
-//         let xpriv = vec![
-//             ExtendedPrivKey::new_master(network, &[0]).unwrap(),
-//             ExtendedPrivKey::new_master(network, &[1]).unwrap(),
-//         ];
-//         let xpub = vec![
-//             ExtendedPubKey::from_priv(&secp, &xpriv[0]),
-//             ExtendedPubKey::from_priv(&secp, &xpriv[1]),
-//         ];
+    //     let push_deposit = || {
+    //         let input = Input::new(
+    //             OutPoint {
+    //                 txid: Txid::from_slice(&[0; 32]).unwrap(),
+    //                 vout: 0,
+    //             },
+    //             &btc.borrow().checkpoints.building().unwrap().sigset,
+    //             &[0u8],
+    //             100_000_000,
+    //             (9, 10),
+    //         )
+    //         .unwrap();
+    //         let mut btc = btc.borrow_mut();
+    //         let mut building_mut = btc.checkpoints.building_mut().unwrap();
+    //         building_mut.fees_collected = 100_000_000;
+    //         let mut building_checkpoint_batch = building_mut
+    //             .batches
+    //             .get_mut(BatchType::Checkpoint as u64)
+    //             .unwrap()
+    //             .unwrap();
+    //         let mut checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap().unwrap();
+    //         checkpoint_tx.input.push_back(input).unwrap();
+    //     };
 
-//         let push_deposit = || {
-//             let input = Input::new(
-//                 OutPoint {
-//                     txid: Txid::from_slice(&[0; 32]).unwrap(),
-//                     vout: 0,
-//                 },
-//                 &btc.borrow().checkpoints.building().unwrap().sigset,
-//                 &[0u8],
-//                 100_000_000,
-//                 (9, 10),
-//             )
-//             .unwrap();
-//             let mut btc = btc.borrow_mut();
-//             let mut building_mut = btc.checkpoints.building_mut().unwrap();
-//             building_mut.fees_collected = 100_000_000;
-//             let mut building_checkpoint_batch = building_mut
-//                 .batches
-//                 .get_mut(BatchType::Checkpoint as u64)
-//                 .unwrap()
-//                 .unwrap();
-//             let mut checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap().unwrap();
-//             checkpoint_tx.input.push_back(input).unwrap();
-//         };
+    //     let push_withdrawal = || {
+    //         let mut btc = btc.borrow_mut();
 
-//         let push_withdrawal = || {
-//             let mut btc = btc.borrow_mut();
+    //         btc.add_withdrawal(Adapter::new(Script::new()), 459_459_927_000_000.into())
+    //             .unwrap();
 
-//             btc.add_withdrawal(Adapter::new(Script::new()), 459_459_927_000_000.into())
-//                 .unwrap();
+    //         let mut building_mut = btc.checkpoints.building_mut().unwrap();
+    //         building_mut.fees_collected = 100_000_000;
+    //     };
 
-//             let mut building_mut = btc.checkpoints.building_mut().unwrap();
-//             building_mut.fees_collected = 100_000_000;
-//         };
+    //     let sign_batch = |btc_height| {
+    //         let mut btc = btc.borrow_mut();
+    //         let queue = &mut btc.checkpoints;
+    //         let cp = queue.signing().unwrap().unwrap();
+    //         let sigset_index = cp.sigset.index;
+    //         for i in 0..2 {
+    //             if queue.signing().unwrap().is_none() {
+    //                 break;
+    //             }
+    //             let cp = queue.signing().unwrap().unwrap();
+    //             let to_sign = cp.to_sign(Xpub::new(xpub[i])).unwrap();
+    //             let secp2 = Secp256k1::signing_only();
+    //             let sigs = crate::app::signer::sign(&secp2, &xpriv[i], &to_sign).unwrap();
+    //             queue
+    //                 .sign(Xpub::new(xpub[i]), sigs, sigset_index, btc_height)
+    //                 .unwrap();
+    //         }
+    //     };
+    //     let sign_cp = |btc_height| {
+    //         sign_batch(btc_height);
+    //         sign_batch(btc_height);
+    //         if btc.borrow().checkpoints.signing().unwrap().is_some() {
+    //             sign_batch(btc_height);
+    //         }
+    //     };
+    //     let maybe_step = || {
+    //         let mut btc = btc.borrow_mut();
 
-//         let sign_batch = |btc_height| {
-//             let mut btc = btc.borrow_mut();
-//             let queue = &mut btc.checkpoints;
-//             let cp = queue.signing().unwrap().unwrap();
-//             let sigset_index = cp.sigset.index;
-//             for i in 0..2 {
-//                 if queue.signing().unwrap().is_none() {
-//                     break;
-//                 }
-//                 let cp = queue.signing().unwrap().unwrap();
-//                 let to_sign = cp.to_sign(Xpub::new(xpub[i])).unwrap();
-//                 let secp2 = Secp256k1::signing_only();
-//                 let sigs = crate::bitcoin::signer::sign(&secp2, &xpriv[i], &to_sign).unwrap();
-//                 queue
-//                     .sign(Xpub::new(xpub[i]), sigs, sigset_index, btc_height)
-//                     .unwrap();
-//             }
-//         };
-//         let sign_cp = |btc_height| {
-//             sign_batch(btc_height);
-//             sign_batch(btc_height);
-//             if btc.borrow().checkpoints.signing().unwrap().is_some() {
-//                 sign_batch(btc_height);
-//             }
-//         };
-//         let maybe_step = || {
-//             let mut btc = btc.borrow_mut();
+    //         btc.begin_block_step(vec![].into_iter(), vec![1, 2, 3])
+    //             .unwrap();
+    //     };
 
-//             btc.begin_block_step(vec![].into_iter(), vec![1, 2, 3])
-//                 .unwrap();
-//         };
+    //     set_time(0);
+    //     for i in 0..2 {
+    //         set_signer(addr[i]);
+    //         btc.borrow_mut().set_signatory_key(Xpub::new(xpub[i]))?;
+    //     }
 
-//         set_time(0);
-//         for i in 0..2 {
-//             set_signer(addr[i]);
-//             btc.borrow_mut().set_signatory_key(Xpub::new(xpub[i]))?;
-//         }
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 0);
+    //     maybe_step();
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 1);
 
-//         assert_eq!(btc.borrow().checkpoints.len()?, 0);
-//         maybe_step();
-//         assert_eq!(btc.borrow().checkpoints.len()?, 1);
+    //     set_time(1000);
+    //     push_deposit();
+    //     maybe_step();
+    //     sign_cp(10);
 
-//         set_time(1000);
-//         push_deposit();
-//         maybe_step();
-//         sign_cp(10);
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 2);
 
-//         assert_eq!(btc.borrow().checkpoints.len()?, 2);
+    //     set_time(2000);
+    //     push_deposit();
+    //     maybe_step();
+    //     let change_rates = btc.borrow().change_rates(2000, 2100, 0)?;
+    //     assert_eq!(change_rates.withdrawal, 0);
+    //     assert_eq!(change_rates.sigset_change, 0);
+    //     sign_cp(10);
 
-//         set_time(2000);
-//         push_deposit();
-//         maybe_step();
-//         let change_rates = btc.borrow().change_rates(2000, 2100, 0)?;
-//         assert_eq!(change_rates.withdrawal, 0);
-//         assert_eq!(change_rates.sigset_change, 0);
-//         sign_cp(10);
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 3);
 
-//         assert_eq!(btc.borrow().checkpoints.len()?, 3);
+    //     // Change the sigset
+    //     let vals = Context::resolve::<Validators>().unwrap();
+    //     vals.set_voting_power([1; 32], 100);
 
-//         // Change the sigset
-//         let vals = Context::resolve::<Validators>().unwrap();
-//         vals.set_voting_power([1; 32], 100);
+    //     set_time(3000);
+    //     push_deposit();
+    //     maybe_step();
+    //     let change_rates = btc.borrow().change_rates(3000, 3100, 0)?;
+    //     assert_eq!(change_rates.withdrawal, 0);
+    //     assert_eq!(change_rates.sigset_change, 0);
+    //     sign_cp(10);
 
-//         set_time(3000);
-//         push_deposit();
-//         maybe_step();
-//         let change_rates = btc.borrow().change_rates(3000, 3100, 0)?;
-//         assert_eq!(change_rates.withdrawal, 0);
-//         assert_eq!(change_rates.sigset_change, 0);
-//         sign_cp(10);
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 4);
 
-//         assert_eq!(btc.borrow().checkpoints.len()?, 4);
+    //     set_time(4000);
+    //     push_deposit();
+    //     maybe_step();
+    //     let change_rates = btc.borrow().change_rates(3000, 4100, 0)?;
+    //     assert_eq!(change_rates.withdrawal, 0);
+    //     assert_eq!(change_rates.sigset_change, 4090);
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 5);
 
-//         set_time(4000);
-//         push_deposit();
-//         maybe_step();
-//         let change_rates = btc.borrow().change_rates(3000, 4100, 0)?;
-//         assert_eq!(change_rates.withdrawal, 0);
-//         assert_eq!(change_rates.sigset_change, 4090);
-//         assert_eq!(btc.borrow().checkpoints.len()?, 5);
+    //     sign_cp(10);
 
-//         sign_cp(10);
+    //     set_time(5000);
+    //     push_deposit();
+    //     maybe_step();
+    //     let change_rates = btc.borrow().change_rates(3000, 5100, 0)?;
+    //     assert_eq!(change_rates.withdrawal, 0);
+    //     assert_eq!(change_rates.sigset_change, 4090);
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 6);
+    //     sign_cp(10);
 
-//         set_time(5000);
-//         push_deposit();
-//         maybe_step();
-//         let change_rates = btc.borrow().change_rates(3000, 5100, 0)?;
-//         assert_eq!(change_rates.withdrawal, 0);
-//         assert_eq!(change_rates.sigset_change, 4090);
-//         assert_eq!(btc.borrow().checkpoints.len()?, 6);
-//         sign_cp(10);
+    //     set_time(6000);
+    //     push_withdrawal();
+    //     maybe_step();
+    //     let change_rates = btc.borrow().change_rates(3000, 5100, 0)?;
+    //     assert_eq!(change_rates.withdrawal, 8664);
+    //     assert_eq!(change_rates.sigset_change, 4090);
+    //     assert_eq!(btc.borrow().checkpoints.signing()?.unwrap().sigset.index, 5);
+    //     let change_rates = btc.borrow().change_rates(3000, 5100, 5)?;
+    //     assert_eq!(change_rates.withdrawal, 0);
+    //     assert_eq!(change_rates.sigset_change, 0);
 
-//         set_time(6000);
-//         push_withdrawal();
-//         maybe_step();
-//         let change_rates = btc.borrow().change_rates(3000, 5100, 0)?;
-//         assert_eq!(change_rates.withdrawal, 8664);
-//         assert_eq!(change_rates.sigset_change, 4090);
-//         assert_eq!(btc.borrow().checkpoints.signing()?.unwrap().sigset.index, 5);
-//         let change_rates = btc.borrow().change_rates(3000, 5100, 5)?;
-//         assert_eq!(change_rates.withdrawal, 0);
-//         assert_eq!(change_rates.sigset_change, 0);
+    //     Ok(())
+    // }
 
-//         Ok(())
-//     }
+    // #[test]
+    // #[serial_test::serial]
+    // fn test_take_pending() -> ContractResult<()> {
+    //     // use checkpoint::*;
+    //     let paid = orga::plugins::Paid::default();
+    //     Context::add(paid);
 
-//     #[test]
-//     #[serial_test::serial]
-//     fn test_take_pending() -> ContractResult<()> {
-//         // use checkpoint::*;
-//         let paid = orga::plugins::Paid::default();
-//         Context::add(paid);
+    //     let mut vals = orga::plugins::Validators::new(
+    //         Rc::new(RefCell::new(Some(EntryMap::new()))),
+    //         Rc::new(RefCell::new(Some(Map::new()))),
+    //     );
+    //     let addr = vec![Address::from_pubkey([0; 33]), Address::from_pubkey([1; 33])];
+    //     vals.set_voting_power([0; 32], 100);
+    //     vals.set_operator([0; 32], addr[0])?;
+    //     vals.set_voting_power([1; 32], 10);
+    //     vals.set_operator([1; 32], addr[1])?;
+    //     Context::add(vals);
 
-//         let mut vals = orga::plugins::Validators::new(
-//             Rc::new(RefCell::new(Some(EntryMap::new()))),
-//             Rc::new(RefCell::new(Some(Map::new()))),
-//         );
-//         let addr = vec![Address::from_pubkey([0; 33]), Address::from_pubkey([1; 33])];
-//         vals.set_voting_power([0; 32], 100);
-//         vals.set_operator([0; 32], addr[0])?;
-//         vals.set_voting_power([1; 32], 10);
-//         vals.set_operator([1; 32], addr[1])?;
-//         Context::add(vals);
+    //     let set_signer = |addr| {
+    //         Context::add(Signer { signer: Some(addr) });
+    //     };
+    //     let set_time = |time| {
+    //         let time = orga::plugins::Time::from_seconds(time);
+    //         Context::add(time);
+    //     };
 
-//         let set_signer = |addr| {
-//             Context::add(Signer { signer: Some(addr) });
-//         };
-//         let set_time = |time| {
-//             let time = orga::plugins::Time::from_seconds(time);
-//             Context::add(time);
-//         };
+    //     let btc = Rc::new(RefCell::new(Bitcoin::default()));
+    //     let secp = Secp256k1::new();
+    //     let network = btc.borrow().network();
+    //     let xpriv = vec![
+    //         ExtendedPrivKey::new_master(network, &[0]).unwrap(),
+    //         ExtendedPrivKey::new_master(network, &[1]).unwrap(),
+    //     ];
+    //     let xpub = vec![
+    //         ExtendedPubKey::from_priv(&secp, &xpriv[0]),
+    //         ExtendedPubKey::from_priv(&secp, &xpriv[1]),
+    //     ];
 
-//         let btc = Rc::new(RefCell::new(Bitcoin::default()));
-//         let secp = Secp256k1::new();
-//         let network = btc.borrow().network();
-//         let xpriv = vec![
-//             ExtendedPrivKey::new_master(network, &[0]).unwrap(),
-//             ExtendedPrivKey::new_master(network, &[1]).unwrap(),
-//         ];
-//         let xpub = vec![
-//             ExtendedPubKey::from_priv(&secp, &xpriv[0]),
-//             ExtendedPubKey::from_priv(&secp, &xpriv[1]),
-//         ];
+    //     let push_deposit = |dest: Dest, coin: Coin<Nbtc>| {
+    //         let input = Input::new(
+    //             OutPoint {
+    //                 txid: Txid::from_slice(&[0; 32]).unwrap(),
+    //                 vout: 0,
+    //             },
+    //             &btc.borrow().checkpoints.building().unwrap().sigset,
+    //             &[0u8],
+    //             100_000_000,
+    //             (9, 10),
+    //         )
+    //         .unwrap();
+    //         let mut btc = btc.borrow_mut();
+    //         let mut building_mut = btc.checkpoints.building_mut().unwrap();
+    //         building_mut.fees_collected = 100_000_000;
+    //         building_mut.pending.insert(dest, coin).unwrap();
+    //         let mut building_checkpoint_batch = building_mut
+    //             .batches
+    //             .get_mut(BatchType::Checkpoint as u64)
+    //             .unwrap()
+    //             .unwrap();
+    //         let mut checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap().unwrap();
+    //         checkpoint_tx.input.push_back(input).unwrap();
+    //     };
 
-//         let push_deposit = |dest: Dest, coin: Coin<Nbtc>| {
-//             let input = Input::new(
-//                 OutPoint {
-//                     txid: Txid::from_slice(&[0; 32]).unwrap(),
-//                     vout: 0,
-//                 },
-//                 &btc.borrow().checkpoints.building().unwrap().sigset,
-//                 &[0u8],
-//                 100_000_000,
-//                 (9, 10),
-//             )
-//             .unwrap();
-//             let mut btc = btc.borrow_mut();
-//             let mut building_mut = btc.checkpoints.building_mut().unwrap();
-//             building_mut.fees_collected = 100_000_000;
-//             building_mut.pending.insert(dest, coin).unwrap();
-//             let mut building_checkpoint_batch = building_mut
-//                 .batches
-//                 .get_mut(BatchType::Checkpoint as u64)
-//                 .unwrap()
-//                 .unwrap();
-//             let mut checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap().unwrap();
-//             checkpoint_tx.input.push_back(input).unwrap();
-//         };
+    //     let push_withdrawal = || {
+    //         let mut btc = btc.borrow_mut();
 
-//         let push_withdrawal = || {
-//             let mut btc = btc.borrow_mut();
+    //         btc.add_withdrawal(Adapter::new(Script::new()), 459_459_927_000_000.into())
+    //             .unwrap();
 
-//             btc.add_withdrawal(Adapter::new(Script::new()), 459_459_927_000_000.into())
-//                 .unwrap();
+    //         let mut building_mut = btc.checkpoints.building_mut().unwrap();
+    //         building_mut.fees_collected = 100_000_000;
+    //     };
 
-//             let mut building_mut = btc.checkpoints.building_mut().unwrap();
-//             building_mut.fees_collected = 100_000_000;
-//         };
+    //     let sign_batch = |btc_height| {
+    //         let mut btc = btc.borrow_mut();
+    //         let queue = &mut btc.checkpoints;
+    //         let cp = queue.signing().unwrap().unwrap();
+    //         let sigset_index = cp.sigset.index;
+    //         for i in 0..2 {
+    //             if queue.signing().unwrap().is_none() {
+    //                 break;
+    //             }
+    //             let cp = queue.signing().unwrap().unwrap();
+    //             let to_sign = cp.to_sign(Xpub::new(xpub[i])).unwrap();
+    //             let secp2 = Secp256k1::signing_only();
+    //             let sigs = crate::app::signer::sign(&secp2, &xpriv[i], &to_sign).unwrap();
+    //             queue
+    //                 .sign(Xpub::new(xpub[i]), sigs, sigset_index, btc_height)
+    //                 .unwrap();
+    //         }
+    //     };
+    //     let sign_cp = |btc_height| {
+    //         sign_batch(btc_height);
+    //         sign_batch(btc_height);
+    //         if btc.borrow().checkpoints.signing().unwrap().is_some() {
+    //             sign_batch(btc_height);
+    //         }
+    //     };
 
-//         let sign_batch = |btc_height| {
-//             let mut btc = btc.borrow_mut();
-//             let queue = &mut btc.checkpoints;
-//             let cp = queue.signing().unwrap().unwrap();
-//             let sigset_index = cp.sigset.index;
-//             for i in 0..2 {
-//                 if queue.signing().unwrap().is_none() {
-//                     break;
-//                 }
-//                 let cp = queue.signing().unwrap().unwrap();
-//                 let to_sign = cp.to_sign(Xpub::new(xpub[i])).unwrap();
-//                 let secp2 = Secp256k1::signing_only();
-//                 let sigs = crate::bitcoin::signer::sign(&secp2, &xpriv[i], &to_sign).unwrap();
-//                 queue
-//                     .sign(Xpub::new(xpub[i]), sigs, sigset_index, btc_height)
-//                     .unwrap();
-//             }
-//         };
-//         let sign_cp = |btc_height| {
-//             sign_batch(btc_height);
-//             sign_batch(btc_height);
-//             if btc.borrow().checkpoints.signing().unwrap().is_some() {
-//                 sign_batch(btc_height);
-//             }
-//         };
+    //     let confirm_cp = |confirmed_index| {
+    //         let mut btc = btc.borrow_mut();
+    //         btc.checkpoints.confirmed_index = Some(confirmed_index);
+    //     };
 
-//         let confirm_cp = |confirmed_index| {
-//             let mut btc = btc.borrow_mut();
-//             btc.checkpoints.confirmed_index = Some(confirmed_index);
-//         };
+    //     let take_pending = || {
+    //         let mut btc = btc.borrow_mut();
+    //         btc.take_pending().unwrap()
+    //     };
 
-//         let take_pending = || {
-//             let mut btc = btc.borrow_mut();
-//             btc.take_pending().unwrap()
-//         };
+    //     let maybe_step = || {
+    //         let mut btc = btc.borrow_mut();
 
-//         let maybe_step = || {
-//             let mut btc = btc.borrow_mut();
+    //         btc.begin_block_step(vec![].into_iter(), vec![1, 2, 3])
+    //             .unwrap();
+    //     };
 
-//             btc.begin_block_step(vec![].into_iter(), vec![1, 2, 3])
-//                 .unwrap();
-//         };
+    //     set_time(0);
+    //     for i in 0..2 {
+    //         set_signer(addr[i]);
+    //         btc.borrow_mut().set_signatory_key(Xpub::new(xpub[i]))?;
+    //     }
 
-//         set_time(0);
-//         for i in 0..2 {
-//             set_signer(addr[i]);
-//             btc.borrow_mut().set_signatory_key(Xpub::new(xpub[i]))?;
-//         }
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 0);
+    //     maybe_step();
+    //     assert_eq!(btc.borrow().checkpoints.len()?, 1);
+    //     set_time(1000);
+    //     let channel_id = "channel-0"
+    //         .parse::<ChannelId>()
+    //         .map_err(|_| Error::Ibc("Invalid channel id".into()))?;
 
-//         assert_eq!(btc.borrow().checkpoints.len()?, 0);
-//         maybe_step();
-//         assert_eq!(btc.borrow().checkpoints.len()?, 1);
-//         set_time(1000);
-//         let channel_id = "channel-0"
-//             .parse::<ChannelId>()
-//             .map_err(|_| Error::Ibc("Invalid channel id".into()))?;
+    //     let port_id = "transfer"
+    //         .parse::<PortId>()
+    //         .map_err(|_| Error::Ibc("Invalid port".into()))?;
+    //     let mut dest = IbcDest {
+    //         source_port: port_id.to_string().try_into()?,
+    //         source_channel: channel_id.to_string().try_into()?,
+    //         sender: orga::encoding::Adapter("sender1".to_string().into()),
+    //         receiver: orga::encoding::Adapter("receiver".to_owned().into()),
+    //         timeout_timestamp: 10u64,
+    //         memo: "".try_into()?,
+    //     };
 
-//         let port_id = "transfer"
-//             .parse::<PortId>()
-//             .map_err(|_| Error::Ibc("Invalid port".into()))?;
-//         let mut dest = IbcDest {
-//             source_port: port_id.to_string().try_into()?,
-//             source_channel: channel_id.to_string().try_into()?,
-//             sender: orga::encoding::Adapter("sender1".to_string().into()),
-//             receiver: orga::encoding::Adapter("receiver".to_owned().into()),
-//             timeout_timestamp: 10u64,
-//             memo: "".try_into()?,
-//         };
+    //     // initially, there should not be any confirmed checkpoints -> return empty array for pending dests
+    //     assert_eq!(take_pending().len(), 0);
+    //     // fixture: create 2 confirmed checkpoints having deposits so we can validate later
+    //     push_deposit(Dest::Ibc(dest.clone()), Coin::<Nbtc>::mint(Amount::new(1)));
+    //     dest.sender = orga::encoding::Adapter("sender2".to_string().into());
+    //     push_deposit(Dest::Ibc(dest.clone()), Coin::<Nbtc>::mint(Amount::new(1)));
+    //     maybe_step();
+    //     sign_cp(10);
+    //     confirm_cp(0);
+    //     set_time(2000);
+    //     push_deposit(Dest::Ibc(dest.clone()), Coin::<Nbtc>::mint(Amount::new(5)));
+    //     maybe_step();
+    //     sign_cp(10);
+    //     confirm_cp(1);
+    //     assert_eq!(
+    //         btc.borrow().checkpoints.first_unhandled_confirmed_cp_index,
+    //         0
+    //     );
+    //     assert_eq!(btc.borrow().checkpoints.confirmed_index, Some(1));
+    //     // before take pending, the confirmed checkpoints should have some pending deposits
+    //     assert_eq!(
+    //         btc.borrow()
+    //             .checkpoints
+    //             .get(0)
+    //             .unwrap()
+    //             .pending
+    //             .iter()
+    //             .unwrap()
+    //             .count(),
+    //         2
+    //     );
+    //     assert_eq!(
+    //         btc.borrow()
+    //             .checkpoints
+    //             .get(1)
+    //             .unwrap()
+    //             .pending
+    //             .iter()
+    //             .unwrap()
+    //             .count(),
+    //         1
+    //     );
 
-//         // initially, there should not be any confirmed checkpoints -> return empty array for pending dests
-//         assert_eq!(take_pending().len(), 0);
-//         // fixture: create 2 confirmed checkpoints having deposits so we can validate later
-//         push_deposit(Dest::Ibc(dest.clone()), Coin::<Nbtc>::mint(Amount::new(1)));
-//         dest.sender = orga::encoding::Adapter("sender2".to_string().into());
-//         push_deposit(Dest::Ibc(dest.clone()), Coin::<Nbtc>::mint(Amount::new(1)));
-//         maybe_step();
-//         sign_cp(10);
-//         confirm_cp(0);
-//         set_time(2000);
-//         push_deposit(Dest::Ibc(dest.clone()), Coin::<Nbtc>::mint(Amount::new(5)));
-//         maybe_step();
-//         sign_cp(10);
-//         confirm_cp(1);
-//         assert_eq!(
-//             btc.borrow().checkpoints.first_unhandled_confirmed_cp_index,
-//             0
-//         );
-//         assert_eq!(btc.borrow().checkpoints.confirmed_index, Some(1));
-//         // before take pending, the confirmed checkpoints should have some pending deposits
-//         assert_eq!(
-//             btc.borrow()
-//                 .checkpoints
-//                 .get(0)
-//                 .unwrap()
-//                 .pending
-//                 .iter()
-//                 .unwrap()
-//                 .count(),
-//             2
-//         );
-//         assert_eq!(
-//             btc.borrow()
-//                 .checkpoints
-//                 .get(1)
-//                 .unwrap()
-//                 .pending
-//                 .iter()
-//                 .unwrap()
-//                 .count(),
-//             1
-//         );
+    //     // action. After take pending, the unhandled confirmed index should increase to 2 since we handled 2 confirmed checkpoints
+    //     let cp_dests = take_pending();
+    //     let checkpoints = &btc.borrow().checkpoints;
+    //     assert_eq!(checkpoints.first_unhandled_confirmed_cp_index, 2);
+    //     assert_eq!(cp_dests.len(), 2);
+    //     assert_eq!(cp_dests[0].len(), 2);
+    //     assert_eq!(cp_dests[1].len(), 1);
+    //     assert_eq!(
+    //         cp_dests[0][0].0.to_base64().unwrap(),
+    //         Dest::Ibc(IbcDest {
+    //             sender: orga::encoding::Adapter("sender1".to_string().into()),
+    //             ..dest.clone()
+    //         })
+    //         .to_base64()
+    //         .unwrap(),
+    //     );
+    //     assert_eq!(cp_dests[0][0].1.amount, Amount::new(1));
 
-//         // action. After take pending, the unhandled confirmed index should increase to 2 since we handled 2 confirmed checkpoints
-//         let cp_dests = take_pending();
-//         let checkpoints = &btc.borrow().checkpoints;
-//         assert_eq!(checkpoints.first_unhandled_confirmed_cp_index, 2);
-//         assert_eq!(cp_dests.len(), 2);
-//         assert_eq!(cp_dests[0].len(), 2);
-//         assert_eq!(cp_dests[1].len(), 1);
-//         assert_eq!(
-//             cp_dests[0][0].0.to_base64().unwrap(),
-//             Dest::Ibc(IbcDest {
-//                 sender: orga::encoding::Adapter("sender1".to_string().into()),
-//                 ..dest.clone()
-//             })
-//             .to_base64()
-//             .unwrap(),
-//         );
-//         assert_eq!(cp_dests[0][0].1.amount, Amount::new(1));
+    //     assert_eq!(
+    //         cp_dests[0][1].0.to_base64().unwrap(),
+    //         Dest::Ibc(IbcDest {
+    //             sender: orga::encoding::Adapter("sender2".to_string().into()),
+    //             ..dest.clone()
+    //         })
+    //         .to_base64()
+    //         .unwrap(),
+    //     );
+    //     assert_eq!(cp_dests[0][1].1.amount, Amount::new(1));
 
-//         assert_eq!(
-//             cp_dests[0][1].0.to_base64().unwrap(),
-//             Dest::Ibc(IbcDest {
-//                 sender: orga::encoding::Adapter("sender2".to_string().into()),
-//                 ..dest.clone()
-//             })
-//             .to_base64()
-//             .unwrap(),
-//         );
-//         assert_eq!(cp_dests[0][1].1.amount, Amount::new(1));
+    //     assert_eq!(
+    //         cp_dests[1][0].0.to_base64().unwrap(),
+    //         Dest::Ibc(IbcDest {
+    //             sender: orga::encoding::Adapter("sender2".to_string().into()),
+    //             ..dest.clone()
+    //         })
+    //         .to_base64()
+    //         .unwrap(),
+    //     );
+    //     assert_eq!(cp_dests[1][0].1.amount, Amount::new(5));
 
-//         assert_eq!(
-//             cp_dests[1][0].0.to_base64().unwrap(),
-//             Dest::Ibc(IbcDest {
-//                 sender: orga::encoding::Adapter("sender2".to_string().into()),
-//                 ..dest.clone()
-//             })
-//             .to_base64()
-//             .unwrap(),
-//         );
-//         assert_eq!(cp_dests[1][0].1.amount, Amount::new(5));
-
-//         // assert confirmed checkpoints pending. Should not have anything because we have removed them already in take_pending()
-//         let checkpoints = &btc.borrow().checkpoints;
-//         let first_cp = checkpoints.get(0).unwrap();
-//         assert_eq!(first_cp.pending.iter().unwrap().count(), 0);
-//         let second_cp = checkpoints.get(1).unwrap();
-//         assert_eq!(second_cp.pending.iter().unwrap().count(), 0);
-//         Ok(())
-//     }
-// }
+    //     // assert confirmed checkpoints pending. Should not have anything because we have removed them already in take_pending()
+    //     let checkpoints = &btc.borrow().checkpoints;
+    //     let first_cp = checkpoints.get(0).unwrap();
+    //     assert_eq!(first_cp.pending.iter().unwrap().count(), 0);
+    //     let second_cp = checkpoints.get(1).unwrap();
+    //     assert_eq!(second_cp.pending.iter().unwrap().count(), 0);
+    //     Ok(())
+    // }
+}

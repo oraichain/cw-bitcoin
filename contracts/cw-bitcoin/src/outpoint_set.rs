@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use cosmwasm_std::{Order, Storage};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{ContractError, ContractResult},
@@ -19,6 +20,7 @@ use crate::{
 /// of the network crediting a deposit twice. Care should be taken to configure
 /// usage of this collection to set timestamps properly to ensure this does not
 /// happen.
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct OutpointSet {}
 
 impl OutpointSet {

@@ -28,7 +28,7 @@ pub struct SignedRecoveryTx {
     pub dest: Dest,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RecoveryTxs {}
 
 pub struct RecoveryTxInput<'a> {

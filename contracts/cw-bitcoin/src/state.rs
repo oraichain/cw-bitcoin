@@ -4,7 +4,7 @@ use cw_storage_plus::{Item, Map};
 
 use crate::{
     adapter::Adapter,
-    bitcoin::ConsensusKey,
+    app::ConsensusKey,
     error::ContractResult,
     header::WorkHeader,
     interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Validator, Xpub},

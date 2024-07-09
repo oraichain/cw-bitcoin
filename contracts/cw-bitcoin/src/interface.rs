@@ -2,7 +2,6 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 
 use bitcoin::util::bip32::ExtendedPubKey;
-use bitcoin::Amount;
 use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::from_slice;
@@ -18,8 +17,8 @@ use serde::{de, ser, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::adapter::Adapter;
-use crate::bitcoin::ConsensusKey;
-use crate::bitcoin::NETWORK;
+use crate::app::ConsensusKey;
+use crate::app::NETWORK;
 use crate::constants::MAX_CHECKPOINT_AGE;
 use crate::constants::MAX_CHECKPOINT_INTERVAL;
 use crate::constants::MAX_DEPOSIT_AGE;
@@ -106,7 +105,7 @@ impl<'a, T> DerefMut for DequeExtension<'a, T> {
     }
 }
 
-#[cw_serde]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Accounts {
     transfers_allowed: bool,
     transfer_exceptions: Vec<String>,
