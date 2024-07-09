@@ -1,12 +1,13 @@
 use bitcoin::Script;
 use cosmwasm_std::Storage;
-use cw_storage_plus::{Deque, Item, Map};
+use cw_storage_plus::{Item, Map};
 
 use crate::{
     adapter::Adapter,
     error::ContractResult,
     header::WorkHeader,
-    interface::{BitcoinConfig, CheckpointConfig, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Xpub},
+    recovery::RecoveryTx,
 };
 
 pub const CHECKPOINT_CONFIG: Item<CheckpointConfig> = Item::new("checkpoint_config");
@@ -37,4 +38,6 @@ pub fn to_output_script(store: &dyn Storage, dest: String) -> ContractResult<Opt
 /// contains more work than the current chain, however it can not process reorgs
 /// that are deeper than the length of the queue (the length will be at the
 /// configured pruning level based on the `max_length` config parameter).
-pub const HEADERS: Deque<WorkHeader> = Deque::new("headers");
+pub const HEADERS: DequeExtension<WorkHeader> = DequeExtension::new("headers");
+
+pub const RECOVERY_TXS: DequeExtension<RecoveryTx> = DequeExtension::new("recovery_txs");

@@ -2,7 +2,6 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::{Signature, ThresholdSig},
 };
-use crate::signatory::derive_pubkey;
 use crate::{
     adapter::Adapter,
     interface::Xpub,
@@ -13,11 +12,11 @@ use crate::{
     constants::DEFAULT_FEE_RATE,
     error::{ContractError, ContractResult},
 };
+use crate::{interface::DequeExtension, signatory::derive_pubkey};
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Coin, Env, Order, StdError, Storage};
-use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
@@ -1323,8 +1322,8 @@ impl BuildingCheckpoint {
 }
 
 impl CheckpointQueue {
-    pub fn queue(&self) -> Deque<Checkpoint> {
-        Deque::new(&self.queue)
+    pub fn queue(&self) -> DequeExtension<Checkpoint> {
+        DequeExtension::new(&self.queue)
     }
 
     /// Set the queue's configuration parameters.
@@ -1340,7 +1339,7 @@ impl CheckpointQueue {
     /// Removes all checkpoints from the queue and resets the index to zero.
     pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
         self.index = 0;
-        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
         while !checkpoints.is_empty(store)? {
             checkpoints.pop_back(store)?;
         }
@@ -1352,7 +1351,7 @@ impl CheckpointQueue {
     ///
     /// If the index is out of bounds or was pruned, an error is returned.
     pub fn get(&self, store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {
-        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
         let queue_len = checkpoints.len(store)?;
         let index = self.get_deque_index(index, queue_len)?;
         let checkpoint = checkpoints.get(store, index)?.unwrap();
@@ -1385,7 +1384,7 @@ impl CheckpointQueue {
     // is_empty is defined
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self, store: &dyn Storage) -> ContractResult<u32> {
-        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
         let queue_len = checkpoints.len(store)?;
         Ok(queue_len)
     }
@@ -1410,8 +1409,8 @@ impl CheckpointQueue {
     /// checkpoint.
     pub fn all(&self, store: &dyn Storage) -> ContractResult<Vec<(u32, Checkpoint)>> {
         // TODO: return iterator
-        // TODO: use Deque iterator
-        let checkpoints = Deque::new(&self.queue);
+        // TODO: use DequeExtension iterator
+        let checkpoints = DequeExtension::new(&self.queue);
         let queue_len = checkpoints.len(store)?;
         let mut out = Vec::with_capacity(queue_len as usize);
 
@@ -1431,7 +1430,7 @@ impl CheckpointQueue {
         limit: u32,
     ) -> ContractResult<Vec<CompletedCheckpoint>> {
         // TODO: return iterator
-        // TODO: use Deque iterator
+        // TODO: use DequeExtension iterator
 
         let mut out = vec![];
 
@@ -1704,7 +1703,7 @@ impl CheckpointQueue {
     /// Prunes old checkpoints from the queue.
     pub fn prune(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
         let latest = self.building(store)?.create_time();
-        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
         let mut queue_len = checkpoints.len(store)?;
         while let Some(oldest) = checkpoints.front(store)? {
             // TODO: move to min_checkpoints field in config
@@ -2064,7 +2063,7 @@ impl CheckpointQueue {
         threshold_ratio: (u64, u64),
     ) -> ContractResult<()> {
         let mut index = first_index + 1;
-        let checkpoints: Deque<Checkpoint> = Deque::new(&self.queue);
+        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(&self.queue);
         let create_time = checkpoints.get(store, 0)?.unwrap().create_time();
 
         for script in redeem_scripts {
@@ -2159,7 +2158,7 @@ mod test {
         complete: u32,
         signing: bool,
     ) -> CheckpointQueue {
-        let checkpoints: Deque<Checkpoint> = Deque::new(queue);
+        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(queue);
         let mut checkpoint_queue = CheckpointQueue::default();
         checkpoint_queue.queue = queue.to_string();
         let mut push = |status| {

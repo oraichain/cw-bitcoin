@@ -1,11 +1,17 @@
 use std::ops::Deref;
+use std::ops::DerefMut;
 
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::from_slice;
+use cosmwasm_std::to_vec;
 use cosmwasm_std::Addr;
 use cosmwasm_std::Coin;
+use cosmwasm_std::StdResult;
+use cosmwasm_std::Storage;
+use cw_storage_plus::Deque;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 // use serde::{de::DeserializeOwned, Serialize};
 use sha2::{Digest, Sha256};
@@ -25,32 +31,72 @@ use crate::constants::USER_FEE_FACTOR;
 use crate::error::ContractResult;
 use crate::signatory::SIGSET_THRESHOLD;
 
-// pub trait DequeExtension<'a, T: Serialize + DeserializeOwned> {
-//     fn retain_unordered<F>(&self, store: &mut dyn Storage, f: F) -> StdResult<u64>
-//     where
-//         F: FnMut(&T) -> bool;
-// }
+pub struct DequeExtension<'a, T> {
+    // prefix of the deque items
+    key_prefix: [u8; 2],
+    namespace: &'a [u8],
+    // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
+    queue: Deque<'a, T>,
+}
 
-// impl<'a, T: Serialize + DeserializeOwned> DequeExtension<'a, T> for Deque<'a, T> {
-//     fn retain_unordered<F>(&self, store: &mut dyn Storage, mut f: F) -> StdResult<u64>
-//     where
-//         F: FnMut(&T) -> bool,
-//     {
-//         let mut temp = vec![];
-//         while let Some(item) = self.pop_front(store)? {
-//             temp.push(item);
-//         }
-//         let mut size = 0;
-//         for item in temp {
-//             if f(&item) {
-//                 self.push_back(store, &item)?;
-//                 size += 1;
-//             }
-//         }
+impl<'a, T: Serialize + DeserializeOwned> DequeExtension<'a, T> {
+    pub const fn new(prefix: &'a str) -> Self {
+        Self {
+            namespace: prefix.as_bytes(),
+            key_prefix: (prefix.len() as u16).to_be_bytes(),
+            queue: Deque::new(prefix),
+        }
+    }
 
-//         Ok(size)
-//     }
-// }
+    pub fn get_key(&self, pos: u32) -> Vec<u8> {
+        let key = &pos.to_be_bytes();
+        let size = self.namespace.len() + 2 + key.len();
+        let mut out = Vec::with_capacity(size);
+        out.extend_from_slice(&self.key_prefix);
+        out.extend_from_slice(self.namespace);
+        out.extend_from_slice(key);
+        out
+    }
+
+    /// Sets the value at the given position in the queue. Returns [`StdError::NotFound`] if index is out of bounds
+    pub fn set(&self, storage: &mut dyn Storage, pos: u32, value: &T) -> StdResult<()> {
+        let prefixed_key = self.get_key(pos);
+        storage.set(&prefixed_key, &to_vec(value)?);
+        Ok(())
+    }
+    //     fn retain_unordered<F>(&self, store: &mut dyn Storage, mut f: F) -> StdResult<u64>
+    //     where
+    //         F: FnMut(&T) -> bool,
+    //     {
+    //         let mut temp = vec![];
+    //         while let Some(item) = self.pop_front(store)? {
+    //             temp.push(item);
+    //         }
+    //         let mut size = 0;
+    //         for item in temp {
+    //             if f(&item) {
+    //                 self.push_back(store, &item)?;
+    //                 size += 1;
+    //             }
+    //         }
+
+    //         Ok(size)
+    //     }
+}
+
+impl<'a, T> Deref for DequeExtension<'a, T> {
+    type Target = Deque<'a, T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.queue
+    }
+}
+
+impl<'a, T> DerefMut for DequeExtension<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.queue
+    }
+}
 
 #[cw_serde]
 pub struct Accounts {
