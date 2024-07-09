@@ -4,9 +4,8 @@ use super::{
 };
 use crate::{
     adapter::Adapter,
-    interface::Xpub,
-    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
-    state::{to_output_script, RECOVERY_SCRIPTS},
+    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest, Xpub},
+    state::{next_checkpoint_queue_id, to_output_script, RECOVERY_SCRIPTS},
 };
 use crate::{
     constants::DEFAULT_FEE_RATE,
@@ -840,6 +839,16 @@ pub struct CheckpointQueue {
     pub queue: String,
 }
 
+impl CheckpointQueue {
+    pub fn new(store: &mut dyn Storage) -> ContractResult<Self> {
+        let queue = format!("checkpoint{}s", next_checkpoint_queue_id(store)?);
+        Ok(Self {
+            queue,
+            ..Default::default()
+        })
+    }
+}
+
 /// A wrapper around  an immutable reference to a `Checkpoint` which adds type
 /// information guaranteeing that the checkpoint is in the `Complete` state.
 #[derive(Deref)]
@@ -1465,7 +1474,7 @@ impl CheckpointQueue {
         } else {
             self.index.checked_sub(1)
         }
-        .ok_or_else(|| StdError::generic_err("No completed checkpoints yet").into())
+        .ok_or_else(|| ContractError::App("No completed checkpoints yet".to_string()))
     }
 
     pub fn first_index(&self, store: &dyn Storage) -> ContractResult<u32> {
@@ -1701,6 +1710,8 @@ impl CheckpointQueue {
             for output in excess_outputs {
                 checkpoint_tx.output.push(output);
             }
+
+            self.set(store, &**building)?;
         }
 
         Ok(true)
@@ -1895,6 +1906,7 @@ impl CheckpointQueue {
 
         let mut building = self.building(store)?;
         building.deposits_enabled = deposits_enabled;
+        self.set(store, &**building)?;
 
         Ok(Some(building))
     }
@@ -2162,15 +2174,12 @@ mod test {
     //TODO: More fee deduction tests
 
     fn create_queue_with_statuses(
-        queue: &str,
         store: &mut dyn Storage,
         complete: u32,
         signing: bool,
     ) -> CheckpointQueue {
-        let checkpoints: DequeExtension<Checkpoint> = DequeExtension::new(queue);
-        let mut checkpoint_queue = CheckpointQueue::default();
-        checkpoint_queue.queue = queue.to_string();
-        let mut push = |status| {
+        let mut checkpoint_queue = CheckpointQueue::new(store).unwrap();
+        let mut push = |checkpoints: DequeExtension<Checkpoint>, status| {
             let cp = Checkpoint {
                 status,
                 fee_rate: DEFAULT_FEE_RATE,
@@ -2188,13 +2197,13 @@ mod test {
         checkpoint_queue.index = complete;
 
         for _ in 0..complete {
-            push(CheckpointStatus::Complete);
+            push(checkpoint_queue.queue(), CheckpointStatus::Complete);
         }
         if signing {
-            push(CheckpointStatus::Signing);
+            push(checkpoint_queue.queue(), CheckpointStatus::Signing);
             checkpoint_queue.index += 1;
         }
-        push(CheckpointStatus::Building);
+        push(checkpoint_queue.queue(), CheckpointStatus::Building);
 
         checkpoint_queue
     }
@@ -2202,7 +2211,7 @@ mod test {
     #[test]
     fn completed_with_signing() {
         let mut deps = mock_dependencies();
-        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, true);
+        let queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
         let cp = queue.completed(deps.as_mut().storage, 1).unwrap();
         assert_eq!(cp.len(), 1);
         assert_eq!(cp[0].status, CheckpointStatus::Complete);
@@ -2211,7 +2220,7 @@ mod test {
     #[test]
     fn completed_without_signing() {
         let mut deps = mock_dependencies();
-        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, false);
+        let queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
         let cp = queue.completed(deps.as_mut().storage, 1).unwrap();
         assert_eq!(cp.len(), 1);
         assert_eq!(cp[0].status, CheckpointStatus::Complete);
@@ -2220,7 +2229,7 @@ mod test {
     #[test]
     fn completed_no_complete() {
         let mut deps = mock_dependencies();
-        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 0, false);
+        let queue = create_queue_with_statuses(deps.as_mut().storage, 0, false);
         let cp = queue.completed(deps.as_mut().storage, 10).unwrap();
         assert_eq!(cp.len(), 0);
     }
@@ -2228,7 +2237,7 @@ mod test {
     #[test]
     fn completed_zero_limit() {
         let mut deps = mock_dependencies();
-        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, false);
+        let queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
         let cp = queue.completed(deps.as_mut().storage, 0).unwrap();
         assert_eq!(cp.len(), 0);
     }
@@ -2236,7 +2245,7 @@ mod test {
     #[test]
     fn completed_oversized_limit() {
         let mut deps = mock_dependencies();
-        let queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, false);
+        let queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
         let cp = queue.completed(deps.as_mut().storage, 100).unwrap();
         assert_eq!(cp.len(), 10);
     }
@@ -2244,7 +2253,7 @@ mod test {
     #[test]
     fn completed_pruned() {
         let mut deps = mock_dependencies();
-        let mut queue = create_queue_with_statuses("checkpoint", deps.as_mut().storage, 10, false);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
         queue.index += 10;
         let cp = queue.completed(deps.as_mut().storage, 2).unwrap();
         assert_eq!(cp.len(), 2);
@@ -2254,27 +2263,27 @@ mod test {
     #[test]
     fn num_unconfirmed() {
         let mut deps = mock_dependencies();
-        let mut queue = create_queue_with_statuses("checkpoint1", deps.as_mut().storage, 10, false);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
         queue.confirmed_index = Some(5);
         assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
-        let mut queue = create_queue_with_statuses("checkpoint2", deps.as_mut().storage, 10, true);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
         queue.confirmed_index = Some(5);
         assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
-        let mut queue = create_queue_with_statuses("checkpoint3", deps.as_mut().storage, 0, false);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 0, false);
         queue.confirmed_index = None;
         assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
 
-        let mut queue = create_queue_with_statuses("checkpoint4", deps.as_mut().storage, 0, true);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 0, true);
         queue.confirmed_index = None;
         assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
 
-        let mut queue = create_queue_with_statuses("checkpoint5", deps.as_mut().storage, 10, false);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
         queue.confirmed_index = None;
         assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 10);
 
-        let mut queue = create_queue_with_statuses("checkpoint6", deps.as_mut().storage, 10, true);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
         queue.confirmed_index = None;
         assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 10);
     }
@@ -2282,7 +2291,7 @@ mod test {
     #[test]
     fn first_unconfirmed_index() {
         let mut deps = mock_dependencies();
-        let mut queue = create_queue_with_statuses("checkpoint1", deps.as_mut().storage, 10, false);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
         queue.confirmed_index = Some(5);
         assert_eq!(
             queue
@@ -2291,7 +2300,7 @@ mod test {
             Some(6)
         );
 
-        let mut queue = create_queue_with_statuses("checkpoint2", deps.as_mut().storage, 10, true);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
         queue.confirmed_index = Some(5);
         assert_eq!(
             queue
@@ -2300,7 +2309,7 @@ mod test {
             Some(6)
         );
 
-        let mut queue = create_queue_with_statuses("checkpoint3", deps.as_mut().storage, 0, false);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 0, false);
         queue.confirmed_index = None;
         assert_eq!(
             queue
@@ -2309,7 +2318,7 @@ mod test {
             None
         );
 
-        let mut queue = create_queue_with_statuses("checkpoint4", deps.as_mut().storage, 0, true);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 0, true);
         queue.confirmed_index = None;
         assert_eq!(
             queue
@@ -2318,7 +2327,7 @@ mod test {
             None
         );
 
-        let mut queue = create_queue_with_statuses("checkpoint5", deps.as_mut().storage, 10, false);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
         queue.confirmed_index = None;
         assert_eq!(
             queue
@@ -2327,7 +2336,7 @@ mod test {
             Some(0)
         );
 
-        let mut queue = create_queue_with_statuses("checkpoint6", deps.as_mut().storage, 10, true);
+        let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
         queue.confirmed_index = None;
         assert_eq!(
             queue

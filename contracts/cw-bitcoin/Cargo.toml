@@ -34,3 +34,4 @@ sha2 = "0.10.6"
 [dev-dependencies]
 chrono = "0.4.19"
 serial_test = "2.0.0"
+tendermint-proto = "=0.23.9"

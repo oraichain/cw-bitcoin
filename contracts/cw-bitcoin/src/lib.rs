@@ -14,4 +14,6 @@ mod signatory;
 mod state;
 mod threshold_sig;
 
+mod signer;
+
 pub mod contract;

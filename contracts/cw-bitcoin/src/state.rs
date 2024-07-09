@@ -55,6 +55,18 @@ pub const EXPIRATION_QUEUE: Map<(u64, &str), ()> = Map::new("expiration_queue");
 /// A set of outpoints.
 pub const OUTPOINTS: Map<&str, ()> = Map::new("outpoints");
 
+pub const CHECKPOINT_QUEUE_ID: Item<u64> = Item::new("cp_queue_id");
+
+pub fn next_checkpoint_queue_id(store: &mut dyn Storage) -> ContractResult<u64> {
+    let id: u64 = last_checkpoint_queue_id(store)? + 1;
+    CHECKPOINT_QUEUE_ID.save(store, &id)?;
+    Ok(id)
+}
+
+pub fn last_checkpoint_queue_id(store: &dyn Storage) -> ContractResult<u64> {
+    Ok(CHECKPOINT_QUEUE_ID.may_load(store)?.unwrap_or_default())
+}
+
 pub fn to_output_script(store: &dyn Storage, dest: &str) -> ContractResult<Option<Script>> {
     Ok(RECOVERY_SCRIPTS
         .load(store, dest)
