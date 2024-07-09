@@ -14,6 +14,11 @@ mod signatory;
 mod state;
 mod threshold_sig;
 
+/// libraries for relayer
+#[cfg(not(target_arch = "wasm32"))]
 mod signer;
 
 pub mod contract;
+
+#[cfg(test)]
+mod tests;

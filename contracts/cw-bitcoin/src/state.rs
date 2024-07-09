@@ -11,6 +11,7 @@ use crate::{
     recovery::RecoveryTx,
 };
 
+/// TODO: store in smart contract
 pub const CHECKPOINT_CONFIG: Item<CheckpointConfig> = Item::new("checkpoint_config");
 pub const HEADER_CONFIG: Item<HeaderConfig> = Item::new("header");
 pub const BITCOIN_CONFIG: Item<BitcoinConfig> = Item::new("bitcoin_config");

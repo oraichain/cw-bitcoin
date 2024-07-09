@@ -498,19 +498,12 @@ pub struct HeaderConfig {
     pub trusted_header: Adapter<BlockHeader>,
 }
 
-impl Default for HeaderConfig {
-    fn default() -> Self {
-        HeaderConfig::mainnet()
-    }
-}
-
 impl HeaderConfig {
-    pub fn mainnet() -> Self {
-        let checkpoint_json = include_bytes!("./checkpoint.json");
-        let checkpoint: (u32, BlockHeader) = from_slice(checkpoint_json).unwrap();
+    pub fn from_bytes(checkpoint_json: &[u8]) -> ContractResult<Self> {
+        let checkpoint: (u32, BlockHeader) = from_slice(checkpoint_json)?;
         let (height, header) = checkpoint;
 
-        Self {
+        Ok(Self {
             max_length: MAX_LENGTH,
             max_time_increase: MAX_TIME_INCREASE,
             trusted_height: height,
@@ -521,7 +514,7 @@ impl HeaderConfig {
             trusted_header: header.into(),
             retargeting: true,
             min_difficulty_blocks: false,
-        }
+        })
     }
 }
 

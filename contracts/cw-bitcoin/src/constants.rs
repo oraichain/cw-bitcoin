@@ -26,3 +26,5 @@ pub const MAX_TARGET: u32 = 0x1d00ffff;
 
 // TODO: move to config
 pub const SIGSET_THRESHOLD: (u64, u64) = (2, 3);
+
+pub const BTC_NATIVE_TOKEN_DENOM: &str = "uoraibtc";

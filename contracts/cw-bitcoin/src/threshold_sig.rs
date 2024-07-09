@@ -8,7 +8,7 @@ use bitcoin::secp256k1::{
     ecdsa, PublicKey, Secp256k1,
 };
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{StdError, StdResult};
+use cosmwasm_std::StdResult;
 use serde::{Deserialize, Serialize};
 
 // TODO: update for taproot-based design (musig rounds, fallback path)
