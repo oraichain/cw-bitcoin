@@ -38,7 +38,10 @@ fn primitive_adapter_encode_decode() {
     assert_eq!(*decoded_adapter, header);
 
     // post from client
-    let header_wasm:BlockHeader = Decodable::consensus_decode(&mut Binary::from_base64("AQAAAItSu9csL0lWkFn1WcGxeU3lGS5PfW0rA8dIK60AAAAAg+T4qdUC7QxBkHXBq7XVb4eKLpB55WEr+3ai3DfZxCdB3WhJ//8AHSuQndY=").unwrap().as_slice()).unwrap();
+    let header_str="AQAAAItSu9csL0lWkFn1WcGxeU3lGS5PfW0rA8dIK60AAAAAg+T4qdUC7QxBkHXBq7XVb4eKLpB55WEr+3ai3DfZxCdB3WhJ//8AHSuQndY=";
+    let header_wasm: BlockHeader =
+        Decodable::consensus_decode(&mut Binary::from_base64(header_str).unwrap().as_slice())
+            .unwrap();
     assert_eq!(header_wasm, header);
 }
 

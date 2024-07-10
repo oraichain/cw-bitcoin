@@ -17,6 +17,6 @@ let blockHeader = {
   bits: 486_604_799,
   nonce: 3_600_650_283
 };
-let blockHeaderData = Buffer.from(wasm.serializeBlockHeader(blockHeader));
-let blockHeader2 = wasm.deserializeBlockHeader(blockHeaderData);
+let blockHeaderData = Buffer.from(wasm.encodeBlockHeader(blockHeader));
+let blockHeader2 = wasm.decodeBlockHeader(blockHeaderData);
 console.log(blockHeader2, blockHeaderData.toString('base64'));
