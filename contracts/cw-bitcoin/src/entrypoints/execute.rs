@@ -1,6 +1,6 @@
-use cosmwasm_std::{from_binary, Binary, Env, Response, Storage};
-
 use crate::{app::Bitcoin, error::ContractResult, interface::Dest, state::HEADER_CONFIG};
+use bitcoin::{consensus::Decodable, util::merkleblock::PartialMerkleTree, Transaction};
+use cosmwasm_std::{Binary, Env, Response, Storage};
 
 pub fn relay_deposit(
     env: Env,
@@ -12,16 +12,16 @@ pub fn relay_deposit(
     sigset_index: u32,
     dest: Dest,
 ) -> ContractResult<Response> {
-    let btc_tx = from_binary(&btc_tx)?;
-    let btc_proof = from_binary(&btc_proof)?;
+    let btc_tx: Transaction = Decodable::consensus_decode(&mut btc_tx.as_slice())?;
+    let btc_proof: PartialMerkleTree = Decodable::consensus_decode(&mut btc_proof.as_slice())?;
     let header_config = HEADER_CONFIG.load(store)?;
     let mut btc = Bitcoin::new(header_config);
     btc.relay_deposit(
         env,
         store,
-        btc_tx,
+        btc_tx.into(),
         btc_height,
-        btc_proof,
+        btc_proof.into(),
         btc_vout,
         sigset_index,
         dest,

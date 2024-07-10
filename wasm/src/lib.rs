@@ -8,6 +8,7 @@ mod adapter;
 mod deposit_index;
 mod error;
 mod header_queue;
+mod helpers;
 mod interface;
 mod relayer;
 mod signatory;

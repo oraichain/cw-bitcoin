@@ -35,6 +35,8 @@ impl<T: Default> Default for Adapter<T> {
     }
 }
 
+/// these methods as for storage only, for passing to contract, use Decodable is much cleaner
+
 /// Serializes as a string
 impl<T: Encodable> Serialize for Adapter<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

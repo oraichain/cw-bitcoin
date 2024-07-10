@@ -6,7 +6,6 @@ use cosmwasm_std::to_vec;
 use cosmwasm_std::Addr;
 use cosmwasm_std::Binary;
 use cosmwasm_std::Coin;
-use cosmwasm_std::StdResult;
 use cosmwasm_std::Storage;
 use cosmwasm_std::Uint128;
 use cw_storage_plus::Deque;

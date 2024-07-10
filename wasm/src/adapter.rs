@@ -1,6 +1,7 @@
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 
 /// A wrapper that adds core `orga` traits to types from the `bitcoin` crate.
 #[derive(Clone, Debug, PartialEq, Deref, Serialize, Deserialize, DerefMut, Tsify)]

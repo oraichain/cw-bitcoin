@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+// @ts-nocheck
 import * as wasm from './pkg/wasm';
 
 const signatorySet = wasm.newSignatorySet(
@@ -6,3 +8,15 @@ const signatorySet = wasm.newSignatorySet(
   3n
 );
 console.log(signatorySet);
+
+let blockHeader = {
+  version: 0x1,
+  prev_blockhash: '00000000ad2b48c7032b6d7d4f2e19e54d79b1c159f5599056492f2cd7bb528b',
+  merkle_root: '27c4d937dca276fb2b61e579902e8a876fd5b5abc17590410ced02d5a9f8e483',
+  time: 1231609153,
+  bits: 486_604_799,
+  nonce: 3_600_650_283
+};
+let blockHeaderData = Buffer.from(wasm.serializeBlockHeader(blockHeader));
+let blockHeader2 = wasm.deserializeBlockHeader(blockHeaderData);
+console.log(blockHeader2, blockHeaderData.toString('base64'));

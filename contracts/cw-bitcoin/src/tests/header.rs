@@ -1,8 +1,10 @@
+use bitcoin::consensus::Decodable;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::sha256d::Hash;
 use bitcoin::BlockHash;
 use bitcoin::{hash_types::TxMerkleNode, BlockHeader};
 use chrono::{TimeZone, Utc};
+use cosmwasm_std::Binary;
 use cosmwasm_std::{from_binary, testing::mock_dependencies, to_binary};
 use serial_test::serial;
 
@@ -34,6 +36,10 @@ fn primitive_adapter_encode_decode() {
     let decoded_adapter: Adapter<BlockHeader> = from_binary(&encoded_adapter).unwrap();
 
     assert_eq!(*decoded_adapter, header);
+
+    // post from client
+    let header_wasm:BlockHeader = Decodable::consensus_decode(&mut Binary::from_base64("AQAAAItSu9csL0lWkFn1WcGxeU3lGS5PfW0rA8dIK60AAAAAg+T4qdUC7QxBkHXBq7XVb4eKLpB55WEr+3ai3DfZxCdB3WhJ//8AHSuQndY=").unwrap().as_slice()).unwrap();
+    assert_eq!(header_wasm, header);
 }
 
 #[test]
