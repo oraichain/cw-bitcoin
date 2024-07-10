@@ -1,7 +1,7 @@
 [workspace]
 resolver = '2'
 
-members = ["contracts/*"]
+members = ["contracts/*", "wasm"]
 
 
 [workspace.package]
@@ -23,7 +23,7 @@ cosmwasm-std = { version = "=1.2" }
 cosmwasm-schema = { version = "=1.2" }
 cosmwasm-storage = { version = "=1.2" }
 cosmwasm-vm = { version = "=1.2" }
-
+bitcoin = { version = "0.29.2", features = ["serde"] }
 thiserror = "1.0.26"
 
 cw2 = { version = "1.0.1" }
@@ -33,6 +33,7 @@ cw-storage-plus = { version = "1.0.1" }
 cw-multi-test = "0.16.6"
 cw-utils = "0.16.0"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
+ed = { git = "https://github.com/nomic-io/ed", rev = "9c0e206ffdb59dacb90f083e004e8080713e6ad8" }
 
 [profile.release]
 opt-level = 3

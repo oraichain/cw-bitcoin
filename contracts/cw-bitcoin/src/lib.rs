@@ -4,7 +4,7 @@ mod adapter;
 mod app;
 mod checkpoint;
 mod constants;
-mod error;
+pub mod error;
 mod header;
 mod interface;
 mod msg;
