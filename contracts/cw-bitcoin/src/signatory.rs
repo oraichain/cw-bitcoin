@@ -21,7 +21,6 @@ use bitcoin::secp256k1::Verification;
 use bitcoin::util::bip32::ChildNumber;
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
-use cosmwasm_std::Env;
 use cosmwasm_std::Order;
 use cosmwasm_std::Storage;
 use ed::Encode;
