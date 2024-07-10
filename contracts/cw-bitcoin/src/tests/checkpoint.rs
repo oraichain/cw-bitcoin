@@ -3,8 +3,10 @@ use cosmwasm_std::{testing::mock_dependencies, Storage};
 use crate::{
     checkpoint::{adjust_fee_rate, BitcoinTx, Checkpoint, CheckpointQueue, CheckpointStatus},
     constants::DEFAULT_FEE_RATE,
-    interface::{CheckpointConfig, DequeExtension},
+    error::ContractResult,
+    interface::CheckpointConfig,
     signatory::{Signatory, SignatorySet},
+    state::CHECKPOINTS,
     tests::helper::push_bitcoin_tx_output,
     threshold_sig::Pubkey,
 };
@@ -46,13 +48,15 @@ fn deduct_fee_multi_pass_empty_result() {
 
 //TODO: More fee deduction tests
 
-fn create_queue_with_statuses(
+fn create_queue_with_status(
     store: &mut dyn Storage,
     complete: u32,
     signing: bool,
-) -> CheckpointQueue {
-    let mut checkpoint_queue = CheckpointQueue::new(store).unwrap();
-    let mut push = |checkpoints: DequeExtension<Checkpoint>, status| {
+) -> ContractResult<CheckpointQueue> {
+    let mut checkpoint_queue = CheckpointQueue::default();
+    checkpoint_queue.reset(store)?;
+
+    let mut push = |status| {
         let cp = Checkpoint {
             status,
             fee_rate: DEFAULT_FEE_RATE,
@@ -64,27 +68,26 @@ fn create_queue_with_statuses(
             batches: vec![],
         };
 
-        checkpoints.push_back(store, &cp).unwrap();
+        CHECKPOINTS.push_back(store, &cp).unwrap();
     };
-
     checkpoint_queue.index = complete;
 
     for _ in 0..complete {
-        push(checkpoint_queue.queue(), CheckpointStatus::Complete);
+        push(CheckpointStatus::Complete);
     }
     if signing {
-        push(checkpoint_queue.queue(), CheckpointStatus::Signing);
+        push(CheckpointStatus::Signing);
         checkpoint_queue.index += 1;
     }
-    push(checkpoint_queue.queue(), CheckpointStatus::Building);
+    push(CheckpointStatus::Building);
 
-    checkpoint_queue
+    Ok(checkpoint_queue)
 }
 
 #[test]
 fn completed_with_signing() {
     let mut deps = mock_dependencies();
-    let queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
     let cp = queue.completed(deps.as_mut().storage, 1).unwrap();
     assert_eq!(cp.len(), 1);
     assert_eq!(cp[0].status, CheckpointStatus::Complete);
@@ -93,7 +96,7 @@ fn completed_with_signing() {
 #[test]
 fn completed_without_signing() {
     let mut deps = mock_dependencies();
-    let queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     let cp = queue.completed(deps.as_mut().storage, 1).unwrap();
     assert_eq!(cp.len(), 1);
     assert_eq!(cp[0].status, CheckpointStatus::Complete);
@@ -102,7 +105,7 @@ fn completed_without_signing() {
 #[test]
 fn completed_no_complete() {
     let mut deps = mock_dependencies();
-    let queue = create_queue_with_statuses(deps.as_mut().storage, 0, false);
+    let queue = create_queue_with_status(deps.as_mut().storage, 0, false).unwrap();
     let cp = queue.completed(deps.as_mut().storage, 10).unwrap();
     assert_eq!(cp.len(), 0);
 }
@@ -110,7 +113,7 @@ fn completed_no_complete() {
 #[test]
 fn completed_zero_limit() {
     let mut deps = mock_dependencies();
-    let queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     let cp = queue.completed(deps.as_mut().storage, 0).unwrap();
     assert_eq!(cp.len(), 0);
 }
@@ -118,7 +121,7 @@ fn completed_zero_limit() {
 #[test]
 fn completed_oversized_limit() {
     let mut deps = mock_dependencies();
-    let queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     let cp = queue.completed(deps.as_mut().storage, 100).unwrap();
     assert_eq!(cp.len(), 10);
 }
@@ -126,7 +129,7 @@ fn completed_oversized_limit() {
 #[test]
 fn completed_pruned() {
     let mut deps = mock_dependencies();
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     queue.index += 10;
     let cp = queue.completed(deps.as_mut().storage, 2).unwrap();
     assert_eq!(cp.len(), 2);
@@ -136,27 +139,27 @@ fn completed_pruned() {
 #[test]
 fn num_unconfirmed() {
     let mut deps = mock_dependencies();
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     queue.confirmed_index = Some(5);
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
     queue.confirmed_index = Some(5);
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 0, false);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 0, false).unwrap();
     queue.confirmed_index = None;
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 0, true);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 0, true).unwrap();
     queue.confirmed_index = None;
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     queue.confirmed_index = None;
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 10);
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
     queue.confirmed_index = None;
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 10);
 }
@@ -164,7 +167,7 @@ fn num_unconfirmed() {
 #[test]
 fn first_unconfirmed_index() {
     let mut deps = mock_dependencies();
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     queue.confirmed_index = Some(5);
     assert_eq!(
         queue
@@ -173,7 +176,7 @@ fn first_unconfirmed_index() {
         Some(6)
     );
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
     queue.confirmed_index = Some(5);
     assert_eq!(
         queue
@@ -182,7 +185,7 @@ fn first_unconfirmed_index() {
         Some(6)
     );
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 0, false);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 0, false).unwrap();
     queue.confirmed_index = None;
     assert_eq!(
         queue
@@ -191,7 +194,7 @@ fn first_unconfirmed_index() {
         None
     );
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 0, true);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 0, true).unwrap();
     queue.confirmed_index = None;
     assert_eq!(
         queue
@@ -200,7 +203,7 @@ fn first_unconfirmed_index() {
         None
     );
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, false);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     queue.confirmed_index = None;
     assert_eq!(
         queue
@@ -209,7 +212,7 @@ fn first_unconfirmed_index() {
         Some(0)
     );
 
-    let mut queue = create_queue_with_statuses(deps.as_mut().storage, 10, true);
+    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
     queue.confirmed_index = None;
     assert_eq!(
         queue
@@ -257,23 +260,19 @@ fn sigset(n: u32) -> SignatorySet {
 #[test]
 fn backfill_basic() {
     let mut deps = mock_dependencies();
-    let mut queue = CheckpointQueue::new(deps.as_mut().storage).unwrap();
+    let mut queue = CheckpointQueue::default();
 
     queue.index = 10;
-    queue
-        .queue()
+    CHECKPOINTS
         .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(7)).unwrap())
         .unwrap();
-    queue
-        .queue()
+    CHECKPOINTS
         .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(8)).unwrap())
         .unwrap();
-    queue
-        .queue()
+    CHECKPOINTS
         .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(9)).unwrap())
         .unwrap();
-    queue
-        .queue()
+    CHECKPOINTS
         .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(10)).unwrap())
         .unwrap();
 
@@ -318,8 +317,7 @@ fn backfill_with_zeroth() {
     let mut deps = mock_dependencies();
     let mut queue = CheckpointQueue::default();
     queue.index = 1;
-    queue
-        .queue()
+    CHECKPOINTS
         .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(1)).unwrap())
         .unwrap();
 

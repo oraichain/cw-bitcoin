@@ -4,7 +4,6 @@ use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::interface::HeaderConfig;
 use crate::state::HEADERS;
-use crate::state::HEADER_CONFIG;
 use bitcoin::blockdata::block::BlockHeader;
 
 use bitcoin::util::uint::Uint256;
@@ -188,19 +187,12 @@ pub struct HeaderQueue {
 }
 
 impl HeaderQueue {
-    pub fn new(store: &mut dyn Storage) -> ContractResult<Self> {
-        let config = HEADER_CONFIG.load(store)?;
-        let decoded_adapter: Adapter<BlockHeader> = config.trusted_header.into();
-        let wrapped_header = WrappedHeader::new(decoded_adapter, config.trusted_height);
-        let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
-        let current_work = Adapter::new(work_header.work());
-
-        HEADERS.push_back(store, &work_header)?;
-
-        Ok(Self {
+    pub fn new(config: HeaderConfig) -> Self {
+        let current_work = Adapter::new(config.work_header().work());
+        Self {
             current_work,
             config,
-        })
+        }
     }
 
     /// Verify and add a list of headers to the header queue.
@@ -586,12 +578,7 @@ impl HeaderQueue {
         store: &mut dyn Storage,
         config: HeaderConfig,
     ) -> ContractResult<()> {
-        let mut queue_len = self.len(store);
-
-        while queue_len > 0 {
-            HEADERS.pop_back(store)?;
-            queue_len -= 1;
-        }
+        HEADERS.clear(store)?;
 
         let decoded_adapter: Adapter<BlockHeader> = config.trusted_header.into();
         let wrapped_header = WrappedHeader::new(decoded_adapter, config.trusted_height);

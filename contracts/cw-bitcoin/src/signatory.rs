@@ -104,11 +104,13 @@ pub struct SignatorySet {
 
 impl SignatorySet {
     /// Creates a signatory set based on the current validator set.
-    pub fn from_validator_ctx(store: &dyn Storage, env: Env, index: u32) -> ContractResult<Self> {
-        let time = env.block.time;
-
+    pub fn from_validator_ctx(
+        store: &dyn Storage,
+        create_time: u64,
+        index: u32,
+    ) -> ContractResult<Self> {
         let mut sigset = SignatorySet {
-            create_time: time.seconds(),
+            create_time,
             present_vp: 0,
             possible_vp: 0,
             index,

@@ -2,18 +2,16 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::{Signature, ThresholdSig},
 };
+use crate::signatory::derive_pubkey;
 use crate::{
     adapter::Adapter,
     interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest, Xpub},
-    state::{
-        next_checkpoint_queue_id, to_output_script, CHECKPOINT_QUEUE_ID_PREFIX, RECOVERY_SCRIPTS,
-    },
+    state::{to_output_script, CHECKPOINTS, RECOVERY_SCRIPTS},
 };
 use crate::{
     constants::DEFAULT_FEE_RATE,
     error::{ContractError, ContractResult},
 };
-use crate::{interface::DequeExtension, signatory::derive_pubkey};
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
@@ -832,25 +830,6 @@ pub struct CheckpointQueue {
 
     /// Configuration parameters used in processing checkpoints.
     pub config: CheckpointConfig,
-
-    /// The checkpoints in the queue, in order from oldest to newest. The last
-    /// checkpoint is the checkpoint currently being built, and has the index
-    /// contained in the `index` field.
-    pub queue_id: String,
-}
-
-impl CheckpointQueue {
-    pub fn new(store: &mut dyn Storage) -> ContractResult<Self> {
-        let queue_id = format!(
-            "{}{}s",
-            CHECKPOINT_QUEUE_ID_PREFIX,
-            next_checkpoint_queue_id(store)?
-        );
-        Ok(Self {
-            queue_id,
-            ..Default::default()
-        })
-    }
 }
 
 /// A wrapper around  an immutable reference to a `Checkpoint` which adds type
@@ -1312,10 +1291,6 @@ impl BuildingCheckpoint {
 }
 
 impl CheckpointQueue {
-    pub fn queue(&self) -> DequeExtension<Checkpoint> {
-        DequeExtension::new(&self.queue_id)
-    }
-
     /// Set the queue's configuration parameters.
     pub fn configure(&mut self, config: CheckpointConfig) {
         self.config = config;
@@ -1329,22 +1304,17 @@ impl CheckpointQueue {
     /// Removes all checkpoints from the queue and resets the index to zero.
     pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
         self.index = 0;
-        let checkpoints = self.queue();
-        while !checkpoints.is_empty(store)? {
-            checkpoints.pop_back(store)?;
-        }
 
-        Ok(())
+        CHECKPOINTS.clear(store)
     }
 
     /// Gets a reference to the checkpoint at the given index.
     ///
     /// If the index is out of bounds or was pruned, an error is returned.
     pub fn get(&self, store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {
-        let checkpoints = self.queue();
-        let queue_len = checkpoints.len(store)?;
+        let queue_len = CHECKPOINTS.len(store)?;
         let index = self.get_deque_index(index, queue_len)?;
-        let checkpoint = checkpoints.get(store, index)?.unwrap();
+        let checkpoint = CHECKPOINTS.get(store, index)?.unwrap();
         Ok(checkpoint)
     }
 
@@ -1354,10 +1324,9 @@ impl CheckpointQueue {
         index: u32,
         checkpoint: &Checkpoint,
     ) -> ContractResult<()> {
-        let checkpoints = self.queue();
-        let queue_len = checkpoints.len(store)?;
+        let queue_len = CHECKPOINTS.len(store)?;
         let index = self.get_deque_index(index, queue_len)?;
-        checkpoints.set(store, index, checkpoint)?;
+        CHECKPOINTS.set(store, index, checkpoint)?;
         Ok(())
     }
 
@@ -1387,8 +1356,7 @@ impl CheckpointQueue {
     // is_empty is defined
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self, store: &dyn Storage) -> ContractResult<u32> {
-        let checkpoints = self.queue();
-        let queue_len = checkpoints.len(store)?;
+        let queue_len = CHECKPOINTS.len(store)?;
         Ok(queue_len)
     }
 
@@ -1413,12 +1381,11 @@ impl CheckpointQueue {
     pub fn all(&self, store: &dyn Storage) -> ContractResult<Vec<(u32, Checkpoint)>> {
         // TODO: return iterator
         // TODO: use DequeExtension iterator
-        let checkpoints = self.queue();
-        let queue_len = checkpoints.len(store)?;
+        let queue_len = CHECKPOINTS.len(store)?;
         let mut out = Vec::with_capacity(queue_len as usize);
 
         for i in 0..queue_len {
-            let checkpoint = checkpoints.get(store, i)?.unwrap();
+            let checkpoint = CHECKPOINTS.get(store, i)?.unwrap();
             out.push(((self.index + 1 - (queue_len - i as u32)), checkpoint));
         }
 
@@ -1708,9 +1675,8 @@ impl CheckpointQueue {
     /// Prunes old checkpoints from the queue.
     pub fn prune(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
         let latest = self.building(store)?.create_time();
-        let checkpoints = self.queue();
-        let mut queue_len = checkpoints.len(store)?;
-        while let Some(oldest) = checkpoints.front(store)? {
+        let mut queue_len = CHECKPOINTS.len(store)?;
+        while let Some(oldest) = CHECKPOINTS.front(store)? {
             // TODO: move to min_checkpoints field in config
             if queue_len <= 10 {
                 break;
@@ -1720,7 +1686,7 @@ impl CheckpointQueue {
                 break;
             }
 
-            checkpoints.pop_front(store)?;
+            CHECKPOINTS.pop_front(store)?;
             queue_len -= 1;
         }
 
@@ -1739,8 +1705,8 @@ impl CheckpointQueue {
         if self.signing(store)?.is_some() {
             return Ok(false);
         }
-        let checkpoints = self.queue();
-        if !checkpoints.is_empty(store)? {
+
+        if !CHECKPOINTS.is_empty(store)? {
             let now = env.block.time.seconds();
             let elapsed = now - self.building(store)?.create_time();
 
@@ -1827,13 +1793,13 @@ impl CheckpointQueue {
         // Increment the index. For the first checkpoint, leave the index at
         // zero.
         let mut index = self.index;
-        if !checkpoints.is_empty(store)? {
+        if !CHECKPOINTS.is_empty(store)? {
             index += 1;
         }
 
         // Build the signatory set for the new checkpoint based on the current
         // validator set.
-        let sigset = SignatorySet::from_validator_ctx(store, env, index)?;
+        let sigset = SignatorySet::from_validator_ctx(store, env.block.time.seconds(), index)?;
         // Do not push if there are no validators in the signatory set.
         if sigset.possible_vp() == 0 {
             return Ok(false);
@@ -1870,15 +1836,14 @@ impl CheckpointQueue {
     ) -> ContractResult<Option<BuildingCheckpoint>> {
         // Increment the index. For the first checkpoint, leave the index at
         // zero.
-        let checkpoints = DequeExtension::new(&self.queue_id);
         let mut index = self.index;
-        if !checkpoints.is_empty(store)? {
+        if !CHECKPOINTS.is_empty(store)? {
             index += 1;
         }
 
         // Build the signatory set for the new checkpoint based on the current
         // validator set.
-        let sigset = SignatorySet::from_validator_ctx(store, env, index)?;
+        let sigset = SignatorySet::from_validator_ctx(store, env.block.time.seconds(), index)?;
 
         // Do not push if there are no validators in the signatory set.
         if sigset.possible_vp() == 0 {
@@ -1892,7 +1857,7 @@ impl CheckpointQueue {
 
         self.index = index;
 
-        checkpoints.push_back(store, &Checkpoint::new(sigset)?)?;
+        CHECKPOINTS.push_back(store, &Checkpoint::new(sigset)?)?;
 
         let mut building = self.building(store)?;
         building.deposits_enabled = deposits_enabled;
@@ -2076,8 +2041,7 @@ impl CheckpointQueue {
         threshold_ratio: (u64, u64),
     ) -> ContractResult<()> {
         let mut index = first_index + 1;
-        let checkpoints = self.queue();
-        let create_time = checkpoints.get(store, 0)?.unwrap().create_time();
+        let create_time = CHECKPOINTS.get(store, 0)?.unwrap().create_time();
 
         for script in redeem_scripts {
             index -= 1;
@@ -2092,7 +2056,7 @@ impl CheckpointQueue {
             let mut cp = Checkpoint::new(sigset)?;
             cp.status = CheckpointStatus::Complete;
 
-            checkpoints.push_front(store, &cp)?;
+            CHECKPOINTS.push_front(store, &cp)?;
         }
 
         Ok(())

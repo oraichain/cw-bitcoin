@@ -35,6 +35,8 @@ use crate::constants::TRANSFER_FEE;
 use crate::constants::USER_FEE_FACTOR;
 use crate::error::ContractError;
 use crate::error::ContractResult;
+use crate::header::WorkHeader;
+use crate::header::WrappedHeader;
 
 #[derive(Deref, DerefMut)]
 pub struct DequeExtension<'a, T> {
@@ -56,6 +58,16 @@ impl<'a, T: Serialize + de::DeserializeOwned> DequeExtension<'a, T> {
         }
     }
 
+    pub fn clear(&self, store: &mut dyn Storage) -> ContractResult<()> {
+        let mut queue_len = self.len(store)?;
+
+        while queue_len > 0 {
+            self.pop_back(store)?;
+            queue_len -= 1;
+        }
+        Ok(())
+    }
+
     pub fn get_key(&self, pos: u32) -> Vec<u8> {
         let key = &pos.to_be_bytes();
         let size = self.namespace.len() + 2 + key.len();
@@ -67,7 +79,7 @@ impl<'a, T: Serialize + de::DeserializeOwned> DequeExtension<'a, T> {
     }
 
     /// Sets the value at the given position in the queue. Returns [`StdError::NotFound`] if index is out of bounds
-    pub fn set(&self, storage: &mut dyn Storage, pos: u32, value: &T) -> StdResult<()> {
+    pub fn set(&self, storage: &mut dyn Storage, pos: u32, value: &T) -> ContractResult<()> {
         let prefixed_key = self.get_key(pos);
         storage.set(&prefixed_key, &to_vec(value)?);
         Ok(())
@@ -470,6 +482,13 @@ impl HeaderConfig {
             retargeting: true,
             min_difficulty_blocks: false,
         })
+    }
+
+    pub fn work_header(&self) -> WorkHeader {
+        let decoded_adapter: Adapter<BlockHeader> = self.trusted_header.into();
+        let wrapped_header = WrappedHeader::new(decoded_adapter, self.trusted_height);
+        let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
+        work_header
     }
 }
 

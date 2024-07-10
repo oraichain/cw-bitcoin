@@ -17,7 +17,7 @@ use cosmwasm_std::testing::{mock_dependencies, mock_env};
 use cosmwasm_std::{Addr, Coin, Env, Storage};
 use error::ContractResult;
 use interface::{Dest, HeaderConfig, Xpub};
-use state::{HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS};
+use state::{save_header, HEADERS, SIGNERS, VALIDATORS};
 use tests::helper::set_time;
 
 use crate::interface::IbcDest;
@@ -32,8 +32,8 @@ use crate::{
 fn relay_height_validity() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
-    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
-    let mut btc = Bitcoin::new(deps.as_mut().storage)?;
+    save_header(deps.as_mut().storage, &header_config)?;
+    let mut btc = Bitcoin::new(header_config);
 
     for _ in 0..10 {
         let btc_height = btc.headers.height(deps.as_ref().storage)?;
@@ -95,7 +95,7 @@ fn relay_height_validity() -> ContractResult<()> {
 fn check_change_rates() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
-    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
+    save_header(deps.as_mut().storage, &header_config)?;
 
     let consensus_key1 = [0; 32];
     let consensus_key2 = [1; 32];
@@ -108,7 +108,7 @@ fn check_change_rates() -> ContractResult<()> {
     SIGNERS.save(deps.as_mut().storage, addr[0], &consensus_key1)?;
     SIGNERS.save(deps.as_mut().storage, addr[1], &consensus_key2)?;
 
-    let btc = RefCell::new(Bitcoin::new(deps.as_mut().storage)?);
+    let btc = RefCell::new(Bitcoin::new(header_config));
     let secp = Secp256k1::new();
     let network = btc.borrow().network();
     let xpriv = vec![
@@ -289,7 +289,8 @@ fn check_change_rates() -> ContractResult<()> {
 fn test_take_pending() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
-    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
+    save_header(deps.as_mut().storage, &header_config)?;
+
     let consensus_key1 = [0; 32];
     let consensus_key2 = [1; 32];
 
@@ -301,7 +302,7 @@ fn test_take_pending() -> ContractResult<()> {
     SIGNERS.save(deps.as_mut().storage, addr[0], &consensus_key1)?;
     SIGNERS.save(deps.as_mut().storage, addr[1], &consensus_key2)?;
 
-    let btc = RefCell::new(Bitcoin::new(deps.as_mut().storage)?);
+    let btc = RefCell::new(Bitcoin::new(header_config));
     let secp = Secp256k1::new();
     let network = btc.borrow().network();
     let xpriv = vec![

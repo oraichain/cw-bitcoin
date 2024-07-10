@@ -2,6 +2,7 @@
 use cosmwasm_std::entry_point;
 
 use crate::{
+    entrypoints::*,
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
 };
@@ -32,7 +33,25 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-    unimplemented!()
+    match msg {
+        ExecuteMsg::RelayDeposit {
+            btc_tx,
+            btc_height,
+            btc_proof,
+            btc_vout,
+            sigset_index,
+            dest,
+        } => relay_deposit(
+            env,
+            deps.storage,
+            btc_tx,
+            btc_height,
+            btc_proof,
+            btc_vout,
+            sigset_index,
+            dest,
+        ),
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]

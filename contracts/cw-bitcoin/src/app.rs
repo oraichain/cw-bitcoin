@@ -1,5 +1,5 @@
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
-use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
+use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, HeaderConfig, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
 use crate::state::{get_validators, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS};
 use crate::threshold_sig;
@@ -78,10 +78,17 @@ pub struct Bitcoin {
 pub type ConsensusKey = [u8; 32];
 
 impl Bitcoin {
-    pub fn new(store: &mut dyn Storage) -> ContractResult<Self> {
-        let headers = HeaderQueue::new(store)?;
-        let checkpoints = CheckpointQueue::new(store)?;
-        let app = Self {
+    pub fn new(header_config: HeaderConfig) -> Self {
+        let headers = HeaderQueue::new(header_config);
+        let checkpoints = CheckpointQueue::default();
+        Self::from_checkpoints_and_headers(checkpoints, headers)
+    }
+
+    pub fn from_checkpoints_and_headers(
+        checkpoints: CheckpointQueue,
+        headers: HeaderQueue,
+    ) -> Self {
+        Self {
             headers,
             checkpoints,
             processed_outpoints: OutpointSet::default(),
@@ -91,9 +98,7 @@ impl Bitcoin {
             fee_pool: 0,
             config: BitcoinConfig::default(),
             recovery_txs: RecoveryTxs::default(),
-        };
-
-        Ok(app)
+        }
     }
 
     /// Sets the configuration parameters to the given values.
