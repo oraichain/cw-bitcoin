@@ -135,10 +135,7 @@ fn check_change_rates() -> ContractResult<()> {
 
         let mut building_mut = btc.checkpoints.building(store)?;
         building_mut.fees_collected = 100_000_000;
-        let building_checkpoint_batch = building_mut
-            .batches
-            .get_mut(BatchType::Checkpoint as usize)
-            .unwrap();
+        let building_checkpoint_batch = &mut building_mut.batches[BatchType::Checkpoint];
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.input.push(input);
         btc.checkpoints
@@ -331,10 +328,7 @@ fn test_take_pending() -> ContractResult<()> {
         let mut building_mut = btc.checkpoints.building(store)?;
         building_mut.fees_collected = 100_000_000;
         building_mut.pending.push((dest.to_receiver_addr(), coin));
-        let building_checkpoint_batch = building_mut
-            .batches
-            .get_mut(BatchType::Checkpoint as usize)
-            .unwrap();
+        let building_checkpoint_batch = &mut building_mut.batches[BatchType::Checkpoint];
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.input.push(input);
         btc.checkpoints

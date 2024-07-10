@@ -322,10 +322,7 @@ impl Bitcoin {
         // TODO: record as excess collected if inputs are full
 
         let mut building_mut = self.checkpoints.building(store)?;
-        let building_checkpoint_batch = building_mut
-            .batches
-            .get_mut(BatchType::Checkpoint as usize)
-            .unwrap();
+        let building_checkpoint_batch = &mut building_mut.batches[BatchType::Checkpoint];
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.input.push(input);
         // TODO: keep in excess queue if full
@@ -469,10 +466,7 @@ impl Bitcoin {
         };
 
         let mut checkpoint = self.checkpoints.building(store)?;
-        let building_checkpoint_batch = checkpoint
-            .batches
-            .get_mut(BatchType::Checkpoint as usize)
-            .unwrap();
+        let building_checkpoint_batch = &mut checkpoint.batches[BatchType::Checkpoint];
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.output.push(Adapter::new(output));
 

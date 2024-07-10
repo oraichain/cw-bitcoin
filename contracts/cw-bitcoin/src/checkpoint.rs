@@ -297,8 +297,7 @@ impl BitcoinTx {
         };
 
         // Deduct the final fee share from each remaining output.
-        for i in 0..output_len {
-            let output = self.output.get_mut(i as usize).unwrap();
+        for output in self.output.iter_mut() {
             output.value -= threshold;
         }
 
@@ -333,6 +332,19 @@ pub enum BatchType {
     /// the latest signatory set (in the "reserve output") and to destinations
     /// of any requested withdrawals.
     Checkpoint,
+}
+
+impl<T> std::ops::Index<BatchType> for Vec<T> {
+    type Output = T;
+    fn index(&self, idx: BatchType) -> &Self::Output {
+        &self[idx as usize]
+    }
+}
+
+impl<T> std::ops::IndexMut<BatchType> for Vec<T> {
+    fn index_mut(&mut self, idx: BatchType) -> &mut Self::Output {
+        &mut self[idx as usize]
+    }
 }
 
 /// A batch of transactions in a checkpoint.
@@ -578,9 +590,7 @@ impl Checkpoint {
     /// Gets the checkpoint transaction as a `bitcoin::Transaction`.    
     pub fn checkpoint_tx(&self) -> ContractResult<Adapter<bitcoin::Transaction>> {
         Ok(Adapter::new(
-            self.batches
-                .get(BatchType::Checkpoint as usize)
-                .unwrap()
+            self.batches[BatchType::Checkpoint]
                 .last()
                 .unwrap()
                 .to_bitcoin_tx()?,
@@ -634,7 +644,7 @@ impl Checkpoint {
     }
 
     /// Returns the number of fully-signed batches in the checkpoint.
-    fn signed_batches(&self) -> u64 {
+    fn signed_batches(&self) -> usize {
         let mut signed_batches = 0;
         for batch in &self.batches {
             if batch.signed() {
@@ -654,7 +664,7 @@ impl Checkpoint {
             return None;
         }
         let pos = self.signed_batches();
-        self.batches.get(pos as usize).cloned()
+        self.batches.get(pos).cloned()
     }
 
     /// Returns the timestamp at which the checkpoint was created (when it was
@@ -666,7 +676,7 @@ impl Checkpoint {
     /// Returns `true` if all batches in the checkpoint are fully signed,
     /// otherwise returns `false`.
     pub fn signed(&self) -> bool {
-        self.signed_batches() == self.batches.len() as u64
+        self.signed_batches() == self.batches.len()
     }
 
     /// The emergency disbursal transactions for checkpoint.
@@ -676,16 +686,13 @@ impl Checkpoint {
     pub fn emergency_disbursal_txs(&self) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
         let mut txs = vec![];
 
-        let intermediate_tx_batch = self
-            .batches
-            .get(BatchType::IntermediateTx as usize)
-            .unwrap();
+        let intermediate_tx_batch = &self.batches[BatchType::IntermediateTx];
         let Some(intermediate_tx) = intermediate_tx_batch.get(0) else {
             return Ok(txs);
         };
         txs.push(Adapter::new(intermediate_tx.to_bitcoin_tx()?));
 
-        let disbursal_batch = self.batches.get(BatchType::Disbursal as usize).unwrap();
+        let disbursal_batch = &self.batches[BatchType::Disbursal];
         for tx in disbursal_batch.iter() {
             txs.push(Adapter::new(tx.to_bitcoin_tx()?));
         }
@@ -696,7 +703,7 @@ impl Checkpoint {
     pub fn checkpoint_tx_miner_fees(&self) -> ContractResult<u64> {
         let mut fees = 0;
 
-        let batch = self.batches.get(BatchType::Checkpoint as usize).unwrap();
+        let batch = &self.batches[BatchType::Checkpoint];
         let tx = batch.get(0).unwrap();
 
         for input in &tx.input {
@@ -724,7 +731,7 @@ impl Checkpoint {
         config: &CheckpointConfig,
         timestamping_commitment: &[u8],
     ) -> ContractResult<u64> {
-        let batch = self.batches.get(BatchType::Checkpoint as usize).unwrap();
+        let batch = &self.batches[BatchType::Checkpoint];
         let cp = batch.get(0).unwrap();
         let mut tx = cp.to_bitcoin_tx()?;
 
@@ -762,20 +769,17 @@ impl Checkpoint {
         let checkpoint_tx = checkpoint_batch
             .get(0)
             .ok_or(ContractError::Checkpoint("Cannot get checkpoint tx".into()))?;
-        for i in 0..config.max_inputs.min(checkpoint_tx.input.len() as u64) {
-            let input = checkpoint_tx
-                .input
-                .get(i as usize)
-                .ok_or(ContractError::Checkpoint(
-                    "Cannot get checkpoint tx input".into(),
-                ))?;
+        for i in 0..(config.max_inputs as usize).min(checkpoint_tx.input.len()) {
+            let input = checkpoint_tx.input.get(i).ok_or(ContractError::Checkpoint(
+                "Cannot get checkpoint tx input".into(),
+            ))?;
             in_amount += input.amount;
         }
         let mut out_amount = 0;
-        for i in 0..config.max_outputs.min(checkpoint_tx.output.len() as u64) {
+        for i in 0..(config.max_outputs as usize).min(checkpoint_tx.output.len()) {
             let output = checkpoint_tx
                 .output
-                .get(i as usize)
+                .get(i)
                 .ok_or(ContractError::Checkpoint(
                     "Cannot get checkpoint tx output".into(),
                 ))?;
@@ -920,10 +924,7 @@ impl BuildingCheckpoint {
         let output_script = sigset.output_script(&[0u8], threshold)?;
         let tx_value = tx.value()?;
 
-        let intermediate_tx_batch = self
-            .batches
-            .get_mut(BatchType::IntermediateTx as usize)
-            .unwrap();
+        let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
         let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
         let num_outputs = u32::try_from(intermediate_tx.output.len())?;
 
@@ -961,20 +962,14 @@ impl BuildingCheckpoint {
         // amount from the final emergency disbursal transactions since the
         // outputs they spend are now worth less than before.
         let intermediate_tx_fee = {
-            let intermediate_tx_batch = self
-                .batches
-                .get_mut(BatchType::IntermediateTx as usize)
-                .unwrap();
+            let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
             let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
             let fee = intermediate_tx.vsize()? * fee_rate;
             intermediate_tx.deduct_fee(fee)?;
             fee
         };
 
-        let intermediate_tx_batch = self
-            .batches
-            .get(BatchType::IntermediateTx as usize)
-            .unwrap();
+        let intermediate_tx_batch = &self.batches[BatchType::IntermediateTx];
         let intermediate_tx = intermediate_tx_batch.get(0).unwrap();
         let intermediate_tx_id = intermediate_tx.txid()?;
         let intermediate_tx_len = intermediate_tx.output.len() as u64;
@@ -997,7 +992,7 @@ impl BuildingCheckpoint {
 
         // Deduct fees from final emergency disbursal transactions. Only retain
         // transactions which have enough value to pay the fee.
-        let disbursal_batch = self.batches.get_mut(BatchType::Disbursal as usize).unwrap();
+        let disbursal_batch = &mut self.batches[BatchType::Disbursal];
         disbursal_batch.batch = disbursal_batch
             .batch
             .clone()
@@ -1070,10 +1065,7 @@ impl BuildingCheckpoint {
     ) -> ContractResult<()> {
         // TODO: Use tree structure instead of single-intermediate, many-final,
         // since the intermediate tx may grow too large
-        let intermediate_tx_batch = self
-            .batches
-            .get_mut(BatchType::IntermediateTx as usize)
-            .unwrap();
+        let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
         if intermediate_tx_batch.is_empty() {
             return Ok(());
         }
@@ -1166,10 +1158,8 @@ impl BuildingCheckpoint {
             config.sigset_threshold,
         )?;
         let output_script = self.sigset.output_script(&[0u8], config.sigset_threshold)?;
-        let intermediate_tx_batch = self
-            .batches
-            .get_mut(BatchType::IntermediateTx as usize)
-            .unwrap();
+        let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
+
         let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
         intermediate_tx.lock_time = lock_time;
         intermediate_tx.input.push(tx_in);
@@ -1190,7 +1180,7 @@ impl BuildingCheckpoint {
 
         // Push the newly created final txs into the checkpoint batch to
         // save them in the state.
-        let disbursal_batch = self.batches.get_mut(BatchType::Disbursal as usize).unwrap();
+        let disbursal_batch = &mut self.batches[BatchType::Disbursal];
         for tx in final_txs {
             disbursal_batch.push(tx);
         }
@@ -1199,19 +1189,15 @@ impl BuildingCheckpoint {
         self.deduct_emergency_disbursal_fees(fee_rate)?;
 
         // Populate the sighashes to be signed for each final tx's input.
-        let disbursal_batch = self.batches.get_mut(BatchType::Disbursal as usize).unwrap();
-        for i in 0..disbursal_batch.len() {
-            let tx = disbursal_batch.get_mut(i).unwrap();
+        let disbursal_batch = &mut self.batches[BatchType::Disbursal];
+        for tx in disbursal_batch.iter_mut() {
             for j in 0..tx.input.len() {
                 tx.populate_input_sig_message(j)?;
             }
         }
 
         // Populate the sighashes to be signed for the intermediate tx's input.
-        let intermediate_tx_batch = self
-            .batches
-            .get_mut(BatchType::IntermediateTx as usize)
-            .unwrap();
+        let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
         let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
         intermediate_tx.populate_input_sig_message(0)?;
 
@@ -1241,10 +1227,7 @@ impl BuildingCheckpoint {
         self.0.status = CheckpointStatus::Signing;
 
         let outs = self.additional_outputs(config, &timestamping_commitment)?;
-        let checkpoint_batch = self
-            .batches
-            .get_mut(BatchType::Checkpoint as usize)
-            .unwrap();
+        let checkpoint_batch = &mut self.batches[BatchType::Checkpoint];
         let checkpoint_tx = checkpoint_batch.get_mut(0).unwrap();
         for out in outs.iter().rev() {
             checkpoint_tx.output.insert(0, Adapter::new(out.clone()));
@@ -1705,10 +1688,7 @@ impl CheckpointQueue {
 
             let mut building = self.building(store)?;
             building.fee_rate = fee_rate;
-            let building_checkpoint_batch = building
-                .batches
-                .get_mut(BatchType::Checkpoint as usize)
-                .unwrap();
+            let building_checkpoint_batch = &mut building.batches[BatchType::Checkpoint];
             let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
 
             // The new checkpoint tx's first input is the reserve output from
