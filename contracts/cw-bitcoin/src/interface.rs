@@ -28,13 +28,13 @@ use crate::constants::MIN_DEPOSIT_AMOUNT;
 use crate::constants::MIN_FEE_RATE;
 use crate::constants::MIN_WITHDRAWAL_AMOUNT;
 use crate::constants::RETARGET_INTERVAL;
+use crate::constants::SIGSET_THRESHOLD;
 use crate::constants::TARGET_SPACING;
 use crate::constants::TARGET_TIMESPAN;
 use crate::constants::TRANSFER_FEE;
 use crate::constants::USER_FEE_FACTOR;
 use crate::error::ContractError;
 use crate::error::ContractResult;
-use crate::signatory::SIGSET_THRESHOLD;
 
 #[derive(Deref, DerefMut)]
 pub struct DequeExtension<'a, T> {

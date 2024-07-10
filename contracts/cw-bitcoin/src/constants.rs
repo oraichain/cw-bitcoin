@@ -4,7 +4,6 @@ pub const USER_FEE_FACTOR: u64 = 27000; // 2.7x. Calculate by USER_FEE_FACTOR / 
 /// The default fee rate to be used to pay miner fees, in satoshis per virtual byte.
 /// The default fee rate to be used to pay miner fees, in satoshis per virtual byte.
 pub const DEFAULT_FEE_RATE: u64 = 55; // ~ 100 sat/vb
-pub const BRIDGE_FEE_RATE: f64 = 0.0;
 pub const TRANSFER_FEE: u64 = 0;
 
 // checkpoints
@@ -25,6 +24,7 @@ pub const TARGET_TIMESPAN: u32 = RETARGET_INTERVAL * TARGET_SPACING;
 pub const MAX_TARGET: u32 = 0x1d00ffff;
 
 // TODO: move to config
+pub const MAX_SIGNATORIES: u64 = 20;
 pub const SIGSET_THRESHOLD: (u64, u64) = (2, 3);
 
 pub const BTC_NATIVE_TOKEN_DENOM: &str = "uoraibtc";

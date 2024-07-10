@@ -24,12 +24,10 @@ serde = { workspace = true }
 cw2 = { workspace = true }
 bitcoin = { workspace = true }
 ed = { workspace = true }
+derive_more = { workspace = true }
 cosmwasm-std = { workspace = true, features = ["ibc3"] }
-
-bitcoin-script = "0.1.1"
-derive_more = "0.99.17"
-
-sha2 = "0.10.6"
+bitcoin-script = { workspace = true }
+sha2 = { workspace = true }
 
 
 [dev-dependencies]

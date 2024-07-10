@@ -1,83 +1,43 @@
 use std::cmp::Ordering;
 
-use crate::app::ConsensusKey;
-use crate::constants::MAX_SIGNATORIES;
-use crate::state::get_validators;
-use crate::state::SIG_KEYS;
-use crate::state::XPUBS;
-
-use super::error::ContractError;
-use super::error::ContractResult;
-use super::threshold_sig::Pubkey;
-use bitcoin::blockdata::opcodes::all::{
-    OP_ADD, OP_CHECKSIG, OP_DROP, OP_ELSE, OP_ENDIF, OP_GREATERTHAN, OP_IF, OP_SWAP,
+use crate::{
+    error::{ContractError, ContractResult},
+    threshold_sig::Pubkey,
+    MAX_SIGNATORIES,
 };
-use bitcoin::blockdata::opcodes::{self, OP_FALSE};
-use bitcoin::blockdata::script::{read_scriptint, Instruction};
-use bitcoin::secp256k1::Context as SecpContext;
-use bitcoin::secp256k1::PublicKey;
-use bitcoin::secp256k1::Secp256k1;
-use bitcoin::secp256k1::Verification;
-use bitcoin::util::bip32::ChildNumber;
-use bitcoin::Script;
+use bitcoin::{
+    blockdata::{
+        opcodes::{
+            self,
+            all::{
+                OP_ADD, OP_CHECKSIG, OP_DROP, OP_ELSE, OP_ENDIF, OP_GREATERTHAN, OP_IF, OP_SWAP,
+            },
+            OP_FALSE,
+        },
+        script::{read_scriptint, Instruction},
+    },
+    hashes::hex::FromHex,
+    Script,
+};
 use bitcoin_script::bitcoin_script as script;
-use cosmwasm_std::Env;
-use cosmwasm_std::Order;
-use cosmwasm_std::Storage;
+use derive_more::Deref;
 use ed::Encode;
-use serde::Deserialize;
-use serde::Serialize;
-
-use super::interface::Xpub;
-
-/// The maximum number of signatories in a signatory set.
-///
-/// Signatory sets will be constructed by iterating over the validator set in
-/// descending order of voting power, skipping any validators which have not
-/// submitted a signatory xpub.
-///
-/// This constant should be chosen to balance the tradeoff between the
-/// decentralization of the signatory set and the size of the resulting script
-/// (affecting fees).
-///
-/// It is expected that future versions of this protocol will use aggregated
-/// signatures, allowing for more signatories to be included without making an
-/// impact on script size and fees.
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 
 /// A signatory in a signatory set, consisting of a public key and voting power.
-#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Signatory {
     pub voting_power: u64,
     pub pubkey: Pubkey,
 }
 
-/// Deterministically derive the public key for a signatory in a signatory set,
-/// based on the current signatory set index.
-pub fn derive_pubkey<T>(
-    secp: &Secp256k1<T>,
-    xpub: &Xpub,
-    sigset_index: u32,
-) -> ContractResult<PublicKey>
-where
-    T: SecpContext + Verification,
-{
-    Ok(xpub
-        .derive_pub(
-            secp,
-            &[bitcoin::util::bip32::ChildNumber::from_normal_idx(
-                sigset_index,
-            )?],
-        )?
-        .public_key)
-}
-
-/// A signatory set is a set of signers who secure a UTXO in the network
-/// reserve.
-///
-/// Bitcoin scripts can be generated from a signatory set, which can be used to
-/// create a UTXO which can be only spent by a threshold of the signatories,
-/// based on voting power.
-#[derive(Clone, Debug, Default, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[derive(
+    Clone, Debug, Default, PartialOrd, Deref, PartialEq, Eq, Ord, Deserialize, Serialize, Tsify,
+)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SignatorySet {
     /// The time at which this signatory set was created, in seconds.
     ///
@@ -99,47 +59,11 @@ pub struct SignatorySet {
     pub index: u32,
 
     /// The signatories in this set, sorted by voting power.
+    #[deref]
     pub signatories: Vec<Signatory>,
 }
 
 impl SignatorySet {
-    /// Creates a signatory set based on the current validator set.
-    pub fn from_validator_ctx(store: &dyn Storage, env: Env, index: u32) -> ContractResult<Self> {
-        let time = env.block.time;
-
-        let mut sigset = SignatorySet {
-            create_time: time.seconds(),
-            present_vp: 0,
-            possible_vp: 0,
-            index,
-            signatories: vec![],
-        };
-
-        let val_set = get_validators(store)?;
-
-        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
-        let derive_path = [ChildNumber::from_normal_idx(index)?];
-
-        for entry in &val_set {
-            sigset.possible_vp += entry.power;
-
-            let signatory_key = match SIG_KEYS.load(store, &entry.pubkey) {
-                Ok(xpub) => xpub.derive_pub(&secp, &derive_path)?.public_key.into(),
-                _ => continue,
-            };
-
-            let signatory = Signatory {
-                voting_power: entry.power,
-                pubkey: signatory_key,
-            };
-            sigset.insert(signatory);
-        }
-
-        sigset.sort_and_truncate();
-
-        Ok(sigset)
-    }
-
     pub fn from_script(
         script: &bitcoin::Script,
         threshold_ratio: (u64, u64),
@@ -294,12 +218,12 @@ impl SignatorySet {
         Ok((sigset, commitment.to_vec()))
     }
 
-    fn insert(&mut self, signatory: Signatory) {
+    pub fn insert(&mut self, signatory: Signatory) {
         self.present_vp += signatory.voting_power;
         self.signatories.push(signatory);
     }
 
-    fn sort_and_truncate(&mut self) {
+    pub fn sort_and_truncate(&mut self) {
         self.signatories.sort_by(|a, b| b.cmp(a));
 
         if self.signatories.len() as u64 > MAX_SIGNATORIES {
@@ -472,57 +396,15 @@ impl SignatorySet {
     }
 }
 
-/// A collection storing the signatory extended public keys of each validator
-/// who has submitted one.
-///
-/// The collection also includes an set of all signatory extended public keys,
-/// which is used to prevent duplicate keys from being submitted.
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct SignatoryKeys {}
-
-impl SignatoryKeys {
-    /// Clears the collection.
-    pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
-        let mut xpubs = vec![];
-        for entry in SIG_KEYS.range_raw(store, None, None, Order::Ascending) {
-            let (_, v) = entry?;
-            xpubs.push(v);
-        }
-        for xpub in xpubs {
-            XPUBS.remove(store, &xpub.encode());
-        }
-
-        SIG_KEYS.clear(store);
-
-        Ok(())
-    }
-
-    /// Adds a signatory extended public key to the collection, associated with
-    /// the given consensus key.
-    pub fn insert(
-        &mut self,
-        store: &mut dyn Storage,
-        consensus_key: ConsensusKey,
-        xpub: Xpub,
-    ) -> ContractResult<()> {
-        let mut normalized_xpub = xpub;
-        normalized_xpub.key.child_number = 0.into();
-        normalized_xpub.key.depth = 0;
-        normalized_xpub.key.parent_fingerprint = Default::default();
-        let xpub_key = &normalized_xpub.encode();
-        if XPUBS.has(store, xpub_key) {
-            return Err(ContractError::App("Duplicate signatory key".to_string()).into());
-        }
-
-        SIG_KEYS.save(store, &consensus_key, &xpub)?;
-        XPUBS.save(store, xpub_key, &())?;
-
-        Ok(())
-    }
-
-    /// Returns the signatory extended public key associated with the given
-    /// consensus key, if one exists.    
-    pub fn get(&self, store: &dyn Storage, cons_key: ConsensusKey) -> ContractResult<Option<Xpub>> {
-        Ok(SIG_KEYS.may_load(store, &cons_key)?)
-    }
+#[wasm_bindgen]
+pub fn newSignatorySet(
+    hex_script: &str,
+    numerator: u64,
+    denominator: u64,
+) -> Result<SignatorySet, JsValue> {
+    let script = bitcoin::Script::from_hex(&hex_script)
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let (signatory_set, _) = SignatorySet::from_script(&script, (numerator, denominator))
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    Ok(signatory_set)
 }

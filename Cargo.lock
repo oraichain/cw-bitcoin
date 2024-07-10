@@ -1175,13 +1175,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "traceable_result"
-version = "0.1.0"
-dependencies = [
- "js-sys",
-]
-
-[[package]]
 name = "tsify"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1247,13 +1240,16 @@ name = "wasm"
 version = "0.1.0"
 dependencies = [
  "bitcoin",
+ "bitcoin-script",
+ "derive_more",
  "ed",
  "js-sys",
+ "log",
  "paste",
  "serde",
  "serde-wasm-bindgen",
+ "sha2 0.10.8",
  "thiserror",
- "traceable_result",
  "tsify",
  "wasm-bindgen",
 ]

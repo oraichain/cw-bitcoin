@@ -3,7 +3,6 @@ resolver = '2'
 
 members = ["contracts/*", "wasm"]
 
-
 [workspace.package]
 version = "0.1.0"
 authors = ["Oraichain Labs"]
@@ -34,6 +33,9 @@ cw-multi-test = "0.16.6"
 cw-utils = "0.16.0"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 ed = { git = "https://github.com/nomic-io/ed", rev = "9c0e206ffdb59dacb90f083e004e8080713e6ad8" }
+derive_more = "0.99.17"
+bitcoin-script = "0.1.1"
+sha2 = "0.10.6"
 
 [profile.release]
 opt-level = 3

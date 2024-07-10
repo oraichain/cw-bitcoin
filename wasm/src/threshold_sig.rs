@@ -1,5 +1,5 @@
-use super::constants::SIGSET_THRESHOLD;
 use super::signatory::SignatorySet;
+use super::SIGSET_THRESHOLD;
 use crate::error::{ContractError, ContractResult};
 use bitcoin::blockdata::transaction::EcdsaSighashType;
 use bitcoin::secp256k1::{
@@ -7,8 +7,9 @@ use bitcoin::secp256k1::{
     constants::{MESSAGE_SIZE, PUBLIC_KEY_SIZE},
     ecdsa, PublicKey, Secp256k1,
 };
-use cosmwasm_schema::cw_serde;
+
 use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 
 // TODO: update for taproot-based design (musig rounds, fallback path)
 
@@ -16,11 +17,13 @@ use serde::{Deserialize, Serialize};
 pub type Message = [u8; MESSAGE_SIZE];
 
 /// A compact secp256k1 ECDSA signature.
-#[cw_serde]
+#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Signature(#[serde(serialize_with = "<[_]>::serialize")] pub Vec<u8>);
 
 /// A compressed secp256k1 public key.
-#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Pubkey {
     #[serde(serialize_with = "<[_]>::serialize")]
     bytes: Vec<u8>,
@@ -87,7 +90,8 @@ impl From<PublicKey> for Pubkey {
 ///
 /// It is populated based on a `SignatorySet` and a message to sign, and then
 /// each signer signs the message and adds their signature to the state.]
-#[derive(Default, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct ThresholdSig {
     /// The threshold of voting power required for a the signature to be
     /// considered "signed".
@@ -332,7 +336,8 @@ impl Debug for ThresholdSig {
 
 /// An entry containing a signer's voting power, and their signature if they
 /// have signed.
-#[cw_serde]
+#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Share {
     pub power: u64,
     pub(super) sig: Option<Signature>,

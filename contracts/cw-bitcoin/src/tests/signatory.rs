@@ -1,4 +1,7 @@
-use bitcoin::{hashes::hex::FromHex, Script};
+use bitcoin::{
+    hashes::hex::{FromHex, ToHex},
+    Script,
+};
 
 use crate::{
     error::ContractResult,
