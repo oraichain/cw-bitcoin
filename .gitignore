@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+
+# Text file backups
+**/*.rs.bk
+
+# Build results
+target/
+build/
+
+# IDEs
+.idea/
+*.iml
+
+# Auto-gen
+.cargo-ok
+
+artifacts
+
+.env
+
+# nodejs
+node_modules
+
+# leveldb
+datadir/
+
+# orai sync db
+data/
+
+# code analyzer
+.scannerwork/
+clippy-report.json

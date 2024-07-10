@@ -1,3 +1,4 @@
+use crate::checkpoint::Checkpoint;
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
 use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, HeaderConfig, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
@@ -99,6 +100,19 @@ impl Bitcoin {
             config: BitcoinConfig::default(),
             recovery_txs: RecoveryTxs::default(),
         }
+    }
+
+    pub fn get_checkpoint(
+        &self,
+        store: &dyn Storage,
+        index: Option<u32>,
+    ) -> ContractResult<Checkpoint> {
+        let checkpoint = match index {
+            Some(index) => self.checkpoints.get(store, index)?,
+            None => self.checkpoints.get(store, self.checkpoints.index)?, // get current checkpoint being built
+        };
+
+        Ok(checkpoint)
     }
 
     /// Sets the configuration parameters to the given values.

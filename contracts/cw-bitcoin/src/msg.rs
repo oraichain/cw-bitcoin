@@ -1,18 +1,17 @@
-use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use cosmwasm_schema::cw_serde;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::Binary;
 
-use crate::{adapter::Adapter, interface::Dest};
+use crate::interface::Dest;
 
 #[cw_serde]
 pub struct InstantiateMsg {}
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cw_serde]
 pub enum ExecuteMsg {
     RelayDeposit {
-        btc_tx: Adapter<Transaction>,
+        btc_tx: Binary,
         btc_height: u32,
-        btc_proof: Adapter<PartialMerkleTree>,
+        btc_proof: Binary,
         btc_vout: u32,
         sigset_index: u32,
         dest: Dest,
@@ -20,7 +19,13 @@ pub enum ExecuteMsg {
 }
 
 #[cw_serde]
-pub struct QueryMsg {}
+#[derive(QueryResponses)]
+pub enum QueryMsg {
+    #[returns(u64)]
+    DepositFees { index: Option<u32> },
+    #[returns(u64)]
+    WithdrawalFees { address: String, index: Option<u32> },
+}
 
 #[cw_serde]
 pub struct MigrateMsg {}

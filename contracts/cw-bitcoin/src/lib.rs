@@ -8,7 +8,8 @@ pub mod entrypoints;
 pub mod error;
 mod header;
 mod interface;
-mod msg;
+pub mod msg;
+
 mod outpoint_set;
 mod recovery;
 mod signatory;

@@ -18,8 +18,8 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
-    msg: InstantiateMsg,
+    _info: MessageInfo,
+    _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
@@ -30,7 +30,7 @@ pub fn instantiate(
 pub fn execute(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
@@ -55,11 +55,18 @@ pub fn execute(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    unimplemented!()
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::DepositFees { index } => to_binary(&query_deposit_fees(deps.storage, index)?),
+        QueryMsg::WithdrawalFees { address, index } => {
+            to_binary(&query_withdrawal_fees(deps.storage, address, index)?)
+        }
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
-    unimplemented!()
+    let original_version =
+        cw_utils::ensure_from_older_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    Ok(Response::new().add_attribute("new_version", original_version.to_string()))
 }

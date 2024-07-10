@@ -1,7 +1,7 @@
 mod common;
 mod execute;
-// mod query;
+mod query;
 
 pub use common::*;
 pub use execute::*;
-// pub use query::*;
+pub use query::*;
