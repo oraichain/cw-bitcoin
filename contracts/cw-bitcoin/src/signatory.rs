@@ -1,24 +1,18 @@
-#![allow(clippy::redundant_closure_call)] // TODO: fix bitcoin-script then remove this
-#![allow(unused_imports)] // TODO
-
 use std::cmp::Ordering;
 
 use crate::app::ConsensusKey;
-use crate::interface::Validator;
 use crate::state::get_validators;
 use crate::state::SIG_KEYS;
-use crate::state::VALIDATORS;
 use crate::state::XPUBS;
 
 use super::error::ContractError;
 use super::error::ContractResult;
 use super::threshold_sig::Pubkey;
-use bitcoin::blockdata::block;
 use bitcoin::blockdata::opcodes::all::{
     OP_ADD, OP_CHECKSIG, OP_DROP, OP_ELSE, OP_ENDIF, OP_GREATERTHAN, OP_IF, OP_SWAP,
 };
 use bitcoin::blockdata::opcodes::{self, OP_FALSE};
-use bitcoin::blockdata::script::{read_scriptint, Instruction, Instructions};
+use bitcoin::blockdata::script::{read_scriptint, Instruction};
 use bitcoin::secp256k1::Context as SecpContext;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::Secp256k1;
@@ -26,14 +20,9 @@ use bitcoin::secp256k1::Verification;
 use bitcoin::util::bip32::ChildNumber;
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
-use cosmwasm_schema::cw_serde;
-use cosmwasm_std::Binary;
 use cosmwasm_std::Env;
 use cosmwasm_std::Order;
-use cosmwasm_std::StdError;
-use cosmwasm_std::StdResult;
 use cosmwasm_std::Storage;
-use cw_storage_plus::Map;
 use ed::Encode;
 use serde::Deserialize;
 use serde::Serialize;

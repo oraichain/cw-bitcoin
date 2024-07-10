@@ -462,7 +462,6 @@ impl Checkpoint {
         let disbursal_batch = Batch::default();
         checkpoint.batches.push(disbursal_batch);
 
-        #[allow(unused_mut)]
         let mut intermediate_tx_batch = Batch::default();
         intermediate_tx_batch.push(BitcoinTx::default());
         checkpoint.batches.push(intermediate_tx_batch);
