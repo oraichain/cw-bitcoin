@@ -14,7 +14,7 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-bitcoin = { workspace = true }
+bitcoin = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 serde = { workspace = true }
 ed = { workspace = true }
