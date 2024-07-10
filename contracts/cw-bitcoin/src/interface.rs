@@ -1,6 +1,3 @@
-use std::ops::Deref;
-use std::ops::DerefMut;
-
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
@@ -13,6 +10,7 @@ use cosmwasm_std::StdResult;
 use cosmwasm_std::Storage;
 use cosmwasm_std::Uint128;
 use cw_storage_plus::Deque;
+use derive_more::{Deref, DerefMut};
 use serde::{de, ser, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -38,11 +36,14 @@ use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::signatory::SIGSET_THRESHOLD;
 
+#[derive(Deref, DerefMut)]
 pub struct DequeExtension<'a, T> {
     // prefix of the deque items
     key_prefix: [u8; 2],
     namespace: &'a [u8],
     // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
+    #[deref]
+    #[deref_mut]
     queue: Deque<'a, T>,
 }
 
@@ -70,38 +71,6 @@ impl<'a, T: Serialize + de::DeserializeOwned> DequeExtension<'a, T> {
         let prefixed_key = self.get_key(pos);
         storage.set(&prefixed_key, &to_vec(value)?);
         Ok(())
-    }
-    //     fn retain_unordered<F>(&self, store: &mut dyn Storage, mut f: F) -> StdResult<u64>
-    //     where
-    //         F: FnMut(&T) -> bool,
-    //     {
-    //         let mut temp = vec![];
-    //         while let Some(item) = self.pop_front(store)? {
-    //             temp.push(item);
-    //         }
-    //         let mut size = 0;
-    //         for item in temp {
-    //             if f(&item) {
-    //                 self.push_back(store, &item)?;
-    //                 size += 1;
-    //             }
-    //         }
-
-    //         Ok(size)
-    //     }
-}
-
-impl<'a, T> Deref for DequeExtension<'a, T> {
-    type Target = Deque<'a, T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.queue
-    }
-}
-
-impl<'a, T> DerefMut for DequeExtension<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.queue
     }
 }
 
@@ -373,8 +342,8 @@ pub struct CheckpointConfig {
     pub max_unconfirmed_checkpoints: u32,
 }
 
-impl CheckpointConfig {
-    fn bitcoin() -> Self {
+impl Default for CheckpointConfig {
+    fn default() -> Self {
         Self {
             min_checkpoint_interval: 60 * 5,
             max_checkpoint_interval: MAX_CHECKPOINT_INTERVAL,
@@ -395,15 +364,9 @@ impl CheckpointConfig {
     }
 }
 
-impl Default for CheckpointConfig {
-    fn default() -> Self {
-        Self::bitcoin()
-    }
-}
-
 /// A Bitcoin extended public key, used to derive Bitcoin public keys which
 /// signatories sign transactions with.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, PartialEq, Deref, Eq, Debug, PartialOrd, Ord, Hash)]
 pub struct Xpub {
     pub key: ExtendedPubKey,
 }
@@ -416,14 +379,6 @@ impl Xpub {
 
     /// Gets the `ExtendedPubKey` from the `Xpub`.
     pub fn inner(&self) -> &ExtendedPubKey {
-        &self.key
-    }
-}
-
-impl Deref for Xpub {
-    type Target = ExtendedPubKey;
-
-    fn deref(&self) -> &Self::Target {
         &self.key
     }
 }

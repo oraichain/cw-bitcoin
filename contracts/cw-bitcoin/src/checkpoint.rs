@@ -21,9 +21,6 @@ use cosmwasm_std::{Coin, Env, Order, Storage};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
-// use std::convert::TryFrom;
-use std::ops::{Deref, DerefMut};
-
 /// The status of a checkpoint. Checkpoints start as `Building`, and eventually
 /// advance through the three states.
 #[cw_serde]
@@ -353,24 +350,12 @@ impl<T> std::ops::IndexMut<BatchType> for Vec<T> {
 /// together. Signatories submit signatures for all inputs in all transactions
 /// in the batch at once. Once the batch is fully signed, the checkpoint can
 /// advance to signing of the next batch, if any.
-#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default, Debug, Serialize, Deserialize, Deref, DerefMut, Clone, PartialEq)]
 pub struct Batch {
     signed_txs: u16,
+    #[deref]
+    #[deref_mut]
     batch: Vec<BitcoinTx>,
-}
-
-impl Deref for Batch {
-    type Target = Vec<BitcoinTx>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.batch
-    }
-}
-
-impl DerefMut for Batch {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.batch
-    }
 }
 
 impl Batch {

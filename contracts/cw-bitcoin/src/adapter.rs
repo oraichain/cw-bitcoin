@@ -1,10 +1,10 @@
 use bitcoin::consensus::{Decodable, Encodable};
 use cosmwasm_std::Binary;
+use derive_more::{Deref, DerefMut};
 use serde::{de, ser, Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
 
 /// A wrapper that adds core `orga` traits to types from the `bitcoin` crate.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deref, DerefMut)]
 pub struct Adapter<T> {
     inner: T,
 }
@@ -32,20 +32,6 @@ impl<T: Default> Default for Adapter<T> {
         Self {
             inner: Default::default(),
         }
-    }
-}
-
-impl<T> Deref for Adapter<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T> DerefMut for Adapter<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
     }
 }
 
