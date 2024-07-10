@@ -20,3 +20,8 @@ let blockHeader = {
 let blockHeaderData = Buffer.from(wasm.encodeBlockHeader(blockHeader));
 let blockHeader2 = wasm.decodeBlockHeader(blockHeaderData);
 console.log(blockHeader2, blockHeaderData.toString('base64'));
+
+let wrappedHeader = wasm.newWrappedHeader({ inner: blockHeader } as wasm.Adapter);
+console.log(wrappedHeader);
+
+// pass to wasm as any => decode to type => return
