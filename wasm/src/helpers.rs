@@ -1,8 +1,15 @@
+use bitcoin::{
+    consensus::{Decodable, Encodable},
+    util::uint::Uint256,
+    BlockHeader, Script,
+};
+use wasm_bindgen::prelude::*;
+
 #[macro_export]
 macro_rules! adapter_ops {
-    ($inner:ident) => {
+    ($inner:ty) => {
         ::paste::paste! {
-            use bitcoin::consensus::{Decodable,Encodable};
+
             #[wasm_bindgen]
             pub fn [<encode $inner>] (value: JsValue) -> Result<Vec<u8>, JsValue> {
                     let inner: $inner = serde_wasm_bindgen::from_value(value)?;
@@ -21,3 +28,7 @@ macro_rules! adapter_ops {
         }
     };
 }
+
+adapter_ops!(BlockHeader);
+adapter_ops!(Script);
+adapter_ops!(Uint256);

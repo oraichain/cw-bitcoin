@@ -1,10 +1,8 @@
-use crate::{adapter::Adapter, adapter_ops, error::ContractResult};
+use crate::{adapter::Adapter, error::ContractResult};
 use bitcoin::{util::uint::Uint256, BlockHash, BlockHeader};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
-
-adapter_ops!(BlockHeader);
 
 ///  HeaderConfiguration parameters for Bitcoin header processing.
 // TODO: implement trait that returns constants for bitcoin::Network variants
