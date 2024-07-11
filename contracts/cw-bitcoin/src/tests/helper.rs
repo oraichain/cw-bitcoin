@@ -1,6 +1,44 @@
+use cosmwasm_schema::serde::de::DeserializeOwned;
+use cosmwasm_schema::serde::Serialize;
 use cosmwasm_std::{testing::mock_env, Env, Timestamp};
+use cosmwasm_std::{
+    Addr, AllBalanceResponse, BalanceResponse, BankQuery, Coin, Empty, QuerierWrapper,
+    QueryRequest, StdResult, Uint128,
+};
+use cw20::TokenInfoResponse;
+use std::collections::HashMap;
+
+use cw_multi_test::{next_block, App, AppResponse, Contract, Executor};
 
 use crate::checkpoint::{BitcoinTx, Output};
+use crate::msg::{self};
+
+use crate::{error::ContractResult, threshold_sig::Signature};
+use bitcoin::secp256k1::{Message, Secp256k1};
+use bitcoin::util::bip32::{ChildNumber, ExtendedPrivKey};
+
+/// Sign the given messages with the given extended private key, deriving the
+/// correct private keys for each signature.
+pub fn sign(
+    secp: &Secp256k1<bitcoin::secp256k1::SignOnly>,
+    xpriv: &ExtendedPrivKey,
+    to_sign: &[([u8; 32], u32)],
+) -> ContractResult<Vec<Signature>> {
+    Ok(to_sign
+        .iter()
+        .map(|(msg, index)| {
+            let privkey = xpriv
+                .derive_priv(secp, &[ChildNumber::from_normal_idx(*index)?])?
+                .private_key;
+
+            let signature = secp
+                .sign_ecdsa(&Message::from_slice(&msg[..])?, &privkey)
+                .serialize_compact()
+                .to_vec();
+            Ok(Signature(signature))
+        })
+        .collect::<ContractResult<Vec<_>>>()?)
+}
 
 pub fn push_bitcoin_tx_output(tx: &mut BitcoinTx, value: u64) {
     let tx_out = bitcoin::TxOut {
@@ -15,19 +53,6 @@ pub fn set_time(seconds: u64) -> Env {
     env.block.time = Timestamp::from_seconds(seconds);
     env
 }
-
-use cosmwasm_schema::serde::de::DeserializeOwned;
-use cosmwasm_schema::serde::Serialize;
-use cosmwasm_std::{
-    Addr, AllBalanceResponse, BalanceResponse, BankQuery, Coin, Empty, QuerierWrapper,
-    QueryRequest, StdResult, Uint128,
-};
-use cw20::TokenInfoResponse;
-use std::collections::HashMap;
-
-use cw_multi_test::{next_block, App, AppResponse, Contract, Executor};
-
-use crate::msg::{self};
 
 #[macro_export]
 macro_rules! create_entry_points_testing {

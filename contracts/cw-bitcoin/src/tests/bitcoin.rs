@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-
+use super::helper::sign;
 use adapter::Adapter;
 use app::Bitcoin;
 use bitcoin::hashes::Hash;
@@ -18,6 +17,7 @@ use cosmwasm_std::{Addr, Coin, Env, Storage};
 use error::ContractResult;
 use interface::{Dest, HeaderConfig, Xpub};
 use state::{HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS};
+use std::cell::RefCell;
 use tests::helper::set_time;
 
 use crate::interface::IbcDest;
@@ -178,7 +178,7 @@ fn check_change_rates() -> ContractResult<()> {
             };
             let to_sign = cp.to_sign(&Xpub::new(xpub[i]))?;
             let secp2 = Secp256k1::signing_only();
-            let sigs = crate::signer::sign(&secp2, &xpriv[i], &to_sign)?;
+            let sigs = sign(&secp2, &xpriv[i], &to_sign)?;
             btc.checkpoints
                 .sign(store, &Xpub::new(xpub[i]), sigs, sigset_index, btc_height)?;
         }
@@ -360,7 +360,7 @@ fn test_take_pending() -> ContractResult<()> {
 
             let to_sign = cp.to_sign(&Xpub::new(xpub[i]))?;
             let secp2 = Secp256k1::signing_only();
-            let sigs = signer::sign(&secp2, &xpriv[i], &to_sign)?;
+            let sigs = sign(&secp2, &xpriv[i], &to_sign)?;
             queue.sign(store, &Xpub::new(xpub[i]), sigs, sigset_index, btc_height)?;
         }
 
