@@ -1,5 +1,8 @@
-use crate::{adapter::Adapter, error::ContractResult};
-use bitcoin::{util::uint::Uint256, BlockHash, BlockHeader};
+use crate::{
+    adapter::Adapter, error::ContractResult, MAX_LENGTH, MAX_TARGET, MAX_TIME_INCREASE,
+    RETARGET_INTERVAL, TARGET_SPACING, TARGET_TIMESPAN,
+};
+use bitcoin::{util::uint::Uint256, BlockHash, BlockHeader, TxMerkleNode};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
@@ -38,6 +41,52 @@ pub struct HeaderConfig {
     /// The trusted header (the header which populates the queue when it is
     /// newly created), as encoded bytes.
     pub trusted_header: Adapter<BlockHeader>,
+}
+
+/// A `WrappedHeader`, along with a total estimated amount of work (measured in
+/// hashes) done in the header and previous headers.
+#[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WorkHeader {
+    pub chain_work: Adapter<Uint256>,
+    pub header: WrappedHeader,
+}
+
+impl WorkHeader {
+    /// Create a new `WorkHeader`` from a `WrappedHeader` and a `Uint256`.
+    pub fn new(header: WrappedHeader, chain_work: Uint256) -> WorkHeader {
+        WorkHeader {
+            header,
+            chain_work: Adapter::new(chain_work),
+        }
+    }
+
+    /// The timestamp of the block header.
+    pub fn time(&self) -> u32 {
+        self.header.time()
+    }
+
+    /// The target - the value the hash must be less than to be valid
+    /// proof-of-work.
+    pub fn block_hash(&self) -> BlockHash {
+        self.header.block_hash()
+    }
+
+    /// The estimated amount of work (measured in hashes) done in the header,
+    /// not including work done in any previous headers.
+    pub fn work(&self) -> Uint256 {
+        self.header.work()
+    }
+
+    /// The height of the block header.
+    pub fn height(&self) -> u32 {
+        self.header.height()
+    }
+
+    /// The Merkle root of the block header.
+    pub fn merkle_root(&self) -> TxMerkleNode {
+        self.header.header.merkle_root
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
@@ -137,4 +186,31 @@ impl WrappedHeader {
 #[wasm_bindgen]
 pub fn newWrappedHeader(header: Adapter<BlockHeader>, height: u32) -> WrappedHeader {
     WrappedHeader::new(header, height)
+}
+
+#[wasm_bindgen]
+pub fn newHeaderConfig(height: u32, block_header: JsValue) -> Result<HeaderConfig, JsValue> {
+    // because BlockHeader is not tsify
+    let header: BlockHeader = serde_wasm_bindgen::from_value(block_header)?;
+
+    Ok(HeaderConfig {
+        max_length: MAX_LENGTH,
+        max_time_increase: MAX_TIME_INCREASE,
+        trusted_height: height,
+        retarget_interval: RETARGET_INTERVAL,
+        target_spacing: TARGET_SPACING,
+        target_timespan: TARGET_TIMESPAN,
+        max_target: MAX_TARGET,
+        trusted_header: header.into(),
+        retargeting: true,
+        min_difficulty_blocks: false,
+    })
+}
+
+#[wasm_bindgen]
+pub fn newWorkHeader(header_config: HeaderConfig) -> WorkHeader {
+    let decoded_adapter: Adapter<BlockHeader> = header_config.trusted_header.into();
+    let wrapped_header = WrappedHeader::new(decoded_adapter, header_config.trusted_height);
+    let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
+    work_header
 }
