@@ -51,6 +51,12 @@ pub fn execute(
             sigset_index,
             dest,
         ),
+        ExecuteMsg::UpdateHeaderConfig { config } => update_header_config(deps.storage, config),
+        ExecuteMsg::AddWorkHeader { header } => add_work_header(deps.storage, header),
+        ExecuteMsg::UpdateBitcoinConfig { config } => update_bitcoin_config(deps.storage, config),
+        ExecuteMsg::UpdateCheckpointConfig { config } => {
+            update_checkpoint_config(deps.storage, config)
+        }
     }
 }
 
@@ -61,6 +67,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawalFees { address, index } => {
             to_binary(&query_withdrawal_fees(deps.storage, address, index)?)
         }
+        QueryMsg::HeaderHeight {} => to_binary(&query_header_height(deps.storage)?),
     }
 }
 

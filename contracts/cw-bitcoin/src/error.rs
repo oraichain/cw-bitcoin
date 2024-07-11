@@ -68,6 +68,8 @@ pub enum ContractError {
     WarpRejection(),
     #[error("{0}")]
     VarError(VarError),
+    #[error("unauthorized")]
+    Unauthorized {},
     #[error("Unknown Error")]
     Unknown,
 }

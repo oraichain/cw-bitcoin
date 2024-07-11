@@ -19,7 +19,7 @@ pub fn set_time(seconds: u64) -> Env {
 use cosmwasm_schema::serde::de::DeserializeOwned;
 use cosmwasm_schema::serde::Serialize;
 use cosmwasm_std::{
-    Addr, AllBalanceResponse, BalanceResponse, BankQuery, Coin, Empty, Event, QuerierWrapper,
+    Addr, AllBalanceResponse, BalanceResponse, BankQuery, Coin, Empty, QuerierWrapper,
     QueryRequest, StdResult, Uint128,
 };
 use cw20::TokenInfoResponse;

@@ -4,8 +4,12 @@ use std::str::FromStr;
 use crate::{
     app::Bitcoin,
     error::{ContractError, ContractResult},
-    state::HEADER_CONFIG,
+    state::{header_height, HEADER_CONFIG},
 };
+
+pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
+    header_height(store)
+}
 
 pub fn query_deposit_fees(store: &dyn Storage, index: Option<u32>) -> ContractResult<u64> {
     let header_config = HEADER_CONFIG.load(store)?;

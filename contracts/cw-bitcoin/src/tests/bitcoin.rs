@@ -17,7 +17,7 @@ use cosmwasm_std::testing::{mock_dependencies, mock_env};
 use cosmwasm_std::{Addr, Coin, Env, Storage};
 use error::ContractResult;
 use interface::{Dest, HeaderConfig, Xpub};
-use state::{save_header, HEADERS, SIGNERS, VALIDATORS};
+use state::{HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS};
 use tests::helper::set_time;
 
 use crate::interface::IbcDest;
@@ -32,46 +32,55 @@ use crate::{
 fn relay_height_validity() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
-    save_header(deps.as_mut().storage, &header_config)?;
+    let header = header_config.work_header();
+
+    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
+    HEADERS.push_back(deps.as_mut().storage, &header)?;
+
     let mut btc = Bitcoin::new(header_config);
 
     for _ in 0..10 {
         let btc_height = btc.headers.height(deps.as_ref().storage)?;
-        HEADERS.push_back(
-            deps.as_mut().storage,
-            &WorkHeader::new(
-                WrappedHeader::new(
-                    Adapter::new(BlockHeader {
-                        bits: 0,
-                        merkle_root: TxMerkleNode::all_zeros(),
-                        nonce: 0,
-                        prev_blockhash: BlockHash::all_zeros(),
-                        time: 0,
-                        version: 0,
-                    }),
-                    btc_height + 1,
-                ),
-                uint::Uint256([0, 0, 0, 0]),
+        let header = WorkHeader::new(
+            WrappedHeader::new(
+                Adapter::new(BlockHeader {
+                    bits: 0,
+                    merkle_root: TxMerkleNode::all_zeros(),
+                    nonce: 0,
+                    prev_blockhash: BlockHash::all_zeros(),
+                    time: 0,
+                    version: 0,
+                }),
+                btc_height + 1,
             ),
-        )?;
+            uint::Uint256([0, 0, 0, 0]),
+        );
+
+        HEADERS.push_back(deps.as_mut().storage, &header)?;
     }
 
     let h = btc.headers.height(deps.as_ref().storage)?;
+
     let mut try_relay = |height| {
         // TODO: make test cases not fail at irrelevant steps in relay_deposit
         // (either by passing in valid input, or by handling other error paths)
 
+        let btc_tx = Transaction {
+            input: vec![],
+            lock_time: bitcoin::PackedLockTime(0),
+            output: vec![],
+            version: 0,
+        };
+        let btc_proof = PartialMerkleTree::from_txids(&[Txid::all_zeros()], &[true]);
+
+        let env = mock_env();
+
         btc.relay_deposit(
-            mock_env(),
+            env,
             deps.as_mut().storage,
-            Adapter::new(Transaction {
-                input: vec![],
-                lock_time: bitcoin::PackedLockTime(0),
-                output: vec![],
-                version: 0,
-            }),
+            Adapter::new(btc_tx),
             height,
-            Adapter::new(PartialMerkleTree::from_txids(&[Txid::all_zeros()], &[true])),
+            Adapter::new(btc_proof),
             0,
             0,
             Dest::Address(Addr::unchecked("")),
@@ -95,7 +104,8 @@ fn relay_height_validity() -> ContractResult<()> {
 fn check_change_rates() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
-    save_header(deps.as_mut().storage, &header_config)?;
+    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
+    HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
 
     let consensus_key1 = [0; 32];
     let consensus_key2 = [1; 32];
@@ -289,7 +299,8 @@ fn check_change_rates() -> ContractResult<()> {
 fn test_take_pending() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
-    save_header(deps.as_mut().storage, &header_config)?;
+    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
+    HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
 
     let consensus_key1 = [0; 32];
     let consensus_key2 = [1; 32];

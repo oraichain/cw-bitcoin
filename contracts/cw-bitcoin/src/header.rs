@@ -3,6 +3,7 @@ use crate::constants::MAX_RELAY;
 use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::interface::HeaderConfig;
+use crate::state::header_height;
 use crate::state::HEADERS;
 use bitcoin::blockdata::block::BlockHeader;
 
@@ -504,10 +505,7 @@ impl HeaderQueue {
 
     /// The height of the last header in the header queue.    
     pub fn height(&self, store: &dyn Storage) -> ContractResult<u32> {
-        match HEADERS.back(store)? {
-            Some(inner) => Ok(inner.height()),
-            None => Ok(0),
-        }
+        header_height(store)
     }
 
     /// The hash of the last header in the header queue.    

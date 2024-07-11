@@ -11,7 +11,7 @@ use serial_test::serial;
 use crate::adapter::Adapter;
 use crate::header::{HeaderQueue, WrappedHeader};
 use crate::interface::HeaderConfig;
-use crate::state::save_header;
+use crate::state::{HEADERS, HEADER_CONFIG};
 
 #[test]
 fn primitive_adapter_encode_decode() {
@@ -206,7 +206,12 @@ fn add_multiple() {
         .into(),
     };
 
-    save_header(deps.as_mut().storage, &test_config).unwrap();
+    HEADER_CONFIG
+        .save(deps.as_mut().storage, &test_config)
+        .unwrap();
+    HEADERS
+        .push_back(deps.as_mut().storage, &test_config.work_header())
+        .unwrap();
 
     let mut q = HeaderQueue::new(test_config.clone());
     q.configure(deps.as_mut().storage, test_config).unwrap();
@@ -263,7 +268,12 @@ fn add_into_iterator() {
         }
         .into(),
     };
-    save_header(deps.as_mut().storage, &test_config).unwrap();
+    HEADER_CONFIG
+        .save(deps.as_mut().storage, &test_config)
+        .unwrap();
+    HEADERS
+        .push_back(deps.as_mut().storage, &test_config.work_header())
+        .unwrap();
 
     let adapter = Adapter::new(header);
     let header_list = [WrappedHeader::new(adapter, 43)];
@@ -322,7 +332,12 @@ fn add_wrong_bits_non_retarget() {
         .into(),
     };
 
-    save_header(deps.as_mut().storage, &test_config).unwrap();
+    HEADER_CONFIG
+        .save(deps.as_mut().storage, &test_config)
+        .unwrap();
+    HEADERS
+        .push_back(deps.as_mut().storage, &test_config.work_header())
+        .unwrap();
 
     let adapter = Adapter::new(header);
     let header_list = [WrappedHeader::new(adapter, 43)];

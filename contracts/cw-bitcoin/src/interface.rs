@@ -155,7 +155,7 @@ pub struct Validator {
     pub power: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[cw_serde]
 pub struct BitcoinConfig {
     /// The minimum number of checkpoints that must be produced before
     /// withdrawals are enabled.

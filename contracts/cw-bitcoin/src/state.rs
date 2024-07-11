@@ -79,8 +79,10 @@ pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
         .collect()
 }
 
-pub fn save_header(store: &mut dyn Storage, header_config: &HeaderConfig) -> ContractResult<()> {
-    HEADER_CONFIG.save(store, header_config)?;
-    HEADERS.push_back(store, &header_config.work_header())?;
-    Ok(())
+/// The height of the last header in the header queue.    
+pub fn header_height(store: &dyn Storage) -> ContractResult<u32> {
+    match HEADERS.back(store)? {
+        Some(inner) => Ok(inner.height()),
+        None => Ok(0),
+    }
 }
