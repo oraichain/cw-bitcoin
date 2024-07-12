@@ -1,7 +1,7 @@
 use crate::error::ContractResult;
-use bitcoin::{Address, Txid};
+use bitcoin::{hashes::Hash, Address, Txid};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 use tsify::Tsify;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
@@ -22,6 +22,12 @@ impl Deposit {
             height,
         }
     }
+
+    pub fn key(txid: Txid, vout: u32) -> String {
+        let mut key = txid.to_vec();
+        key.extend_from_slice(&vout.to_be_bytes());
+        base64::encode(key)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
@@ -31,11 +37,12 @@ pub struct DepositInfo {
     pub confirmations: u64,
 }
 
-type ReceiverIndex = HashMap<String, HashMap<Address, HashMap<(Txid, u32), Deposit>>>;
+type ReceiverIndex = HashMap<String, HashMap<String, HashMap<String, Deposit>>>;
 
 #[derive(Debug, Default, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct DepositIndex {
+    #[tsify(type = "{ [key: string]: { [key: string]: { [key: string]: Deposit } } }")]
     pub receiver_index: ReceiverIndex,
 }
 
@@ -53,9 +60,9 @@ impl DepositIndex {
         self.receiver_index
             .entry(receiver)
             .or_default()
-            .entry(address)
+            .entry(address.to_string())
             .or_default()
-            .insert((deposit.txid, deposit.vout), deposit);
+            .insert(Deposit::key(deposit.txid, deposit.vout), deposit);
     }
 
     fn remove_address_index_deposit(
@@ -68,9 +75,9 @@ impl DepositIndex {
         self.receiver_index
             .get_mut(&receiver)
             .unwrap_or(&mut HashMap::new())
-            .get_mut(&address)
+            .get_mut(&address.to_string())
             .unwrap_or(&mut HashMap::new())
-            .remove(&(txid, vout));
+            .remove(&Deposit::key(txid, vout));
 
         Ok(())
     }
@@ -110,4 +117,17 @@ impl DepositIndex {
 
         Ok(deposits)
     }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn newDepositIndex() -> DepositIndex {
+    let mut deposit = DepositIndex::default();
+    deposit.insert_deposit(
+        "thanhtu".to_string(),
+        Address::from_str("bc1q7vdh8ttns5k2u5acel8yddjw0shens4zmyun4n06gd5mjeq3y4kq9lhw09")
+            .unwrap(),
+        Deposit::new(Txid::from_slice(&[0; 32]).unwrap(), 1, 10, Some(1000)),
+    );
+
+    deposit
 }

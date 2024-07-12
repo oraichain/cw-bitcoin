@@ -184,8 +184,8 @@ impl WrappedHeader {
 }
 
 #[wasm_bindgen]
-pub fn newWrappedHeader(header: Adapter<BlockHeader>, height: u32) -> WrappedHeader {
-    WrappedHeader::new(header, height)
+pub fn newWrappedHeader(header: BlockHeader, height: u32) -> WrappedHeader {
+    WrappedHeader::new(header.into(), height)
 }
 
 #[wasm_bindgen]
