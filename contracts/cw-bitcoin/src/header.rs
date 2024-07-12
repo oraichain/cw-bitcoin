@@ -12,11 +12,12 @@ use bitcoin::BlockHash;
 use bitcoin::TxMerkleNode;
 use cosmwasm_std::Storage;
 use ed::Terminated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// A wrapper around a bitcoin::BlockHeader that implements the core orga
 /// traits, and includes the block's height.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct WrappedHeader {
     height: u32,
     header: Adapter<BlockHeader>,
@@ -127,7 +128,7 @@ impl Terminated for HeaderList {}
 
 /// A `WrappedHeader`, along with a total estimated amount of work (measured in
 /// hashes) done in the header and previous headers.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct WorkHeader {
     pub chain_work: Adapter<Uint256>,
     pub header: WrappedHeader,

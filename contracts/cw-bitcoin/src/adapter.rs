@@ -1,7 +1,9 @@
 use bitcoin::consensus::{Decodable, Encodable};
 use cosmwasm_std::Binary;
 use derive_more::{Deref, DerefMut};
+use schemars::{gen::SchemaGenerator, schema::Schema, JsonSchema};
 use serde::{de, ser, Deserialize, Serialize};
+use std::borrow::Cow;
 
 /// A wrapper that adds core `orga` traits to types from the `bitcoin` crate.
 #[derive(Clone, Debug, PartialEq, Deref, DerefMut)]
@@ -60,6 +62,21 @@ impl<'de, T: Decodable> Deserialize<'de> for Adapter<T> {
         let v = Binary::deserialize(deserializer)?;
         let inner: T = Decodable::consensus_decode(&mut v.as_slice()).map_err(de::Error::custom)?;
         Ok(inner.into())
+    }
+}
+
+// Adapter<T> as Binary
+impl<T> JsonSchema for Adapter<T> {
+    fn schema_name() -> String {
+        Binary::schema_name()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        Binary::schema_id()
+    }
+
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
+        Binary::json_schema(gen)
     }
 }
 

@@ -101,6 +101,7 @@ pub struct ThresholdSig {
     pub signed: u64,
 
     /// The message to be signed (in practice, this will be a Bitcoin sighash).
+    #[tsify(type = "Uint8Array")]
     pub message: Message,
 
     /// The number of signers in the set.

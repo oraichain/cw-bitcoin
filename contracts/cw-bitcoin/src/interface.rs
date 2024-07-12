@@ -10,6 +10,7 @@ use cosmwasm_std::Storage;
 use cosmwasm_std::Uint128;
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
+use schemars::JsonSchema;
 use serde::{de, ser, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -431,7 +432,7 @@ impl<'de> Deserialize<'de> for Xpub {
 
 ///  HeaderConfiguration parameters for Bitcoin header processing.
 // TODO: implement trait that returns constants for bitcoin::Network variants
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct HeaderConfig {
     /// The maximum number of headers that can be stored in the header queue
     /// before pruning.

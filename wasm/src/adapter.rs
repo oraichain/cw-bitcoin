@@ -7,19 +7,17 @@ use wasm_bindgen::prelude::*;
 /// A wrapper that adds core `orga` traits to types from the `bitcoin` crate.
 #[derive(Clone, Debug, PartialEq, Deref, DerefMut, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct Adapter<T> {
-    inner: T,
-}
+pub struct Adapter<T>(#[tsify(type = "string")] T);
 
 impl<T> Adapter<T> {
     /// Creates a new `Adapter` from a value.
     pub fn new(inner: T) -> Self {
-        Self { inner }
+        Self(inner)
     }
 
     /// Consumes the `Adapter` and returns the inner value.
     pub fn into_inner(self) -> T {
-        self.inner
+        self.0
     }
 }
 
@@ -31,9 +29,7 @@ impl<T> From<T> for Adapter<T> {
 
 impl<T: Default> Default for Adapter<T> {
     fn default() -> Self {
-        Self {
-            inner: Default::default(),
-        }
+        Self(Default::default())
     }
 }
 
@@ -44,7 +40,7 @@ impl<T: Encodable> Serialize for Adapter<T> {
         S: ser::Serializer,
     {
         let mut dest: Vec<u8> = Vec::new();
-        self.inner
+        self.0
             .consensus_encode(&mut dest)
             .map_err(ser::Error::custom)?;
         base64::encode(dest).serialize(serializer)
@@ -61,7 +57,7 @@ impl<'de, T: Decodable> Deserialize<'de> for Adapter<T> {
         let bytes = base64::decode(v).map_err(de::Error::custom)?;
         let inner: T =
             Decodable::consensus_decode(&mut bytes.as_slice()).map_err(de::Error::custom)?;
-        Ok(inner.into())
+        Ok(Adapter(inner))
     }
 }
 

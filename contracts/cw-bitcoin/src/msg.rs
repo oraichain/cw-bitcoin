@@ -1,7 +1,11 @@
+use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Binary;
 
-use crate::interface::{BitcoinConfig, CheckpointConfig, Dest};
+use crate::{
+    adapter::Adapter,
+    header::WorkHeader,
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
+};
 
 #[cw_serde]
 pub struct InstantiateMsg {}
@@ -15,15 +19,15 @@ pub enum ExecuteMsg {
         config: CheckpointConfig,
     },
     UpdateHeaderConfig {
-        config: Binary,
+        config: HeaderConfig,
     },
     AddWorkHeader {
-        header: Binary,
+        header: WorkHeader,
     },
     RelayDeposit {
-        btc_tx: Binary,
+        btc_tx: Adapter<Transaction>,
         btc_height: u32,
-        btc_proof: Binary,
+        btc_proof: Adapter<PartialMerkleTree>,
         btc_vout: u32,
         sigset_index: u32,
         dest: Dest,

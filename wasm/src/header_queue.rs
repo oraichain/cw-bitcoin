@@ -39,7 +39,7 @@ pub struct HeaderConfig {
     /// testnet).
     pub min_difficulty_blocks: bool,
     /// The trusted header (the header which populates the queue when it is
-    /// newly created), as encoded bytes.
+    /// newly created), as encoded bytes.    
     pub trusted_header: Adapter<BlockHeader>,
 }
 

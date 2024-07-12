@@ -2,7 +2,7 @@ use std::io;
 
 use bitcoin::{
     consensus::{encode, Decodable, Encodable},
-    TxMerkleNode, Txid,
+    BlockHash, TxMerkleNode, Txid,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -46,6 +46,30 @@ impl Dest {
 
         Ok(bytes)
     }
+}
+
+#[derive(
+    Copy, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, Serialize, Deserialize, Tsify,
+)]
+pub struct BlockHeader {
+    /// Originally protocol version, but repurposed for soft-fork signaling.
+    ///
+    /// ### Relevant BIPs
+    ///
+    /// * [BIP9 - Version bits with timeout and delay](https://github.com/bitcoin/bips/blob/master/bip-0009.mediawiki) (current usage)
+    /// * [BIP34 - Block v2, Height in Coinbase](https://github.com/bitcoin/bips/blob/master/bip-0034.mediawiki)
+    pub version: i32,
+    /// Reference to the previous block in the chain.
+    pub prev_blockhash: BlockHash,
+    /// The root hash of the merkle tree of transactions in the block.
+    pub merkle_root: TxMerkleNode,
+    /// The timestamp of the block, as claimed by the miner.
+    pub time: u32,
+    /// The target value below which the blockhash must lie, encoded as a
+    /// a float (with well-defined rounding, of course).
+    pub bits: u32,
+    /// The nonce, selected to obtain a low enough blockhash.
+    pub nonce: u32,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize, Tsify)]
@@ -140,6 +164,7 @@ pub struct TxIn {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct OutPoint {
     /// The referenced transaction's txid.
+    #[tsify(type = "string")]
     pub txid: Txid,
     /// The index of the referenced output in its transaction's vout.
     pub vout: u32,

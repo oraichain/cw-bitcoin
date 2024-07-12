@@ -8,7 +8,7 @@ use bitcoin::hashes::Hash;
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::util::uint;
 use bitcoin::{BlockHash, BlockHeader, Transaction, TxMerkleNode, Txid};
-use cosmwasm_std::{to_binary, Addr, Binary};
+use cosmwasm_std::{Addr, Binary};
 
 #[test]
 fn test_relay_height_validity() {
@@ -18,13 +18,13 @@ fn test_relay_height_validity() {
         .unwrap();
 
     let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json")).unwrap();
-
+    let header = header_config.work_header();
     let _res = app
         .execute(
             Addr::unchecked("alice"),
             bridge_addr.clone(),
             &msg::ExecuteMsg::UpdateHeaderConfig {
-                config: to_binary(&header_config).unwrap(),
+                config: header_config,
             },
             &[],
         )
@@ -34,9 +34,7 @@ fn test_relay_height_validity() {
         .execute(
             Addr::unchecked("alice"),
             bridge_addr.clone(),
-            &msg::ExecuteMsg::AddWorkHeader {
-                header: to_binary(&header_config.work_header()).unwrap(),
-            },
+            &msg::ExecuteMsg::AddWorkHeader { header },
             &[],
         )
         .unwrap();
@@ -46,7 +44,7 @@ fn test_relay_height_validity() {
             .query(bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
             .unwrap();
 
-        let header = to_binary(&WorkHeader::new(
+        let header = WorkHeader::new(
             WrappedHeader::new(
                 Adapter::new(BlockHeader {
                     bits: 0,
@@ -59,8 +57,7 @@ fn test_relay_height_validity() {
                 btc_height + 1,
             ),
             uint::Uint256([0, 0, 0, 0]),
-        ))
-        .unwrap();
+        );
         app.execute(
             Addr::unchecked("alice"),
             bridge_addr.clone(),
@@ -78,20 +75,15 @@ fn test_relay_height_validity() {
         // TODO: make test cases not fail at irrelevant steps in relay_deposit
         // (either by passing in valid input, or by handling other error paths)
 
-        let mut btc_tx = Binary::default();
-        Transaction {
+        let btc_tx = Transaction {
             input: vec![],
             lock_time: bitcoin::PackedLockTime(0),
             output: vec![],
             version: 0,
         }
-        .consensus_encode(&mut btc_tx.0)
-        .unwrap();
+        .into();
 
-        let mut btc_proof = Binary::default();
-        PartialMerkleTree::from_txids(&[Txid::all_zeros()], &[true])
-            .consensus_encode(&mut btc_proof.0)
-            .unwrap();
+        let btc_proof = PartialMerkleTree::from_txids(&[Txid::all_zeros()], &[true]).into();
 
         app.execute(
             Addr::unchecked("alice"),
