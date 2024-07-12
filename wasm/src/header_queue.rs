@@ -189,7 +189,7 @@ pub fn newWrappedHeader(header: Adapter<BlockHeader>, height: u32) -> WrappedHea
 }
 
 #[wasm_bindgen]
-pub fn newHeaderConfig(height: u32, block_header: JsValue) -> Result<HeaderConfig, JsValue> {
+pub fn newHeaderConfig(height: u32, block_header: JsValue) -> ContractResult<HeaderConfig> {
     // because BlockHeader is not tsify
     let header: BlockHeader = serde_wasm_bindgen::from_value(block_header)?;
 

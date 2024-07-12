@@ -401,10 +401,8 @@ pub fn newSignatorySet(
     hex_script: &str,
     numerator: u64,
     denominator: u64,
-) -> Result<SignatorySet, JsValue> {
-    let script = bitcoin::Script::from_hex(&hex_script)
-        .map_err(|err| JsValue::from_str(&err.to_string()))?;
-    let (signatory_set, _) = SignatorySet::from_script(&script, (numerator, denominator))
-        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+) -> ContractResult<SignatorySet> {
+    let script = bitcoin::Script::from_hex(&hex_script)?;
+    let (signatory_set, _) = SignatorySet::from_script(&script, (numerator, denominator))?;
     Ok(signatory_set)
 }

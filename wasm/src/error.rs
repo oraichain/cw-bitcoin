@@ -3,6 +3,8 @@ use bitcoin::blockdata::transaction::ParseOutPointError;
 #[derive(thiserror::Error, Debug)]
 pub enum ContractError {
     #[error(transparent)]
+    Wasm(#[from] serde_wasm_bindgen::Error),
+    #[error(transparent)]
     Ed(#[from] ed::Error),
     #[error(transparent)]
     Bitcoin(#[from] bitcoin::Error),
@@ -14,6 +16,10 @@ pub enum ContractError {
     BitcoinHash(#[from] bitcoin::hashes::Error),
     #[error(transparent)]
     BitcoinLockTime(#[from] bitcoin::locktime::Error),
+    #[error(transparent)]
+    Base64Decode(#[from] base64::DecodeError),
+    #[error(transparent)]
+    BitcoinHashes(#[from] bitcoin::hashes::hex::Error),
     #[error(transparent)]
     BitcoinEncode(#[from] bitcoin::consensus::encode::Error),
     #[error(transparent)]
@@ -28,6 +34,12 @@ pub enum ContractError {
     Secp(#[from] bitcoin::secp256k1::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+}
+
+impl From<ContractError> for wasm_bindgen::JsValue {
+    fn from(failure: ContractError) -> Self {
+        js_sys::Error::new(&failure.to_string()).into()
+    }
 }
 
 pub type ContractResult<T> = std::result::Result<T, ContractError>;
