@@ -14,7 +14,9 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-bitcoin = { workspace = true, features = ["serde"] }
+bitcoin = { git = "https://github.com/oraichain/rust-bitcoin.git", rev = "493ccd3", features = [
+    "serde",
+] }
 thiserror = { workspace = true }
 serde = { workspace = true }
 ed = { workspace = true }
