@@ -11,10 +11,24 @@ use bitcoin::secp256k1::{
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-// TODO: update for taproot-based design (musig rounds, fallback path)
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    Serialize,
+    Deserialize,
+    tsify::Tsify,
+)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 
 /// A sighash to be signed by a set of signers.
-pub type Message = [u8; MESSAGE_SIZE];
+pub struct Message(#[tsify(type = "number[]")] [u8; MESSAGE_SIZE]);
+
+// TODO: update for taproot-based design (musig rounds, fallback path)
 
 /// A compact secp256k1 ECDSA signature.
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize, Tsify)]
@@ -100,8 +114,7 @@ pub struct ThresholdSig {
     /// The total voting power of signers who have signed the message.
     pub signed: u64,
 
-    /// The message to be signed (in practice, this will be a Bitcoin sighash).
-    #[tsify(type = "Uint8Array")]
+    /// The message to be signed (in practice, this will be a Bitcoin sighash).    
     pub message: Message,
 
     /// The number of signers in the set.
