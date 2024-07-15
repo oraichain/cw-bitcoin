@@ -43,6 +43,10 @@ pub enum QueryMsg {
     DepositFees { index: Option<u32> },
     #[returns(u64)]
     WithdrawalFees { address: String, index: Option<u32> },
+    #[returns(BlockHash)]
+    SidechainBlockHash {},
+    #[returns(u64)]
+    CheckpointByIndex { index: u32 },
 }
 
 #[cw_serde]
