@@ -10,6 +10,7 @@ pub struct Deposit {
     txid: Txid,
     vout: u32,
     amount: u64,
+    #[tsify(optional)]
     height: Option<u64>,
 }
 

@@ -7,22 +7,12 @@ use bitcoin::secp256k1::{
     constants::{MESSAGE_SIZE, PUBLIC_KEY_SIZE},
     ecdsa, PublicKey, Secp256k1,
 };
-
+use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    PartialEq,
-    derive_more::Deref,
-    derive_more::DerefMut,
-    Serialize,
-    Deserialize,
-    tsify::Tsify,
-)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Deref, Serialize, Deserialize, tsify::Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 
 /// A sighash to be signed by a set of signers.
@@ -354,5 +344,17 @@ impl Debug for ThresholdSig {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Share {
     pub power: u64,
+    #[tsify(optional)]
     pub(super) sig: Option<Signature>,
+}
+
+#[derive(
+    Clone, Debug, PartialOrd, derive_more::Deref, PartialEq, Eq, Ord, Deserialize, Serialize, Tsify,
+)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct Shares(Vec<(Pubkey, Share)>);
+
+#[wasm_bindgen]
+pub fn newThresholdSig(shares: Shares) -> ThresholdSig {
+    ThresholdSig::from_shares(shares.0)
 }
