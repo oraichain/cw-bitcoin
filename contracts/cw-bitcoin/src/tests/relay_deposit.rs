@@ -3,12 +3,11 @@ use crate::adapter::Adapter;
 use crate::header::{WorkHeader, WrappedHeader};
 use crate::interface::{Dest, HeaderConfig};
 use crate::msg;
-use bitcoin::consensus::Encodable;
 use bitcoin::hashes::Hash;
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::util::uint;
 use bitcoin::{BlockHash, BlockHeader, Transaction, TxMerkleNode, Txid};
-use cosmwasm_std::{Addr, Binary};
+use cosmwasm_std::Addr;
 
 #[test]
 fn test_relay_height_validity() {
