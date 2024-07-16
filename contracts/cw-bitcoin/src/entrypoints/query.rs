@@ -3,6 +3,7 @@ use cosmwasm_std::Storage;
 use std::str::FromStr;
 
 use crate::{
+    adapter::HashBinary,
     app::Bitcoin,
     checkpoint::{Checkpoint, CheckpointQueue},
     error::{ContractError, ContractResult},
@@ -39,11 +40,10 @@ pub fn query_withdrawal_fees(
     Ok(withdrawal_fees)
 }
 
-pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<BlockHash> {
+pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<HashBinary<BlockHash>> {
     let header_config = HEADER_CONFIG.load(store)?;
     let headers = HeaderQueue::new(header_config);
-    let hash = headers.hash(store)?;
-    // BlockHash serialize is same as HexBinary
+    let hash = HashBinary(headers.hash(store)?);
     Ok(hash)
 }
 

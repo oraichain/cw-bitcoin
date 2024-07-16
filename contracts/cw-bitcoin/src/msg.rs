@@ -43,7 +43,7 @@ pub enum QueryMsg {
     DepositFees { index: Option<u32> },
     #[returns(u64)]
     WithdrawalFees { address: String, index: Option<u32> },
-    #[returns(cosmwasm_std::HexBinary)]
+    #[returns(crate::adapter::HashBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
     #[returns(u64)]
     CheckpointByIndex { index: u32 },
