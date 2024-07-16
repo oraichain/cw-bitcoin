@@ -1,6 +1,8 @@
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::schemars::JsonSchema;
+use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
 use cosmwasm_std::from_slice;
 use cosmwasm_std::to_vec;
 use cosmwasm_std::Addr;
@@ -10,8 +12,6 @@ use cosmwasm_std::Storage;
 use cosmwasm_std::Uint128;
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
-use schemars::JsonSchema;
-use serde::{de, ser, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::adapter::Adapter;
@@ -87,6 +87,7 @@ impl<'a, T: Serialize + de::DeserializeOwned> DequeExtension<'a, T> {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct Accounts {
     transfers_allowed: bool,
     transfer_exceptions: Vec<String>,
@@ -151,6 +152,7 @@ impl Dest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct Validator {
     pub pubkey: ConsensusKey,
     pub power: u64,
@@ -433,6 +435,8 @@ impl<'de> Deserialize<'de> for Xpub {
 ///  HeaderConfiguration parameters for Bitcoin header processing.
 // TODO: implement trait that returns constants for bitcoin::Network variants
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct HeaderConfig {
     /// The maximum number of headers that can be stored in the header queue
     /// before pruning.
@@ -493,6 +497,7 @@ impl HeaderConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct ChangeRates {
     pub withdrawal: u16,
     pub sigset_change: u16,

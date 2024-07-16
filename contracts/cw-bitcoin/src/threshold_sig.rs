@@ -8,7 +8,7 @@ use bitcoin::secp256k1::{
     ecdsa, PublicKey, Secp256k1,
 };
 use cosmwasm_schema::cw_serde;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::serde::{Deserialize, Serialize};
 
 // TODO: update for taproot-based design (musig rounds, fallback path)
 
@@ -21,6 +21,7 @@ pub struct Signature(#[serde(serialize_with = "<[_]>::serialize")] pub Vec<u8>);
 
 /// A compressed secp256k1 public key.
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct Pubkey {
     #[serde(serialize_with = "<[_]>::serialize")]
     bytes: Vec<u8>,
@@ -88,6 +89,7 @@ impl From<PublicKey> for Pubkey {
 /// It is populated based on a `SignatorySet` and a message to sign, and then
 /// each signer signs the message and adds their signature to the state.]
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct ThresholdSig {
     /// The threshold of voting power required for a the signature to be
     /// considered "signed".

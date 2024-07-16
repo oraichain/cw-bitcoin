@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
+use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Order, Storage};
-use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{ContractError, ContractResult},
@@ -21,6 +21,7 @@ use crate::{
 /// usage of this collection to set timestamps properly to ensure this does not
 /// happen.
 #[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct OutpointSet {}
 
 impl OutpointSet {

@@ -1,11 +1,12 @@
 use bitcoin::consensus::{Decodable, Encodable};
+use cosmwasm_schema::schemars::{gen, schema, JsonSchema};
+use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
 use cosmwasm_std::{Binary, HexBinary};
 use derive_more::{Deref, DerefMut};
-use serde::{de, ser, Deserialize, Serialize};
 
 macro_rules! forward_schema_impl {
     ($impl:tt => $target:ty) => {
-        impl<T> schemars::JsonSchema for $impl<T> {
+        impl<T> JsonSchema for $impl<T> {
             fn schema_name() -> String {
                 <$target>::schema_name()
             }
@@ -14,7 +15,7 @@ macro_rules! forward_schema_impl {
                 <$target>::schema_id()
             }
 
-            fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+            fn json_schema(gen: &mut gen::SchemaGenerator) -> schema::Schema {
                 <$target>::json_schema(gen)
             }
         }
@@ -85,6 +86,7 @@ impl<T: Copy> Copy for Adapter<T> {}
 
 /// A wrapper that adds core `orga` traits to types from the `bitcoin` crate.
 #[derive(Clone, Debug, PartialEq, Deref, DerefMut, Serialize, Deserialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct HashBinary<T>(pub T);
 
 forward_schema_impl!(Adapter => Binary);

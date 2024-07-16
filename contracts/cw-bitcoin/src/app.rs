@@ -17,8 +17,8 @@ use super::header::HeaderQueue;
 use bitcoin::util::bip32::ChildNumber;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
-use serde::{Deserialize, Serialize};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -40,6 +40,7 @@ pub fn calc_deposit_fee(_: Uint128) -> u64 {
 /// coordinate the checkpointing process to manage the BTC reserve on the
 /// Bitcoin blockchain.
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct Bitcoin {
     /// A light client of the Bitcoin blockchain, keeping track of the headers
     /// of the highest-work chain.    

@@ -15,9 +15,9 @@ use crate::{
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Coin, Env, Order, Storage};
 use derive_more::{Deref, DerefMut};
-use serde::{Deserialize, Serialize};
 
 /// The status of a checkpoint. Checkpoints start as `Building`, and eventually
 /// advance through the three states.
@@ -46,6 +46,7 @@ pub enum CheckpointStatus {
 /// signed can be turned into a `bitcoin::TxIn` for inclusion in a Bitcoin
 /// transaction.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct Input {
     /// The outpoint being spent by this input.
     pub prevout: Adapter<bitcoin::OutPoint>,
@@ -135,6 +136,7 @@ pub type Output = Adapter<bitcoin::TxOut>;
 
 /// A bitcoin transaction, as a native `orga` data structure.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct BitcoinTx {
     /// The locktime field included in the bitcoin transaction, representing
     /// either a block height or timestamp.
@@ -349,6 +351,7 @@ impl<T> std::ops::IndexMut<BatchType> for Vec<T> {
 /// in the batch at once. Once the batch is fully signed, the checkpoint can
 /// advance to signing of the next batch, if any.
 #[derive(Default, Debug, Serialize, Deserialize, Deref, DerefMut, Clone, PartialEq)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct Batch {
     signed_txs: u16,
     #[deref]
@@ -386,6 +389,7 @@ impl Batch {
 /// `batches` deque), and one or more "final emergency disbursal transactions"
 /// (in the first batch of the `batches` deque).
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct Checkpoint {
     /// The status of the checkpoint, either `Building`, `Signing`, or
     /// `Complete`.

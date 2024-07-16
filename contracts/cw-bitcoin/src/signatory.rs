@@ -21,11 +21,10 @@ use bitcoin::secp256k1::Verification;
 use bitcoin::util::bip32::ChildNumber;
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
+use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Order;
 use cosmwasm_std::Storage;
 use ed::Encode;
-use serde::Deserialize;
-use serde::Serialize;
 
 use super::interface::Xpub;
 
@@ -45,6 +44,7 @@ use super::interface::Xpub;
 
 /// A signatory in a signatory set, consisting of a public key and voting power.
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct Signatory {
     pub voting_power: u64,
     pub pubkey: Pubkey,
@@ -77,6 +77,7 @@ where
 /// create a UTXO which can be only spent by a threshold of the signatories,
 /// based on voting power.
 #[derive(Clone, Debug, Default, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct SignatorySet {
     /// The time at which this signatory set was created, in seconds.
     ///
@@ -479,6 +480,7 @@ impl SignatorySet {
 /// The collection also includes an set of all signatory extended public keys,
 /// which is used to prevent duplicate keys from being submitted.
 #[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct SignatoryKeys {}
 
 impl SignatoryKeys {

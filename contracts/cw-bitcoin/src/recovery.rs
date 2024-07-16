@@ -10,10 +10,11 @@ use crate::{
     state::RECOVERY_TXS,
 };
 use bitcoin::{OutPoint, Transaction, TxOut};
+use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Storage;
-use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct RecoveryTx {
     tx: BitcoinTx,
     old_sigset_index: u32,
@@ -22,6 +23,7 @@ pub struct RecoveryTx {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct SignedRecoveryTx {
     pub tx: Adapter<Transaction>,
     pub sigset_index: u32,
@@ -29,6 +31,7 @@ pub struct SignedRecoveryTx {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct RecoveryTxs {}
 
 pub struct RecoveryTxInput<'a> {

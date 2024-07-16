@@ -10,14 +10,16 @@ use bitcoin::blockdata::block::BlockHeader;
 use bitcoin::util::uint::Uint256;
 use bitcoin::BlockHash;
 use bitcoin::TxMerkleNode;
+use cosmwasm_schema::schemars::JsonSchema;
+use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Storage;
 use ed::Terminated;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 /// A wrapper around a bitcoin::BlockHeader that implements the core orga
 /// traits, and includes the block's height.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct WrappedHeader {
     height: u32,
     header: Adapter<BlockHeader>,
@@ -129,6 +131,8 @@ impl Terminated for HeaderList {}
 /// A `WrappedHeader`, along with a total estimated amount of work (measured in
 /// hashes) done in the header and previous headers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct WorkHeader {
     pub chain_work: Adapter<Uint256>,
     pub header: WrappedHeader,
@@ -183,6 +187,7 @@ impl WorkHeader {
 /// that are deeper than the length of the queue (the length will be at the
 /// configured pruning level based on the `max_length` config parameter).
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
 pub struct HeaderQueue {
     pub(crate) current_work: Adapter<Uint256>,
     pub(crate) config: HeaderConfig,
