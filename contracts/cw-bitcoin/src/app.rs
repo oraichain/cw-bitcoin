@@ -136,11 +136,9 @@ impl Bitcoin {
         signer: Addr,
         signatory_key: Xpub,
     ) -> ContractResult<()> {
-        let consensus_key = SIGNERS.load(store, signer.as_str()).or_else(|_| {
-            Err(ContractError::App(
-                "Signer does not have a consensus key".to_string(),
-            ))
-        })?;
+        let consensus_key = SIGNERS
+            .load(store, signer.as_str())
+            .map_err(|_| ContractError::App("Signer does not have a consensus key".to_string()))?;
 
         if signatory_key.network != self.network() {
             return Err(ContractError::App(
@@ -223,9 +221,9 @@ impl Bitcoin {
             .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
 
         if self.headers.height(store)? - btc_height < self.config.min_confirmations {
-            return Err(
-                ContractError::App("Block is not sufficiently confirmed".to_string()).into(),
-            );
+            return Err(ContractError::App(
+                "Block is not sufficiently confirmed".to_string(),
+            ));
         }
 
         let mut txids = vec![];
@@ -354,7 +352,7 @@ impl Bitcoin {
             .insert_pending(dest, nbtc)?;
 
         self.checkpoints
-            .set(store, self.checkpoints.index, &**building_mut)?;
+            .set(store, self.checkpoints.index, &building_mut)?;
 
         Ok(())
     }
@@ -382,9 +380,9 @@ impl Bitcoin {
             .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
 
         if self.headers.height(store)? - btc_height < self.config.min_checkpoint_confirmations {
-            return Err(
-                ContractError::App("Block is not sufficiently confirmed".to_string()).into(),
-            );
+            return Err(ContractError::App(
+                "Block is not sufficiently confirmed".to_string(),
+            ));
         }
 
         let mut txids = vec![];
@@ -442,15 +440,16 @@ impl Bitcoin {
         mut amount: Uint128,
     ) -> ContractResult<()> {
         if script_pubkey.len() as u64 > self.config.max_withdrawal_script_length {
-            return Err(ContractError::App("Script exceeds maximum length".to_string()).into());
+            return Err(ContractError::App(
+                "Script exceeds maximum length".to_string(),
+            ));
         }
 
         if self.checkpoints.len(store)? < self.config.min_withdrawal_checkpoints {
             return Err(ContractError::App(format!(
                 "Withdrawals are disabled until the network has produced at least {} checkpoints",
                 self.config.min_withdrawal_checkpoints
-            ))
-            .into());
+            )));
         }
 
         let fee_amount = self.calc_minimum_withdrawal_fees(
@@ -469,14 +468,12 @@ impl Bitcoin {
         // if value < self.config.min_withdrawal_amount {
         //     return Err(ContractError::App(
         //         "Withdrawal is smaller than than minimum amount".to_string(),
-        //     )
-        //     .into());
+        //     ));
         // }
         if bitcoin::Amount::from_sat(value) <= script_pubkey.dust_value() {
             return Err(ContractError::App(
                 "Withdrawal is too small to pay its dust limit".to_string(),
-            )
-            .into());
+            ));
         }
 
         let output = bitcoin::TxOut {

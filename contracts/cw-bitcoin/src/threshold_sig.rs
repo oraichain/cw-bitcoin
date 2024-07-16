@@ -269,7 +269,7 @@ impl ThresholdSig {
 
         let sig = ecdsa::Signature::from_compact(&sig.0)?;
 
-        secp.verify_ecdsa(&msg, &sig, &pubkey)?;
+        secp.verify_ecdsa(msg, &sig, &pubkey)?;
 
         Ok(())
     }

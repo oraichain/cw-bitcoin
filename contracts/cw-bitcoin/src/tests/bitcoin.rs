@@ -149,7 +149,7 @@ fn check_change_rates() -> ContractResult<()> {
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.input.push(input);
         btc.checkpoints
-            .set(store, btc.checkpoints.index, &**building_mut)?;
+            .set(store, btc.checkpoints.index, &building_mut)?;
         Ok(())
     };
 
@@ -164,7 +164,7 @@ fn check_change_rates() -> ContractResult<()> {
         let mut building_mut = btc.checkpoints.building(store)?;
         building_mut.fees_collected = 100_000_000;
         btc.checkpoints
-            .set(store, btc.checkpoints.index, &**building_mut)?;
+            .set(store, btc.checkpoints.index, &building_mut)?;
         Ok(())
     };
 
@@ -344,7 +344,7 @@ fn test_take_pending() -> ContractResult<()> {
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.input.push(input);
         btc.checkpoints
-            .set(store, btc.checkpoints.index, &**building_mut)?;
+            .set(store, btc.checkpoints.index, &building_mut)?;
         Ok(())
     };
 

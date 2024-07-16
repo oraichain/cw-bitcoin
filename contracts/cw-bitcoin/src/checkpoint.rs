@@ -204,7 +204,7 @@ impl BitcoinTx {
     pub fn value(&self) -> ContractResult<u64> {
         self.output
             .iter()
-            .fold(Ok(0), |sum: ContractResult<u64>, out| Ok(sum? + out.value))
+            .try_fold(0, |sum: u64, out| Ok(sum + out.value))
     }
 
     /// Calculates the sighash to be signed for the given input index, and
@@ -670,7 +670,7 @@ impl Checkpoint {
         let mut txs = vec![];
 
         let intermediate_tx_batch = &self.batches[BatchType::IntermediateTx];
-        let Some(intermediate_tx) = intermediate_tx_batch.get(0) else {
+        let Some(intermediate_tx) = intermediate_tx_batch.first() else {
             return Ok(txs);
         };
         txs.push(Adapter::new(intermediate_tx.to_bitcoin_tx()?));
@@ -687,7 +687,7 @@ impl Checkpoint {
         let mut fees = 0;
 
         let batch = &self.batches[BatchType::Checkpoint];
-        let tx = batch.get(0).unwrap();
+        let tx = &batch[0];
 
         for input in &tx.input {
             fees += input.amount;
@@ -715,7 +715,7 @@ impl Checkpoint {
         timestamping_commitment: &[u8],
     ) -> ContractResult<u64> {
         let batch = &self.batches[BatchType::Checkpoint];
-        let cp = batch.get(0).unwrap();
+        let cp = &batch[0];
         let mut tx = cp.to_bitcoin_tx()?;
 
         tx.output = self
@@ -934,7 +934,7 @@ impl BuildingCheckpoint {
         };
 
         let intermediate_tx_batch = &self.batches[BatchType::IntermediateTx];
-        let intermediate_tx = intermediate_tx_batch.get(0).unwrap();
+        let intermediate_tx = &intermediate_tx_batch[0];
         let intermediate_tx_id = intermediate_tx.txid()?;
         let intermediate_tx_len = intermediate_tx.output.len() as u64;
 
@@ -1043,18 +1043,16 @@ impl BuildingCheckpoint {
 
         // Create an output for every nBTC account with an associated
         // recovery script.
-        for script in RECOVERY_SCRIPTS
-            .range(store, None, None, Order::Ascending)
-            .into_iter()
-        {
+        for script in RECOVERY_SCRIPTS.range(store, None, None, Order::Ascending) {
             let (address, dest_script) = script?;
-            let balance = nbtc_accounts.balance(address).unwrap();
-            let tx_out = bitcoin::TxOut {
-                value: (balance.amount.u128() / 1_000_000u128) as u64,
-                script_pubkey: dest_script.clone().into_inner(),
-            };
+            if let Some(balance) = nbtc_accounts.balance(address) {
+                let tx_out = bitcoin::TxOut {
+                    value: (balance.amount.u128() / 1_000_000u128) as u64,
+                    script_pubkey: dest_script.clone().into_inner(),
+                };
 
-            outputs.push(Ok(tx_out))
+                outputs.push(Ok(tx_out))
+            }
         }
 
         // Create an output for every pending nBTC transfer in the checkpoint.
@@ -1064,7 +1062,7 @@ impl BuildingCheckpoint {
             .iter()
             .filter_map(|(dest, coin)| {
                 let script_pubkey = match to_output_script(store, dest) {
-                    Err(err) => return Some(Err(err.into())),
+                    Err(err) => return Some(Err(err)),
                     Ok(maybe_script) => maybe_script,
                 }?;
                 Some(Ok::<_, ContractError>(TxOut {
@@ -1238,7 +1236,7 @@ impl BuildingCheckpoint {
         for i in 0..checkpoint_tx.input.len() {
             let input = checkpoint_tx.input.get_mut(i).unwrap();
             let sighash = sc.segwit_signature_hash(
-                i as usize,
+                i,
                 &input.redeem_script,
                 input.amount,
                 EcdsaSighashType::All,
@@ -1386,7 +1384,7 @@ impl CheckpointQueue {
 
         for i in 0..queue_len {
             let checkpoint = CHECKPOINTS.get(store, i)?.unwrap();
-            out.push(((self.index + 1 - (queue_len - i as u32)), checkpoint));
+            out.push(((self.index + 1 - (queue_len - i)), checkpoint));
         }
 
         Ok(out)
@@ -1597,7 +1595,7 @@ impl CheckpointQueue {
                     &config,
                 )?;
             // update checkpoint
-            self.set(store, prev_index, &**building_checkpoint)?;
+            self.set(store, prev_index, &building_checkpoint)?;
 
             *fee_pool -= (fees_paid * parent_config.units_per_sat) as i64;
 
@@ -1666,7 +1664,7 @@ impl CheckpointQueue {
                 checkpoint_tx.output.push(output);
             }
 
-            self.set(store, self.index, &**building)?;
+            self.set(store, self.index, &building)?;
         }
 
         Ok(true)
@@ -1743,7 +1741,7 @@ impl CheckpointQueue {
                 };
 
                 let has_pending_withdrawal = !checkpoint_tx.output.is_empty();
-                let has_pending_transfers = building.pending.iter().next().is_some();
+                let has_pending_transfers = building.pending.first().is_some();
 
                 if !has_pending_deposit && !has_pending_withdrawal && !has_pending_transfers {
                     return Ok(false);
@@ -1861,7 +1859,7 @@ impl CheckpointQueue {
 
         let mut building = self.building(store)?;
         building.deposits_enabled = deposits_enabled;
-        self.set(store, self.index, &**building)?;
+        self.set(store, self.index, &building)?;
 
         Ok(Some(building))
     }

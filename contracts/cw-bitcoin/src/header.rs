@@ -218,12 +218,11 @@ impl HeaderQueue {
         if headers.len() as u64 > MAX_RELAY {
             return Err(ContractError::App(
                 "Exceeded maximum amount of relayed headers".to_string(),
-            )
-            .into());
+            ));
         }
 
         self.add_into_iter(store, headers)
-            .map_err(|err| ContractError::App(err.to_string()).into())
+            .map_err(|err| ContractError::App(err.to_string()))
     }
 
     /// Verify and add an iterator of headers to the header queue.
@@ -578,9 +577,7 @@ impl HeaderQueue {
         config: HeaderConfig,
     ) -> ContractResult<()> {
         HEADERS.clear(store)?;
-
-        let decoded_adapter: Adapter<BlockHeader> = config.trusted_header.into();
-        let wrapped_header = WrappedHeader::new(decoded_adapter, config.trusted_height);
+        let wrapped_header = WrappedHeader::new(config.trusted_header, config.trusted_height);
         let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
 
         self.current_work = work_header.chain_work;

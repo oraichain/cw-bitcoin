@@ -69,7 +69,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         }
         QueryMsg::HeaderHeight {} => to_binary(&query_header_height(deps.storage)?),
         QueryMsg::SidechainBlockHash {} => to_binary(&query_sidechain_block_hash(deps.storage)?),
-        QueryMsg::CheckpointByIndex { index } => to_binary(&query_checkpoint_by_index(deps.storage, index)?),
+        QueryMsg::CheckpointByIndex { index } => {
+            to_binary(&query_checkpoint_by_index(deps.storage, index)?)
+        }
     }
 }
 

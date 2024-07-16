@@ -172,7 +172,7 @@ impl SignatorySet {
                 return Err(ContractError::App("Expected 33 bytes".into()));
             }
 
-            Ok(Pubkey::try_from_slice(bytes)?)
+            Pubkey::try_from_slice(bytes)
         }
 
         fn take_number<'a>(ins: &mut impl Iter<'a>) -> ContractResult<i64> {
@@ -512,7 +512,7 @@ impl SignatoryKeys {
         normalized_xpub.key.parent_fingerprint = Default::default();
         let xpub_key = &normalized_xpub.encode();
         if XPUBS.has(store, xpub_key) {
-            return Err(ContractError::App("Duplicate signatory key".to_string()).into());
+            return Err(ContractError::App("Duplicate signatory key".to_string()));
         }
 
         SIG_KEYS.save(store, &consensus_key, &xpub)?;

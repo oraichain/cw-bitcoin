@@ -402,7 +402,7 @@ pub fn newSignatorySet(
     numerator: u64,
     denominator: u64,
 ) -> ContractResult<SignatorySet> {
-    let script = bitcoin::Script::from_hex(&hex_script)?;
+    let script = bitcoin::Script::from_hex(hex_script)?;
     let (signatory_set, _) = SignatorySet::from_script(&script, (numerator, denominator))?;
     Ok(signatory_set)
 }
