@@ -510,9 +510,9 @@ impl HeaderQueue {
     }
 
     /// The hash of the last header in the header queue.    
-    pub fn hash(&self, store: &dyn Storage) -> ContractResult<Vec<u8>> {
+    pub fn hash(&self, store: &dyn Storage) -> ContractResult<BlockHash> {
         match HEADERS.back(store)? {
-            Some(inner) => Ok(inner.block_hash().to_vec()),
+            Some(inner) => Ok(inner.block_hash()),
             None => Err(ContractError::Header("HeaderQueue is empty".into())),
         }
     }

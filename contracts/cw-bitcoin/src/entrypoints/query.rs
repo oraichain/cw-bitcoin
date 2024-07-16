@@ -1,11 +1,13 @@
 use bitcoin::BlockHash;
-use cosmwasm_std::{ContractResult, Storage};
+use cosmwasm_std::Storage;
 use std::str::FromStr;
 
 use crate::{
     app::Bitcoin,
+    checkpoint::{Checkpoint, CheckpointQueue},
     error::{ContractError, ContractResult},
-    state::{header_height, HEADERS, HEADER_CONFIG},
+    header::HeaderQueue,
+    state::{header_height, HEADER_CONFIG},
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
@@ -38,20 +40,15 @@ pub fn query_withdrawal_fees(
 }
 
 pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<BlockHash> {
-    // let hash = app_client(&self.app_client_addr)
-    //     .query(|app: InnerApp| Ok(app.bitcoin.headers.hash()?))
-    //     .await?;
-    // let hash = BlockHash::from_slice(hash.as_slice())?;
-    // Ok(hash)
     let header_config = HEADER_CONFIG.load(store)?;
-    let btc = Bitcoin::new(header_config);
-    let hash = btc.headers.hash(store)?;
+    let headers = HeaderQueue::new(header_config);
+    let hash = headers.hash(store)?;
+    // BlockHash serialize is same as HexBinary
     Ok(hash)
 }
 
-pub fn query_checkpoint_by_index(store: &dyn Storage, index: u32) -> ContractResult<u64> {
-    let header_config = HEADER_CONFIG.load(store)?;
-    let btc = Bitcoin::new(header_config);
-    let checkpoint = btc.get_checkpoint(store, Some(index))?;
-    Ok(checkpoint.height)
+pub fn query_checkpoint_by_index(store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {
+    let checkpoints = CheckpointQueue::default();
+    let checkpoint = checkpoints.get(store, index)?;
+    Ok(checkpoint)
 }
