@@ -2074,6 +2074,5 @@ pub fn adjust_fee_rate(prev_fee_rate: u64, up: bool, config: &CheckpointConfig) 
     } else {
         (prev_fee_rate * 3 / 4).min(prev_fee_rate - 1)
     }
-    .min(config.max_fee_rate)
-    .max(config.min_fee_rate)
+    .clamp(config.min_fee_rate, config.max_fee_rate)
 }
