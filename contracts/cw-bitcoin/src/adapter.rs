@@ -1,4 +1,5 @@
 use bitcoin::consensus::{Decodable, Encodable};
+
 use cosmwasm_schema::schemars::{gen, schema, JsonSchema};
 use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
 use cosmwasm_std::{Binary, HexBinary};
@@ -62,11 +63,11 @@ impl<T: Encodable> Serialize for Adapter<T> {
     where
         S: ser::Serializer,
     {
-        let mut dest: Vec<u8> = Vec::new();
+        let mut dest = Binary::default();
         self.inner
-            .consensus_encode(&mut dest)
+            .consensus_encode(&mut dest.0)
             .map_err(ser::Error::custom)?;
-        Binary::from(dest).serialize(serializer)
+        dest.serialize(serializer)
     }
 }
 

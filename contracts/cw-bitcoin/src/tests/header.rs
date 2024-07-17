@@ -19,10 +19,10 @@ fn primitive_adapter_encode_decode() {
     //Bitcoin block 42
     let header = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("00000000ad2b48c7032b6d7d4f2e19e54d79b1c159f5599056492f2cd7bb528b")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "00000000ad2b48c7032b6d7d4f2e19e54d79b1c159f5599056492f2cd7bb528b",
+        )
+        .unwrap(),
         merkle_root: "27c4d937dca276fb2b61e579902e8a876fd5b5abc17590410ced02d5a9f8e483"
             .parse()
             .unwrap(),
@@ -54,14 +54,14 @@ fn add_multiple() {
 
     let header_43 = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("00000000314e90489514c787d615cea50003af2023796ccdd085b6bcc1fa28f5")
-                .unwrap(),
-        ),
-        merkle_root: TxMerkleNode::from_hash(
-            Hash::from_hex("2f5c03ce19e9a855ac93087a1b68fe6592bcf4bd7cbb9c1ef264d886a785894e")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "00000000314e90489514c787d615cea50003af2023796ccdd085b6bcc1fa28f5",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "2f5c03ce19e9a855ac93087a1b68fe6592bcf4bd7cbb9c1ef264d886a785894e",
+        )
+        .unwrap(),
         time: stamp.timestamp() as u32,
         bits: 486_604_799,
         nonce: 2_093_702_200,
@@ -71,14 +71,14 @@ fn add_multiple() {
 
     let header_44 = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("00000000ac21f2862aaab177fd3c5c8b395de842f84d88c9cf3420b2d393e550")
-                .unwrap(),
-        ),
-        merkle_root: TxMerkleNode::from_hash(
-            Hash::from_hex("439aee1e1aa6923ad61c1990459f88de1faa3e18b4ee125f99b94b82e1e0af5f")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "00000000ac21f2862aaab177fd3c5c8b395de842f84d88c9cf3420b2d393e550",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "439aee1e1aa6923ad61c1990459f88de1faa3e18b4ee125f99b94b82e1e0af5f",
+        )
+        .unwrap(),
         time: stamp.timestamp() as u32,
         bits: 486_604_799,
         nonce: 429_798_192,
@@ -88,14 +88,14 @@ fn add_multiple() {
 
     let header_45 = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("000000002978eecde8d020f7f057083bc990002fff495121d7dc1c26d00c00f8")
-                .unwrap(),
-        ),
-        merkle_root: TxMerkleNode::from_hash(
-            Hash::from_hex("f69778085f1e78a1ea1cfcfe3b61ffb5c99870f5ae382e41ec43cf165d66a6d9")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "000000002978eecde8d020f7f057083bc990002fff495121d7dc1c26d00c00f8",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "f69778085f1e78a1ea1cfcfe3b61ffb5c99870f5ae382e41ec43cf165d66a6d9",
+        )
+        .unwrap(),
         time: stamp.timestamp() as u32,
         bits: 486_604_799,
         nonce: 2_771_238_433,
@@ -105,14 +105,14 @@ fn add_multiple() {
 
     let header_46 = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("000000009189006e461d2f4037a819d00217412ac01900ddbf09461100b836bb")
-                .unwrap(),
-        ),
-        merkle_root: TxMerkleNode::from_hash(
-            Hash::from_hex("ddd4d06365155ab4caaaee552fb3d8643207bd06efe14f920698a6dd4eb22ffa")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "000000009189006e461d2f4037a819d00217412ac01900ddbf09461100b836bb",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "ddd4d06365155ab4caaaee552fb3d8643207bd06efe14f920698a6dd4eb22ffa",
+        )
+        .unwrap(),
         time: stamp.timestamp() as u32,
         bits: 486_604_799,
         nonce: 1_626_117_377,
@@ -122,14 +122,14 @@ fn add_multiple() {
 
     let header_47 = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("0000000002d5f429a2e3a9d9f82b777469696deb64038803c87833aa8ee9c08e")
-                .unwrap(),
-        ),
-        merkle_root: TxMerkleNode::from_hash(
-            Hash::from_hex("d17b9c9c609309049dfb9005edd7011f02d7875ca7dab6effddf4648bb70eff6")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "0000000002d5f429a2e3a9d9f82b777469696deb64038803c87833aa8ee9c08e",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "d17b9c9c609309049dfb9005edd7011f02d7875ca7dab6effddf4648bb70eff6",
+        )
+        .unwrap(),
         time: stamp.timestamp() as u32,
         bits: 486_604_799,
         nonce: 2_957_174_816,
@@ -139,14 +139,14 @@ fn add_multiple() {
 
     let header_48 = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("000000001a5c4531f86aa874e711e1882038336e2610f70ce750cdd690c57a81")
-                .unwrap(),
-        ),
-        merkle_root: TxMerkleNode::from_hash(
-            Hash::from_hex("32edede0b7d0c37340a665de057f418df634452f6bb80dcb8a5ff0aeddf1158a")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "000000001a5c4531f86aa874e711e1882038336e2610f70ce750cdd690c57a81",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "32edede0b7d0c37340a665de057f418df634452f6bb80dcb8a5ff0aeddf1158a",
+        )
+        .unwrap(),
         time: stamp.timestamp() as u32,
         bits: 486_604_799,
         nonce: 3_759_171_867,
@@ -156,14 +156,14 @@ fn add_multiple() {
 
     let header_49 = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("0000000088960278f4060b8747027b2aac0eb443aedbb1b75d1a72cf71826e89")
-                .unwrap(),
-        ),
-        merkle_root: TxMerkleNode::from_hash(
-            Hash::from_hex("194c9715279d8626bc66f2b6552f2ae67b3df3a00b88553245b12bffffad5b59")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "0000000088960278f4060b8747027b2aac0eb443aedbb1b75d1a72cf71826e89",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "194c9715279d8626bc66f2b6552f2ae67b3df3a00b88553245b12bffffad5b59",
+        )
+        .unwrap(),
         time: stamp.timestamp() as u32,
         bits: 486_604_799,
         nonce: 3_014_810_412,
@@ -290,14 +290,14 @@ fn add_wrong_bits_non_retarget() {
 
     let header = BlockHeader {
         version: 0x1,
-        prev_blockhash: BlockHash::from_hash(
-            Hash::from_hex("00000000314e90489514c787d615cea50003af2023796ccdd085b6bcc1fa28f5")
-                .unwrap(),
-        ),
-        merkle_root: TxMerkleNode::from_hash(
-            Hash::from_hex("2f5c03ce19e9a855ac93087a1b68fe6592bcf4bd7cbb9c1ef264d886a785894e")
-                .unwrap(),
-        ),
+        prev_blockhash: BlockHash::from_hex(
+            "00000000314e90489514c787d615cea50003af2023796ccdd085b6bcc1fa28f5",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "2f5c03ce19e9a855ac93087a1b68fe6592bcf4bd7cbb9c1ef264d886a785894e",
+        )
+        .unwrap(),
         time: stamp.timestamp() as u32,
         bits: 486_604_420,
         nonce: 2_093_702_200,
