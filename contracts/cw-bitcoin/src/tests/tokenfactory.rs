@@ -13,12 +13,7 @@ fn mint_token() {
 
     let mut app = MockApp::new(&[]);
 
-    let contract = app
-        .create_tokenfactory(
-            Addr::unchecked("alice"),
-            &tokenfactory::msg::InstantiateMsg {},
-        )
-        .unwrap();
+    let contract = app.create_tokenfactory(Addr::unchecked("alice")).unwrap();
 
     // no tokens
     let start = app.as_querier().query_all_balances(rcpt.as_str()).unwrap();

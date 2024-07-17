@@ -502,3 +502,9 @@ pub struct ChangeRates {
     pub withdrawal: u16,
     pub sigset_change: u16,
 }
+
+#[cw_serde]
+pub struct Config {
+    pub token_factory_addr: Addr,
+    pub owner: Addr,
+}

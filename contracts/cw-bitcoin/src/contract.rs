@@ -4,7 +4,9 @@ use cosmwasm_std::entry_point;
 use crate::{
     entrypoints::*,
     error::ContractError,
+    interface::Config,
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
+    state::CONFIG,
 };
 
 use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
@@ -18,10 +20,18 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
-    _msg: InstantiateMsg,
+    info: MessageInfo,
+    msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+    CONFIG.save(
+        deps.storage,
+        &Config {
+            owner: info.sender,
+            token_factory_addr: msg.token_factory_addr,
+        },
+    )?;
 
     Ok(Response::default())
 }

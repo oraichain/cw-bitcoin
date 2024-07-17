@@ -1,5 +1,6 @@
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::Addr;
 
 use crate::{
     adapter::Adapter,
@@ -8,7 +9,9 @@ use crate::{
 };
 
 #[cw_serde]
-pub struct InstantiateMsg {}
+pub struct InstantiateMsg {
+    pub token_factory_addr: Addr,
+}
 
 #[cw_serde]
 pub enum ExecuteMsg {

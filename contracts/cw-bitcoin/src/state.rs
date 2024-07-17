@@ -8,9 +8,13 @@ use crate::{
     checkpoint::Checkpoint,
     error::ContractResult,
     header::WorkHeader,
-    interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Validator, Xpub},
+    interface::{
+        BitcoinConfig, CheckpointConfig, Config, DequeExtension, HeaderConfig, Validator, Xpub,
+    },
     recovery::RecoveryTx,
 };
+
+pub const CONFIG: Item<Config> = Item::new("config");
 
 /// TODO: store in smart contract
 pub const CHECKPOINT_CONFIG: Item<CheckpointConfig> = Item::new("checkpoint_config");

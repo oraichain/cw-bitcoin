@@ -1,13 +1,14 @@
 use crate::{
     adapter::Adapter,
     app::Bitcoin,
+    constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::WorkHeader,
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
-    state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, HEADERS, HEADER_CONFIG},
+    state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADERS, HEADER_CONFIG},
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use cosmwasm_std::{Env, Response, Storage};
+use cosmwasm_std::{wasm_execute, Env, Response, Storage};
 
 /// TODO: check logic
 pub fn update_checkpoint_config(
@@ -56,8 +57,9 @@ pub fn relay_deposit(
 ) -> ContractResult<Response> {
     let header_config = HEADER_CONFIG.load(store)?;
     let mut btc = Bitcoin::new(header_config);
-    btc.relay_deposit(
-        env,
+    let mut response = Response::new().add_attribute("action", "relay_deposit");
+    if let Some(mint_amount) = btc.relay_deposit(
+        env.clone(),
         store,
         btc_tx,
         btc_height,
@@ -65,7 +67,18 @@ pub fn relay_deposit(
         btc_vout,
         sigset_index,
         dest,
-    )?;
+    )? {
+        let config = CONFIG.load(store)?;
+        response = response.add_message(wasm_execute(
+            config.token_factory_addr,
+            &tokenfactory::msg::ExecuteMsg::MintTokens {
+                denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
+                amount: mint_amount,
+                mint_to_address: env.contract.address.to_string(),
+            },
+            vec![],
+        )?);
+    }
 
-    Ok(Response::new().add_attribute("action", "relay_deposit"))
+    Ok(response)
 }

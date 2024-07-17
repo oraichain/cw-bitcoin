@@ -12,8 +12,12 @@ use cosmwasm_std::Addr;
 #[test]
 fn test_relay_height_validity() {
     let mut app = MockApp::new(&[]);
+    let token_factory_addr = app.create_tokenfactory(Addr::unchecked("alice")).unwrap();
     let bridge_addr = app
-        .create_bridge(Addr::unchecked("alice"), &msg::InstantiateMsg {})
+        .create_bridge(
+            Addr::unchecked("alice"),
+            &msg::InstantiateMsg { token_factory_addr },
+        )
         .unwrap();
 
     let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json")).unwrap();

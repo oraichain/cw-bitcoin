@@ -213,7 +213,7 @@ impl Bitcoin {
         btc_vout: u32,
         sigset_index: u32,
         dest: Dest,
-    ) -> ContractResult<()> {
+    ) -> ContractResult<Option<Uint128>> {
         let now = env.block.time.seconds();
 
         let btc_header = self
@@ -304,7 +304,7 @@ impl Bitcoin {
                 },
             )?;
 
-            return Ok(());
+            return Ok(None);
         }
 
         let prevout = bitcoin::OutPoint {
@@ -320,10 +320,10 @@ impl Bitcoin {
         )?;
         let input_size = input.est_vsize();
         // mint token_factory here
-        // let mut nbtc = Nbtc::mint(output.value * self.config.units_per_sat);
+        let mint_amount = (output.value * self.config.units_per_sat).into();
         let mut nbtc = Coin {
             denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
-            amount: (output.value * self.config.units_per_sat).into(),
+            amount: mint_amount,
         };
         let fee_amount = self.calc_minimum_deposit_fees(input_size, checkpoint.fee_rate);
         let deposit_fees = calc_deposit_fee(nbtc.amount);
@@ -355,7 +355,7 @@ impl Bitcoin {
         self.checkpoints
             .set(store, self.checkpoints.index, &building_mut)?;
 
-        Ok(())
+        Ok(Some(mint_amount))
     }
 
     /// Records proof that a checkpoint produced by the network has been

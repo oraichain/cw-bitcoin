@@ -402,12 +402,14 @@ impl MockApp {
     }
 
     /// external method
-    pub fn create_tokenfactory(
-        &mut self,
-        sender: Addr,
-        init_msg: &tokenfactory::msg::InstantiateMsg,
-    ) -> Result<Addr, String> {
-        let addr = self.instantiate(self.tokenfactory_id, sender, init_msg, &[], "tokenfactory")?;
+    pub fn create_tokenfactory(&mut self, sender: Addr) -> Result<Addr, String> {
+        let addr = self.instantiate(
+            self.tokenfactory_id,
+            sender,
+            &tokenfactory::msg::InstantiateMsg {},
+            &[],
+            "tokenfactory",
+        )?;
         Ok(addr)
     }
 }
