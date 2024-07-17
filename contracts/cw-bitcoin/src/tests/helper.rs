@@ -1,14 +1,20 @@
 use cosmwasm_schema::serde::de::DeserializeOwned;
 use cosmwasm_schema::serde::Serialize;
+use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{testing::mock_env, Env, Timestamp};
 use cosmwasm_std::{
-    Addr, AllBalanceResponse, BalanceResponse, BankQuery, Coin, Empty, QuerierWrapper,
-    QueryRequest, StdResult, Uint128,
+    Addr, AllBalanceResponse, BalanceResponse, BankQuery, Coin, Empty, IbcMsg, IbcQuery,
+    QuerierWrapper, QueryRequest, StdResult, Uint128,
 };
 use cw20::TokenInfoResponse;
 use std::collections::HashMap;
+use token_bindings::{TokenFactoryMsg, TokenFactoryQuery};
+use token_bindings_test::TokenFactoryModule;
 
-use cw_multi_test::{next_block, App, AppResponse, Contract, Executor};
+use cw_multi_test::{
+    next_block, App, AppResponse, BankKeeper, BasicAppBuilder, Contract, ContractWrapper,
+    DistributionKeeper, Executor, FailingModule, StakeKeeper, WasmKeeper,
+};
 
 use crate::checkpoint::{BitcoinTx, Output};
 use crate::msg::{self};
@@ -54,57 +60,77 @@ pub fn set_time(seconds: u64) -> Env {
     env
 }
 
-#[macro_export]
-macro_rules! create_entry_points_testing {
-    ($contract:ident) => {
-        cw_multi_test::ContractWrapper::new(
-            $contract::contract::execute,
-            $contract::contract::instantiate,
-            $contract::contract::query,
-        )
-    };
-}
+pub type AppWrapped = App<
+    BankKeeper,
+    MockApi,
+    MockStorage,
+    TokenFactoryModule,
+    WasmKeeper<TokenFactoryMsg, TokenFactoryQuery>,
+    StakeKeeper,
+    DistributionKeeper,
+    FailingModule<IbcMsg, IbcQuery, Empty>,
+>;
+pub type Code = Box<dyn Contract<TokenFactoryMsg, TokenFactoryQuery>>;
 
 pub struct MockApp {
-    app: App,
+    app: AppWrapped,
     token_map: HashMap<String, Addr>, // map token name to address
     token_id: u64,
     bridge_id: u64,
+    tokenfactory_id: u64,
 }
 
 #[allow(dead_code)]
 impl MockApp {
     pub fn new(init_balances: &[(&str, &[Coin])]) -> Self {
-        let mut app = App::new(|router, _, storage| {
-            for (owner, init_funds) in init_balances.iter() {
-                router
-                    .bank
-                    .init_balance(
-                        storage,
-                        &Addr::unchecked(owner.to_owned()),
-                        init_funds.to_vec(),
-                    )
-                    .unwrap();
-            }
-        });
+        let mut app = BasicAppBuilder::<TokenFactoryMsg, TokenFactoryQuery>::new_custom()
+            .with_custom(TokenFactoryModule {})
+            .build(|router, _, storage| {
+                for (owner, init_funds) in init_balances.iter() {
+                    router
+                        .bank
+                        .init_balance(
+                            storage,
+                            &Addr::unchecked(owner.to_owned()),
+                            init_funds.to_vec(),
+                        )
+                        .unwrap();
+                }
+            });
 
         // default token is cw20_base
-        let token_id = app.store_code(Box::new(create_entry_points_testing!(cw20_base)));
-        let bridge_id = app.store_code(Box::new(create_entry_points_testing!(crate)));
+        let token_id = app.store_code(Box::new(ContractWrapper::new_with_empty(
+            cw20_base::contract::execute,
+            cw20_base::contract::instantiate,
+            cw20_base::contract::query,
+        )));
+
+        let bridge_id = app.store_code(Box::new(ContractWrapper::new_with_empty(
+            crate::contract::execute,
+            crate::contract::instantiate,
+            crate::contract::query,
+        )));
+
+        let tokenfactory_id = app.store_code(Box::new(ContractWrapper::new(
+            tokenfactory::contract::execute,
+            tokenfactory::contract::instantiate,
+            tokenfactory::contract::query,
+        )));
 
         Self {
             app,
             token_id,
             bridge_id,
+            tokenfactory_id,
             token_map: HashMap::new(),
         }
     }
 
-    pub fn set_token_contract(&mut self, code: Box<dyn Contract<Empty>>) {
+    pub fn set_token_contract(&mut self, code: Code) {
         self.token_id = self.upload(code);
     }
 
-    pub fn upload(&mut self, code: Box<dyn Contract<Empty>>) -> u64 {
+    pub fn upload(&mut self, code: Code) -> u64 {
         let code_id = self.app.store_code(code);
         self.app.update_block(next_block);
         code_id
@@ -126,17 +152,25 @@ impl MockApp {
         Ok(contract_addr)
     }
 
-    pub fn execute<T: Serialize + std::fmt::Debug>(
+    pub fn execute<T: Serialize + std::fmt::Debug + Clone + 'static>(
         &mut self,
         sender: Addr,
         contract_addr: Addr,
         msg: &T,
         send_funds: &[Coin],
     ) -> Result<AppResponse, String> {
-        let response = self
-            .app
-            .execute_contract(sender, contract_addr, msg, send_funds)
-            .map_err(|err| err.to_string())?;
+        let response = if std::mem::size_of::<T>() == std::mem::size_of::<TokenFactoryMsg>() {
+            let value = msg.clone();
+            let dest = unsafe { std::ptr::read(&value as *const T as *const TokenFactoryMsg) };
+            std::mem::forget(value);
+            self.app
+                .execute(contract_addr, dest.into())
+                .map_err(|err| err.to_string())?
+        } else {
+            self.app
+                .execute_contract(sender, contract_addr, msg, send_funds)
+                .map_err(|err| err.to_string())?
+        };
 
         self.app.update_block(next_block);
 
@@ -214,7 +248,7 @@ impl MockApp {
         Ok(balances)
     }
 
-    pub fn as_querier(&self) -> QuerierWrapper {
+    pub fn as_querier(&self) -> QuerierWrapper<'_, TokenFactoryQuery> {
         self.app.wrap()
     }
 
@@ -364,6 +398,16 @@ impl MockApp {
         init_msg: &msg::InstantiateMsg,
     ) -> Result<Addr, String> {
         let addr = self.instantiate(self.bridge_id, sender, init_msg, &[], "cw-bitcoin-bridge")?;
+        Ok(addr)
+    }
+
+    /// external method
+    pub fn create_tokenfactory(
+        &mut self,
+        sender: Addr,
+        init_msg: &tokenfactory::msg::InstantiateMsg,
+    ) -> Result<Addr, String> {
+        let addr = self.instantiate(self.tokenfactory_id, sender, init_msg, &[], "tokenfactory")?;
         Ok(addr)
     }
 }
