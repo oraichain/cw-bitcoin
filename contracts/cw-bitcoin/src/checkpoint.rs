@@ -839,12 +839,12 @@ pub struct CheckpointQueue {
 /// A wrapper around  an immutable reference to a `Checkpoint` which adds type
 /// information guaranteeing that the checkpoint is in the `Complete` state.
 #[derive(Deref)]
-pub struct CompletedCheckpoint(Box<Checkpoint>);
+pub struct CompletedCheckpoint(Checkpoint);
 
 /// A wrapper around a mutable reference to a `Checkpoint` which adds type
 /// information guaranteeing that the checkpoint is in the `Complete` state.
 #[derive(Deref, DerefMut)]
-pub struct SigningCheckpoint(Box<Checkpoint>);
+pub struct SigningCheckpoint(Checkpoint);
 
 impl SigningCheckpoint {
     /// Adds a batch of signatures to the checkpoint for the signatory with the
@@ -867,7 +867,7 @@ impl SigningCheckpoint {
 /// A wrapper around a mutable reference to a `Checkpoint` which adds type
 /// information guaranteeing that the checkpoint is in the `Building` state.
 #[derive(Deref, DerefMut)]
-pub struct BuildingCheckpoint(Box<Checkpoint>);
+pub struct BuildingCheckpoint(Checkpoint);
 
 /// The data returned by the `advance()` method of `BuildingCheckpointMut`.
 type BuildingAdvanceRes = (
@@ -1418,7 +1418,7 @@ impl CheckpointQueue {
 
         for i in start..end {
             let checkpoint = self.get(store, i)?;
-            out.push(CompletedCheckpoint(Box::new(checkpoint)));
+            out.push(CompletedCheckpoint(checkpoint));
         }
 
         Ok(out)
@@ -1506,7 +1506,7 @@ impl CheckpointQueue {
             return Ok(None);
         }
 
-        Ok(Some(SigningCheckpoint(Box::new(second))))
+        Ok(Some(SigningCheckpoint(second)))
     }
 
     /// A reference to the checkpoint in the `Building` state.
@@ -1517,7 +1517,7 @@ impl CheckpointQueue {
     /// state.
     pub fn building(&self, store: &dyn Storage) -> ContractResult<BuildingCheckpoint> {
         let last = self.get(store, self.index)?;
-        Ok(BuildingCheckpoint(Box::new(last)))
+        Ok(BuildingCheckpoint(last))
     }
 
     /// Advances the checkpoint queue state machine.
@@ -1587,7 +1587,7 @@ impl CheckpointQueue {
             let prev = self.get(store, prev_index)?;
             let sigset = prev.sigset.clone();
             let prev_fee_rate = prev.fee_rate;
-            let mut building_checkpoint = BuildingCheckpoint(Box::new(prev));
+            let mut building_checkpoint = BuildingCheckpoint(prev);
             let (reserve_outpoint, reserve_value, fees_paid, excess_inputs, excess_outputs) =
                 building_checkpoint.advance(
                     env,
