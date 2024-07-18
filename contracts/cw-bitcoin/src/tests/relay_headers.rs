@@ -131,3 +131,148 @@ fn test_relay_headers() {
         )
         .unwrap();
 }
+
+#[test]
+#[serial]
+fn test_relay_headers_2() {
+    let mut app = MockApp::new(&[]);
+    let token_factory_addr = app
+        .create_tokenfactory(Addr::unchecked("obtc_minter"))
+        .unwrap();
+    let bridge_addr = app
+        .create_bridge(
+            Addr::unchecked("perfogic"),
+            &msg::InstantiateMsg { token_factory_addr },
+        )
+        .unwrap();
+
+    // Init block 852711
+    let trusted_header = BlockHeader {
+        version: 612098048,
+        prev_blockhash: BlockHash::from_hex(
+            "000000000000000000000e197885b8fcb02eaed6a35e54fbe743df527e090956",
+        )
+        .unwrap(),
+        merkle_root: "f99baa1ecd7a806510c50c103e7a53480e360626327c6f517f5f4963c44bd971"
+            .parse()
+            .unwrap(),
+        time: 1721285108,
+        bits: 386108013,
+        nonce: 467428825,
+    };
+
+    let header_config = HeaderConfig {
+        max_length: 2000,
+        max_time_increase: 8 * 60 * 60,
+        trusted_height: 852711,
+        retarget_interval: 2016,
+        target_spacing: 10 * 60,
+        target_timespan: 2016 * (10 * 60),
+        max_target: 0x1d00ffff,
+        retargeting: true,
+        min_difficulty_blocks: false,
+        trusted_header: Adapter::from(trusted_header),
+    };
+
+    let _res = app
+        .execute(
+            Addr::unchecked("alice"),
+            bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateHeaderConfig {
+                config: header_config,
+            },
+            &[],
+        )
+        .unwrap();
+
+    // set up headers
+    let header_852712 = BlockHeader {
+        version: 678903808,
+        prev_blockhash: BlockHash::from_hex(
+            "00000000000000000001459fbe0477dceedc0f72b7baae70e124efac1b410b26",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "bc359a26203a96855754722cecbdd4e6a58cbe453e81017bbddcc0c117748ed8",
+        )
+        .unwrap(),
+        time: 1721287419,
+        bits: 386108013,
+        nonce: 879772167,
+    };
+    // let header_852713 = BlockHeader {
+    //     version: 0x1,
+    //     prev_blockhash: BlockHash::from_hex(
+    //         "00000000000000000001672387abddd1b6bdb71f8abbef087b1b44b9c731313f",
+    //     )
+    //     .unwrap(),
+    //     merkle_root: TxMerkleNode::from_hex(
+    //         "a553e0fcdc3b1d19df13d9ea8a8635cbcb9f32969ffe4676380b13e05ecb75e2",
+    //     )
+    //     .unwrap(),
+    //     time: 1721288473,
+    //     bits: 386108013,
+    //     nonce: 2866698366,
+    // };
+    // let header_852714 = BlockHeader {
+    //     version: 0x1,
+    //     prev_blockhash: BlockHash::from_hex(
+    //         "000000000000000000034adba1b5ba7f6fe047c5d4324867b5acc4abdf138c2f",
+    //     )
+    //     .unwrap(),
+    //     merkle_root: TxMerkleNode::from_hex(
+    //         "1b17ada217f478cdc58b2da0144e0ae21e85259324ef257840bf322705a68289",
+    //     )
+    //     .unwrap(),
+    //     time: 1721288988,
+    //     bits: 386108013,
+    //     nonce: 1316334967,
+    // };
+    // let header_852715 = BlockHeader {
+    //     version: 0x1,
+    //     prev_blockhash: BlockHash::from_hex(
+    //         "00000000000000000002ce043b6be0ef1ff73b5367984304be51426a34b67513",
+    //     )
+    //     .unwrap(),
+    //     merkle_root: TxMerkleNode::from_hex(
+    //         "7dee6993c2b4b994c9f6e159dbceec6b4b8cae9e512d4de62f2616ed56089be1",
+    //     )
+    //     .unwrap(),
+    //     time: 1721290322,
+    //     bits: 386108013,
+    //     nonce: 1561485854,
+    // };
+    // let header_852716 = BlockHeader {
+    //     version: 0x1,
+    //     prev_blockhash: BlockHash::from_hex(
+    //         "0000000000000000000047da97a6099e8d7fef9e46e70f6f78ced349cbf18535",
+    //     )
+    //     .unwrap(),
+    //     merkle_root: TxMerkleNode::from_hex(
+    //         "933547277d9fb987b422c1b33a8ffd45d4a1b1d6336b1e385fa5427e3148d861",
+    //     )
+    //     .unwrap(),
+    //     time: 1721291358,
+    //     bits: 386108013,
+    //     nonce: 1266111310,
+    // };
+
+    let header_list = vec![
+        WrappedHeader::new(Adapter::new(header_852712), 852712),
+        // WrappedHeader::new(Adapter::new(header_852713), 852713),
+        // WrappedHeader::new(Adapter::new(header_852714), 852714),
+        // WrappedHeader::new(Adapter::new(header_852715), 852715),
+        // WrappedHeader::new(Adapter::new(header_852716), 852716),
+    ];
+
+    let _res = app
+        .execute(
+            Addr::unchecked("alice"),
+            bridge_addr.clone(),
+            &msg::ExecuteMsg::RelayHeaders {
+                headers: header_list,
+            },
+            &[],
+        )
+        .unwrap();
+}
