@@ -21,7 +21,6 @@ use bitcoin::{
 };
 use bitcoin_script::bitcoin_script as script;
 use derive_more::Deref;
-use ed::Encode;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;

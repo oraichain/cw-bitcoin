@@ -6,8 +6,8 @@ use std::env::VarError;
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
-    #[error(transparent)]
-    Ed(#[from] ed::Error),
+    // #[error(transparent)]
+    // Ed(#[from] ed::Error),
     #[error("Account Error: {0}")]
     Account(String),
     #[error("Coins Error: {0}")]

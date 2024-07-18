@@ -13,7 +13,7 @@ use bitcoin::TxMerkleNode;
 use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Storage;
-use ed::Terminated;
+// use ed::Terminated;
 
 /// A wrapper around a bitcoin::BlockHeader that implements the core orga
 /// traits, and includes the block's height.
@@ -126,7 +126,7 @@ impl FromIterator<WrappedHeader> for HeaderList {
     }
 }
 
-impl Terminated for HeaderList {}
+// impl Terminated for HeaderList {}
 
 /// A `WrappedHeader`, along with a total estimated amount of work (measured in
 /// hashes) done in the header and previous headers.

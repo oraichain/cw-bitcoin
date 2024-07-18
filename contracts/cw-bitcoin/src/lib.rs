@@ -1,4 +1,4 @@
-#![feature(trait_alias)]
+// #![feature(trait_alias)]
 
 mod adapter;
 mod app;
