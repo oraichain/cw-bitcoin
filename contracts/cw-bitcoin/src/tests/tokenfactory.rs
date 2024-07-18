@@ -1,7 +1,7 @@
 use cosmwasm_std::{Addr, Coin, Uint128};
 use token_bindings::{
-    FullDenomResponse, Metadata, TokenFactoryMsg, TokenFactoryMsgOptions, TokenFactoryQuery,
-    TokenFactoryQueryEnum,
+    DenomsByCreatorResponse, FullDenomResponse, Metadata, TokenFactoryMsg, TokenFactoryMsgOptions,
+    TokenFactoryQuery, TokenFactoryQueryEnum,
 };
 
 use crate::tests::helper::MockApp;
@@ -61,7 +61,7 @@ fn mint_token() {
         .unwrap();
 
     // now we can mint
-    app.execute(Addr::unchecked("alice"), contract, &msg, &[])
+    app.execute(Addr::unchecked("alice"), contract.clone(), &msg, &[])
         .unwrap();
 
     // we got tokens!
@@ -80,4 +80,16 @@ fn mint_token() {
         .query_balance(rcpt.as_str(), subdenom)
         .unwrap();
     assert_eq!(empty.amount, Uint128::zero());
+
+    let DenomsByCreatorResponse { denoms } = app
+        .as_querier()
+        .query(
+            &TokenFactoryQuery::Token(TokenFactoryQueryEnum::DenomsByCreator {
+                creator: contract.to_string(),
+            })
+            .into(),
+        )
+        .unwrap();
+
+    println!("{:?} {}", denoms, contract);
 }

@@ -372,7 +372,7 @@ dependencies = [
 [[package]]
 name = "cosmwasm-testing-util"
 version = "0.1.0"
-source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=aaa09cf#aaa09cfe66da9e32dbc0627be575ff20e34a8e3a"
+source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=0c9c4d8#0c9c4d82719ab8e0b51192858c7744a77c5cf0b1"
 dependencies = [
  "bech32",
  "cosmwasm-crypto",
@@ -2232,7 +2232,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "token-bindings"
 version = "0.11.0"
-source = "git+https://github.com/oraichain/token-bindings.git?rev=e85d734#e85d7348b07c3d0403c60435c0a7d291af81f987"
+source = "git+https://github.com/oraichain/token-bindings.git?rev=d379675#d3796751981e64da4b6917090c500a45bf6c072f"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -2243,7 +2243,7 @@ dependencies = [
 [[package]]
 name = "token-bindings-test"
 version = "0.11.0"
-source = "git+https://github.com/oraichain/token-bindings.git?rev=e85d734#e85d7348b07c3d0403c60435c0a7d291af81f987"
+source = "git+https://github.com/oraichain/token-bindings.git?rev=d379675#d3796751981e64da4b6917090c500a45bf6c072f"
 dependencies = [
  "anyhow",
  "cosmwasm-std",
@@ -2259,7 +2259,7 @@ dependencies = [
 [[package]]
 name = "tokenfactory"
 version = "0.11.0"
-source = "git+https://github.com/oraichain/token-bindings.git?rev=e85d734#e85d7348b07c3d0403c60435c0a7d291af81f987"
+source = "git+https://github.com/oraichain/token-bindings.git?rev=d379675#d3796751981e64da4b6917090c500a45bf6c072f"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
