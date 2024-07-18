@@ -5,7 +5,7 @@
 **/*.rs.bk
 
 # Build results
-target/
+target/*
 build/
 
 # IDEs
