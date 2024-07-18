@@ -373,6 +373,7 @@ dependencies = [
 [[package]]
 name = "cosmwasm-testing-util"
 version = "0.1.0"
+source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=aaa09cf#aaa09cfe66da9e32dbc0627be575ff20e34a8e3a"
 dependencies = [
  "bech32",
  "cosmwasm-crypto",
