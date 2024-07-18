@@ -110,10 +110,18 @@ fn check_change_rates() -> ContractResult<()> {
     let consensus_key1 = [0; 32];
     let consensus_key2 = [1; 32];
 
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key1, &100)?;
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key2, &10)?;
-
     let addr = ["validator1", "validator2"];
+
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key1,
+        &(100, addr[0].to_string()),
+    )?;
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key2,
+        &(10, addr[1].to_string()),
+    )?;
 
     SIGNERS.save(deps.as_mut().storage, addr[0], &consensus_key1)?;
     SIGNERS.save(deps.as_mut().storage, addr[1], &consensus_key2)?;
@@ -231,7 +239,11 @@ fn check_change_rates() -> ContractResult<()> {
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 3);
 
     // Change the sigset
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key2, &100)?;
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key2,
+        &(100, addr[1].to_string()),
+    )?;
 
     let env = set_time(3000);
     push_deposit(deps.as_mut().storage)?;
@@ -305,10 +317,18 @@ fn test_take_pending() -> ContractResult<()> {
     let consensus_key1 = [0; 32];
     let consensus_key2 = [1; 32];
 
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key1, &100)?;
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key2, &10)?;
-
     let addr = ["validator1", "validator2"];
+
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key1,
+        &(100, addr[0].to_string()),
+    )?;
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key2,
+        &(10, addr[1].to_string()),
+    )?;
 
     SIGNERS.save(deps.as_mut().storage, addr[0], &consensus_key1)?;
     SIGNERS.save(deps.as_mut().storage, addr[1], &consensus_key2)?;

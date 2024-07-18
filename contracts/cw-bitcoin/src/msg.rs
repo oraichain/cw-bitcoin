@@ -1,6 +1,6 @@
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, Binary};
 
 use crate::{
     adapter::Adapter,
@@ -35,6 +35,11 @@ pub enum ExecuteMsg {
         sigset_index: u32,
         dest: Dest,
     },
+}
+
+#[cw_serde]
+pub enum SudoMsg {
+    ClockBeginBlock { hash: Binary },
 }
 
 #[cw_serde]

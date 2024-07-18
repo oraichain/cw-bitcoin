@@ -27,7 +27,8 @@ pub const BITCOIN_CONFIG: Item<BitcoinConfig> = Item::new("bitcoin_config");
 /// Mapping validator Address => bitcoin::Script
 pub const RECOVERY_SCRIPTS: Map<&str, Adapter<bitcoin::Script>> = Map::new("recovery_scripts");
 
-pub const VALIDATORS: Map<&ConsensusKey, u64> = Map::new("validators");
+/// Mapping validator ConsensusKey => (power, Address)
+pub const VALIDATORS: Map<&ConsensusKey, (u64, String)> = Map::new("validators");
 
 /// Mapping validator Address => ConsensusKey
 pub const SIGNERS: Map<&str, ConsensusKey> = Map::new("signers");
@@ -74,11 +75,8 @@ pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
     VALIDATORS
         .range(store, None, None, Order::Ascending)
         .map(|item| {
-            let (k, v) = item?;
-            Ok(Validator {
-                power: v,
-                pubkey: k,
-            })
+            let (k, (power, _)) = item?;
+            Ok(Validator { power, pubkey: k })
         })
         .collect()
 }

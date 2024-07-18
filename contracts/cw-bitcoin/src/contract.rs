@@ -2,11 +2,12 @@
 use cosmwasm_std::entry_point;
 
 use crate::{
+    app::Bitcoin,
     entrypoints::*,
     error::ContractError,
     interface::Config,
-    msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
-    state::CONFIG,
+    msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
+    state::{CONFIG, HEADER_CONFIG, VALIDATORS},
 };
 
 use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
@@ -66,6 +67,40 @@ pub fn execute(
         ExecuteMsg::UpdateBitcoinConfig { config } => update_bitcoin_config(deps.storage, config),
         ExecuteMsg::UpdateCheckpointConfig { config } => {
             update_checkpoint_config(deps.storage, config)
+        }
+    }
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
+    match msg {
+        SudoMsg::ClockBeginBlock { hash } => {
+            let header_config = HEADER_CONFIG.load(deps.storage)?;
+            let mut btc = Bitcoin::new(header_config);
+            let external_outputs: Vec<bitcoin::TxOut> =
+                if btc.should_push_checkpoint(env.clone(), deps.storage)? {
+                    // TODO: build output
+                    vec![]
+                    // self.cosmos
+                    //     .build_outputs(&self.ibc, btc.checkpoints.index)?
+                } else {
+                    vec![]
+                };
+
+            let offline_signers = btc.begin_block_step(
+                env,
+                deps.storage,
+                external_outputs.into_iter().map(Ok),
+                hash.to_vec(),
+            )?;
+
+            for cons_key in &offline_signers {
+                let (_, address) = VALIDATORS.load(deps.storage, cons_key)?;
+                // punish_downtime(address)?;
+                println!("need punish downtime for {}", address);
+            }
+
+            Ok(Response::new())
         }
     }
 }
