@@ -105,7 +105,7 @@ impl WrappedHeader {
 
 /// A list of WrappedHeaders.
 // TODO: remove this in favor of e.g. `LengthVec<u8, WrappedHeader>`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HeaderList(Vec<WrappedHeader>);
 
 impl From<Vec<WrappedHeader>> for HeaderList {
@@ -216,8 +216,6 @@ impl HeaderQueue {
     /// timestamps, etc.), an error will be returned and the header queue will
     /// not be modified.    
     pub fn add(&mut self, store: &mut dyn Storage, headers: HeaderList) -> ContractResult<()> {
-        // exempt_from_fee()?;
-
         let headers: Vec<_> = headers.into();
 
         if headers.len() as u64 > MAX_HEADERS_RELAY_ONE_TIME {

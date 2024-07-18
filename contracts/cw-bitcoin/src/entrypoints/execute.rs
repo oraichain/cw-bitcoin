@@ -3,7 +3,7 @@ use crate::{
     app::Bitcoin,
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
-    header::WorkHeader,
+    header::{HeaderList, HeaderQueue, WorkHeader, WrappedHeader},
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
     state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADERS, HEADER_CONFIG},
 };
@@ -29,20 +29,25 @@ pub fn update_bitcoin_config(
 }
 
 /// TODO: check logic
+/// ONLY USE ONE
 pub fn update_header_config(
     store: &mut dyn Storage,
     config: HeaderConfig,
 ) -> ContractResult<Response> {
-    HEADER_CONFIG.save(store, &config)?;
+    let header_config = HEADER_CONFIG.load(store)?;
+    let mut header_queue = HeaderQueue::new(header_config);
+    let _ = header_queue.configure(store, config)?;
     Ok(Response::new().add_attribute("action", "update_header_config"))
 }
 
-/// TODO: check logic
-pub fn add_work_header(store: &mut dyn Storage, header: WorkHeader) -> ContractResult<Response> {
-    // try verify header encoding
-
-    HEADERS.push_back(store, &header)?;
-    Ok(Response::new().add_attribute("action", "add_work_header"))
+pub fn relay_headers(
+    store: &mut dyn Storage,
+    headers: Vec<WrappedHeader>,
+) -> ContractResult<Response> {
+    let header_config = HEADER_CONFIG.load(store)?;
+    let mut header_queue = HeaderQueue::new(header_config);
+    header_queue.add(store, HeaderList::from(headers)).unwrap();
+    Ok(Response::new().add_attribute("action", "add_headers"))
 }
 
 pub fn relay_deposit(
