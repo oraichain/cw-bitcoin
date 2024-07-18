@@ -4,7 +4,7 @@ use cosmwasm_std::Addr;
 
 use crate::{
     adapter::Adapter,
-    header::WorkHeader,
+    header::{HeaderList, WorkHeader, WrappedHeader},
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
 };
 
@@ -24,8 +24,8 @@ pub enum ExecuteMsg {
     UpdateHeaderConfig {
         config: HeaderConfig,
     },
-    AddWorkHeader {
-        header: WorkHeader,
+    RelayHeaders {
+        headers: Vec<WrappedHeader>,
     },
     RelayDeposit {
         btc_tx: Adapter<Transaction>,
