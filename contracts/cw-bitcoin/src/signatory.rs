@@ -451,12 +451,12 @@ impl SignatorySet {
         };
         bytes.extend(&script.into_bytes());
 
-        // Depositor data commitment
-        let data = &dest.encode()?[..];
+        // Depositor data commitment, vector is the same
+
         // Add a commitment of arbitrary data so that deposits can be tied to a
         // specific destination, then remove it from the stack so that the final
         // value on the stack is the threshold check result.
-        let script = script!(<data> OP_DROP);
+        let script = script!(<dest> OP_DROP);
         bytes.extend(&script.into_bytes());
 
         Ok(bytes.into())

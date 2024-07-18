@@ -633,6 +633,7 @@ impl Bitcoin {
     }
 
     /// Called once per sidechain block to advance the checkpointing process.        
+    /// Can add to clock module
     pub fn begin_block_step(
         &mut self,
         env: Env,
