@@ -26,8 +26,6 @@ fn test_relay_headers() {
         )
         .unwrap();
 
-    let stamp = Utc.with_ymd_and_hms(2009, 1, 10, 17, 39, 13).unwrap();
-
     // Init block 42
     let trusted_header = BlockHeader {
         version: 0x1,
@@ -66,7 +64,8 @@ fn test_relay_headers() {
         )
         .unwrap();
 
-    // set up headers
+    // set up
+    let stamp = Utc.with_ymd_and_hms(2009, 1, 10, 17, 44, 37).unwrap();
     let header_43 = BlockHeader {
         version: 0x1,
         prev_blockhash: BlockHash::from_hex(
