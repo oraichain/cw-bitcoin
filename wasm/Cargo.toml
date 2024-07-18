@@ -19,7 +19,6 @@ bitcoin = { git = "https://github.com/oraichain/rust-bitcoin.git", rev = "40fab6
 ] }
 thiserror = { workspace = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-# ed = { workspace = true }
 derive_more = { workspace = true }
 sha2 = { workspace = true }
 bitcoin-script = { workspace = true }

@@ -32,7 +32,6 @@ cw20-base = { version = "1.0.1" }
 cw-storage-plus = { version = "1.0.1" }
 cw-multi-test = "0.16.6"
 cw-utils = "0.16.0"
-# ed = { git = "https://github.com/nomic-io/ed", rev = "9c0e206ffdb59dacb90f083e004e8080713e6ad8" }
 derive_more = "0.99.17"
 
 sha2 = "0.10.6"
