@@ -5,7 +5,7 @@ pub enum ContractError {
     #[error(transparent)]
     Wasm(#[from] serde_wasm_bindgen::Error),
     #[error(transparent)]
-    Ed(#[from] ed::Error),
+    // Ed(#[from] ed::Error),
     #[error(transparent)]
     Bitcoin(#[from] bitcoin::Error),
     #[error(transparent)]
