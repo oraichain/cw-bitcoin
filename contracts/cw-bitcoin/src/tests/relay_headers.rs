@@ -148,7 +148,7 @@ fn test_relay_headers_2() {
 
     // Init block 852711
     let trusted_header = BlockHeader {
-        version: 0x1,
+        version: 612098048,
         prev_blockhash: BlockHash::from_hex(
             "000000000000000000000e197885b8fcb02eaed6a35e54fbe743df527e090956",
         )
@@ -187,7 +187,7 @@ fn test_relay_headers_2() {
 
     // set up headers
     let header_852712 = BlockHeader {
-        version: 0x1,
+        version: 678903808,
         prev_blockhash: BlockHash::from_hex(
             "00000000000000000001459fbe0477dceedc0f72b7baae70e124efac1b410b26",
         )
