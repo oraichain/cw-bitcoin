@@ -34,7 +34,7 @@ pub fn instantiate(
         },
     )?;
 
-    HEADER_CONFIG.save(deps.storage, &HeaderConfig::mainnet().unwrap());
+    HEADER_CONFIG.save(deps.storage, &HeaderConfig::mainnet()?)?;
 
     Ok(Response::default())
 }
