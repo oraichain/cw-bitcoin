@@ -4,7 +4,7 @@ use cosmwasm_std::{Addr, Binary};
 
 use crate::{
     adapter::Adapter,
-    header::{HeaderList, WorkHeader, WrappedHeader},
+    header::WrappedHeader,
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
 };
 

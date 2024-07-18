@@ -3,9 +3,9 @@ use crate::{
     app::Bitcoin,
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
-    header::{HeaderList, HeaderQueue, WorkHeader, WrappedHeader},
+    header::{HeaderList, HeaderQueue, WrappedHeader},
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
-    state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADERS, HEADER_CONFIG},
+    state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG},
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_std::{wasm_execute, Env, Response, Storage};
