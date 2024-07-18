@@ -5,7 +5,7 @@ use crate::{
     app::Bitcoin,
     entrypoints::*,
     error::ContractError,
-    interface::Config,
+    interface::{Config, HeaderConfig},
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{CONFIG, HEADER_CONFIG, VALIDATORS},
 };
@@ -33,6 +33,8 @@ pub fn instantiate(
             token_factory_addr: msg.token_factory_addr,
         },
     )?;
+
+    HEADER_CONFIG.save(deps.storage, &HeaderConfig::mainnet().unwrap());
 
     Ok(Response::default())
 }
@@ -62,8 +64,8 @@ pub fn execute(
             sigset_index,
             dest,
         ),
+        ExecuteMsg::RelayHeaders { headers } => relay_headers(deps.storage, headers),
         ExecuteMsg::UpdateHeaderConfig { config } => update_header_config(deps.storage, config),
-        ExecuteMsg::AddWorkHeader { header } => add_work_header(deps.storage, header),
         ExecuteMsg::UpdateBitcoinConfig { config } => update_bitcoin_config(deps.storage, config),
         ExecuteMsg::UpdateCheckpointConfig { config } => {
             update_checkpoint_config(deps.storage, config)
