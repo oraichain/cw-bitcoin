@@ -316,14 +316,18 @@ impl HeaderQueue {
 
         let mut work = Uint256::default();
 
+        // println!("headers: {:?}", headers);
+
         for (prev_header, header) in headers {
             if header.height() != prev_header.height() + 1 {
                 return Err(ContractError::Header(
                     "Non-consecutive headers passed".into(),
                 ));
             }
-
+            
             if header.prev_blockhash() != prev_header.block_hash() {
+                println!("header.prev_blockhash(): {:?}", header);
+                println!("prev_header.block_hash(): {:?}", prev_header);
                 return Err(ContractError::Header(
                     "Passed header references incorrect previous block hash".into(),
                 ));

@@ -36,7 +36,7 @@ pub fn update_header_config(
 ) -> ContractResult<Response> {
     let header_config = HEADER_CONFIG.load(store)?;
     let mut header_queue = HeaderQueue::new(header_config);
-    let _ = header_queue.configure(store, config)?;
+    let _ = header_queue.configure(store, config.clone())?;
     Ok(Response::new().add_attribute("action", "update_header_config"))
 }
 
