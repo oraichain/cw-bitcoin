@@ -31,7 +31,8 @@ use crate::{
 #[test]
 fn relay_height_validity() -> ContractResult<()> {
     let mut deps = mock_dependencies();
-    let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
+    let header_config = HeaderConfig::mainnet()?;
+    println!("hello world: {:?}", header_config);
     let header = header_config.work_header();
 
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
@@ -103,7 +104,7 @@ fn relay_height_validity() -> ContractResult<()> {
 #[test]
 fn check_change_rates() -> ContractResult<()> {
     let mut deps = mock_dependencies();
-    let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
+    let header_config = HeaderConfig::mainnet()?;
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
     HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
 
@@ -298,7 +299,7 @@ fn check_change_rates() -> ContractResult<()> {
 #[serial_test::serial]
 fn test_take_pending() -> ContractResult<()> {
     let mut deps = mock_dependencies();
-    let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json"))?;
+    let header_config = HeaderConfig::mainnet()?;
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
     HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
 

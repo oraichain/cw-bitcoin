@@ -1,5 +1,5 @@
 use crate::adapter::Adapter;
-use crate::constants::MAX_RELAY;
+use crate::constants::MAX_HEADERS_RELAY_ONE_TIME;
 use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::interface::HeaderConfig;
@@ -220,7 +220,7 @@ impl HeaderQueue {
 
         let headers: Vec<_> = headers.into();
 
-        if headers.len() as u64 > MAX_RELAY {
+        if headers.len() as u64 > MAX_HEADERS_RELAY_ONE_TIME {
             return Err(ContractError::App(
                 "Exceeded maximum amount of relayed headers".to_string(),
             ));

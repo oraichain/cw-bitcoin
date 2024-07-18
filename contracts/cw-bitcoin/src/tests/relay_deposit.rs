@@ -20,7 +20,7 @@ fn test_relay_height_validity() {
         )
         .unwrap();
 
-    let header_config = HeaderConfig::from_bytes(include_bytes!("checkpoint.json")).unwrap();
+    let header_config = HeaderConfig::mainnet().unwrap();
     let header = header_config.work_header();
     let _res = app
         .execute(

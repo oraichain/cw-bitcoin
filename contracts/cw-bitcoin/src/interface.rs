@@ -470,6 +470,10 @@ pub struct HeaderConfig {
 }
 
 impl HeaderConfig {
+    pub fn mainnet() -> ContractResult<Self> {
+        Self::from_bytes(include_bytes!("checkpoint.json"))
+    }
+
     pub fn from_bytes(checkpoint_json: &[u8]) -> ContractResult<Self> {
         let checkpoint: (u32, BlockHeader) = from_slice(checkpoint_json)?;
         let (height, header) = checkpoint;
