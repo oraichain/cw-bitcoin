@@ -22,7 +22,7 @@ cosmwasm-std = { version = "=1.2" }
 cosmwasm-schema = { version = "=1.2" }
 cosmwasm-storage = { version = "=1.2" }
 cosmwasm-vm = { version = "=1.2" }
-bitcoin-script = "0.1.3"
+bitcoin-script = { git = "https://github.com/oraichain/rust-bitcoin-script.git" }
 bitcoin = { version = "0.29.2" }
 thiserror = "1.0.26"
 
