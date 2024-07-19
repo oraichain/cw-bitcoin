@@ -1,14 +1,16 @@
-use bitcoin::BlockHash;
-use cosmwasm_std::Storage;
-use std::str::FromStr;
+use bitcoin::{secp256k1::ffi::recovery, BlockHash, Transaction};
+use cosmwasm_std::{Order, Storage};
+use std::{process, str::FromStr};
 
 use crate::{
-    adapter::HashBinary,
+    adapter::{Adapter, HashBinary},
     app::Bitcoin,
-    checkpoint::{Checkpoint, CheckpointQueue},
+    checkpoint::{self, BuildingCheckpoint, Checkpoint, CheckpointQueue},
     error::{ContractError, ContractResult},
     header::HeaderQueue,
-    state::{header_height, HEADER_CONFIG},
+    recovery::{RecoveryTxs, SignedRecoveryTx},
+    signatory::SignatorySet,
+    state::{header_height, CHECKPOINTS, HEADER_CONFIG, OUTPOINTS},
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
@@ -51,4 +53,78 @@ pub fn query_checkpoint_by_index(store: &dyn Storage, index: u32) -> ContractRes
     let checkpoints = CheckpointQueue::default();
     let checkpoint = checkpoints.get(store, index)?;
     Ok(checkpoint)
+}
+
+pub fn query_building_checkpoint(store: &dyn Storage) -> ContractResult<BuildingCheckpoint> {
+    let checkpoints = CheckpointQueue::default();
+    let checkpoint = checkpoints.building(store)?;
+    Ok(checkpoint)
+}
+
+pub fn query_est_witness_vsize(store: &dyn Storage) -> ContractResult<u64> {
+    let checkpoints = CheckpointQueue::default();
+    let est_witness_vsize = checkpoints.active_sigset(store)?.est_witness_vsize();
+    Ok(est_witness_vsize)
+}
+
+pub fn query_active_sigset(store: &dyn Storage) -> ContractResult<SignatorySet> {
+    let checkpoints = CheckpointQueue::default();
+    let active_sigset = checkpoints.active_sigset(store)?;
+    Ok(active_sigset)
+}
+
+pub fn query_last_complete_tx(store: &dyn Storage) -> ContractResult<Adapter<Transaction>> {
+    let checkpoints = CheckpointQueue::default();
+    let last_complete_tx = checkpoints.last_completed_tx(store)?;
+    Ok(last_complete_tx)
+}
+
+pub fn query_complete_txs(
+    store: &dyn Storage,
+    limit: u32,
+) -> ContractResult<Vec<Adapter<Transaction>>> {
+    let checkpoints = CheckpointQueue::default();
+    let complete_txs = checkpoints.completed_txs(store, limit)?;
+    Ok(complete_txs)
+}
+
+pub fn query_signed_recovery_txs(store: &dyn Storage) -> ContractResult<Vec<SignedRecoveryTx>> {
+    let recovery_txs = RecoveryTxs::default();
+    let signed_recovery_txs = recovery_txs.signed(store)?;
+    Ok(signed_recovery_txs)
+}
+
+pub fn query_last_complete_index(store: &dyn Storage) -> ContractResult<u32> {
+    let checkpoints = CheckpointQueue::default();
+    let last_complete_index = checkpoints.last_completed_index(store)?;
+    Ok(last_complete_index)
+}
+
+pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<u32> {
+    let checkpoints = CheckpointQueue::default();
+    let has_signing = checkpoints.signing(store)?.is_some();
+    let signing_offset = has_signing as u32;
+    let confirmed_index = match checkpoints.confirmed_index {
+        None => return Ok(checkpoints.len(store)? - 1 - signing_offset),
+        Some(index) => index,
+    };
+    Ok(confirmed_index)
+}
+
+pub fn query_first_unconfirmed_index(store: &dyn Storage) -> ContractResult<Option<u32>> {
+    let checkpoints = CheckpointQueue::default();
+    let first_unconfirmed_index = checkpoints.first_unconfirmed_index(store)?;
+    Ok(first_unconfirmed_index)
+}
+
+pub fn query_process_outpoints(store: &dyn Storage) -> ContractResult<Vec<String>> {
+    // get all key of oupoints map
+    let process_outpoints = OUTPOINTS
+        .range(store, None, None, Order::Ascending)
+        .map(|item| {
+            let (k, _) = item?;
+            Ok(k.to_string())
+        })
+        .collect::<ContractResult<Vec<String>>>()?;
+    Ok(process_outpoints)
 }
