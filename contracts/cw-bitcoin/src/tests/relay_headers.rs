@@ -1,13 +1,10 @@
 use super::helper::MockApp;
 use crate::adapter::Adapter;
 use crate::header::WrappedHeader;
-use crate::interface::{Dest, HeaderConfig};
+use crate::interface::HeaderConfig;
 use crate::msg;
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::Hash;
-use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::util::uint;
-use bitcoin::{BlockHash, BlockHeader, Transaction, TxMerkleNode, Txid};
+use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
 use chrono::{TimeZone, Utc};
 use cosmwasm_std::Addr;
 use serial_test::serial;
@@ -200,69 +197,69 @@ fn test_relay_headers_2() {
         bits: 386108013,
         nonce: 879772167,
     };
-    // let header_852713 = BlockHeader {
-    //     version: 0x1,
-    //     prev_blockhash: BlockHash::from_hex(
-    //         "00000000000000000001672387abddd1b6bdb71f8abbef087b1b44b9c731313f",
-    //     )
-    //     .unwrap(),
-    //     merkle_root: TxMerkleNode::from_hex(
-    //         "a553e0fcdc3b1d19df13d9ea8a8635cbcb9f32969ffe4676380b13e05ecb75e2",
-    //     )
-    //     .unwrap(),
-    //     time: 1721288473,
-    //     bits: 386108013,
-    //     nonce: 2866698366,
-    // };
-    // let header_852714 = BlockHeader {
-    //     version: 0x1,
-    //     prev_blockhash: BlockHash::from_hex(
-    //         "000000000000000000034adba1b5ba7f6fe047c5d4324867b5acc4abdf138c2f",
-    //     )
-    //     .unwrap(),
-    //     merkle_root: TxMerkleNode::from_hex(
-    //         "1b17ada217f478cdc58b2da0144e0ae21e85259324ef257840bf322705a68289",
-    //     )
-    //     .unwrap(),
-    //     time: 1721288988,
-    //     bits: 386108013,
-    //     nonce: 1316334967,
-    // };
-    // let header_852715 = BlockHeader {
-    //     version: 0x1,
-    //     prev_blockhash: BlockHash::from_hex(
-    //         "00000000000000000002ce043b6be0ef1ff73b5367984304be51426a34b67513",
-    //     )
-    //     .unwrap(),
-    //     merkle_root: TxMerkleNode::from_hex(
-    //         "7dee6993c2b4b994c9f6e159dbceec6b4b8cae9e512d4de62f2616ed56089be1",
-    //     )
-    //     .unwrap(),
-    //     time: 1721290322,
-    //     bits: 386108013,
-    //     nonce: 1561485854,
-    // };
-    // let header_852716 = BlockHeader {
-    //     version: 0x1,
-    //     prev_blockhash: BlockHash::from_hex(
-    //         "0000000000000000000047da97a6099e8d7fef9e46e70f6f78ced349cbf18535",
-    //     )
-    //     .unwrap(),
-    //     merkle_root: TxMerkleNode::from_hex(
-    //         "933547277d9fb987b422c1b33a8ffd45d4a1b1d6336b1e385fa5427e3148d861",
-    //     )
-    //     .unwrap(),
-    //     time: 1721291358,
-    //     bits: 386108013,
-    //     nonce: 1266111310,
-    // };
+    let header_852713 = BlockHeader {
+        version: 789970944,
+        prev_blockhash: BlockHash::from_hex(
+            "00000000000000000001672387abddd1b6bdb71f8abbef087b1b44b9c731313f",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "a553e0fcdc3b1d19df13d9ea8a8635cbcb9f32969ffe4676380b13e05ecb75e2",
+        )
+        .unwrap(),
+        time: 1721288473,
+        bits: 386108013,
+        nonce: 2866698366,
+    };
+    let header_852714 = BlockHeader {
+        version: 536870912,
+        prev_blockhash: BlockHash::from_hex(
+            "000000000000000000034adba1b5ba7f6fe047c5d4324867b5acc4abdf138c2f",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "1b17ada217f478cdc58b2da0144e0ae21e85259324ef257840bf322705a68289",
+        )
+        .unwrap(),
+        time: 1721288988,
+        bits: 386108013,
+        nonce: 1316334967,
+    };
+    let header_852715 = BlockHeader {
+        version: 738271232,
+        prev_blockhash: BlockHash::from_hex(
+            "00000000000000000002ce043b6be0ef1ff73b5367984304be51426a34b67513",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "7dee6993c2b4b994c9f6e159dbceec6b4b8cae9e512d4de62f2616ed56089be1",
+        )
+        .unwrap(),
+        time: 1721290322,
+        bits: 386108013,
+        nonce: 1561485854,
+    };
+    let header_852716 = BlockHeader {
+        version: 872415232,
+        prev_blockhash: BlockHash::from_hex(
+            "0000000000000000000047da97a6099e8d7fef9e46e70f6f78ced349cbf18535",
+        )
+        .unwrap(),
+        merkle_root: TxMerkleNode::from_hex(
+            "933547277d9fb987b422c1b33a8ffd45d4a1b1d6336b1e385fa5427e3148d861",
+        )
+        .unwrap(),
+        time: 1721291358,
+        bits: 386108013,
+        nonce: 1266111310,
+    };
 
     let header_list = vec![
         WrappedHeader::new(Adapter::new(header_852712), 852712),
-        // WrappedHeader::new(Adapter::new(header_852713), 852713),
-        // WrappedHeader::new(Adapter::new(header_852714), 852714),
-        // WrappedHeader::new(Adapter::new(header_852715), 852715),
-        // WrappedHeader::new(Adapter::new(header_852716), 852716),
+        WrappedHeader::new(Adapter::new(header_852713), 852713),
+        WrappedHeader::new(Adapter::new(header_852714), 852714),
+        WrappedHeader::new(Adapter::new(header_852715), 852715),
+        WrappedHeader::new(Adapter::new(header_852716), 852716),
     ];
 
     let _res = app
