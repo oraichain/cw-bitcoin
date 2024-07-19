@@ -264,19 +264,14 @@ impl BitcoinTx {
 
             // Remove any outputs which are too small to pay the threshold.
             let mut min_output = u64::MAX;
-            self.output = self
-                .output
-                .clone()
-                .into_iter()
-                .filter(|output| {
-                    let dust_value = output.script_pubkey.dust_value().to_sat();
-                    let adjusted_output = output.value.saturating_sub(dust_value);
-                    if adjusted_output < min_output {
-                        min_output = adjusted_output;
-                    }
-                    adjusted_output > threshold
-                })
-                .collect();
+            self.output.retain(|output| {
+                let dust_value = output.script_pubkey.dust_value().to_sat();
+                let adjusted_output = output.value.saturating_sub(dust_value);
+                if adjusted_output < min_output {
+                    min_output = adjusted_output;
+                }
+                adjusted_output > threshold
+            });
 
             output_len = self.output.len() as u64;
 
