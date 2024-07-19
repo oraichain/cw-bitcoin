@@ -1,16 +1,16 @@
-use bitcoin::{secp256k1::ffi::recovery, BlockHash, Transaction};
+use bitcoin::{BlockHash, Transaction};
 use cosmwasm_std::{Order, Storage};
-use std::{process, str::FromStr};
+use std::str::FromStr;
 
 use crate::{
     adapter::{Adapter, HashBinary},
     app::Bitcoin,
-    checkpoint::{self, BuildingCheckpoint, Checkpoint, CheckpointQueue},
+    checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue},
     error::{ContractError, ContractResult},
     header::HeaderQueue,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
-    state::{header_height, CHECKPOINTS, HEADER_CONFIG, OUTPOINTS},
+    state::{header_height, HEADER_CONFIG, OUTPOINTS},
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
