@@ -1212,6 +1212,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
+name = "lib-bitcoin"
+version = "0.1.0"
+dependencies = [
+ "bitcoin 0.29.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bitcoin-script",
+ "chrono",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cosmwasm-testing-util",
+ "cw-multi-test",
+ "cw-storage-plus 1.1.0",
+ "cw-utils 0.16.0",
+ "cw2 1.1.0",
+ "cw20",
+ "cw20-base",
+ "derive_more",
+ "serial_test",
+ "sha2 0.10.8",
+ "thiserror",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.155"
 source = "registry+https://github.com/rust-lang/crates.io-index"
