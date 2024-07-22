@@ -1,3 +1,5 @@
+use std::borrow::BorrowMut;
+
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 
@@ -90,19 +92,18 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
                     vec![]
                 };
 
-            let offline_signers = btc.begin_block_step(
-                env,
-                deps.storage,
-                external_outputs.into_iter().map(Ok),
-                hash.to_vec(),
-            )?;
+            // let offline_signers = btc.begin_block_step(
+            //     env,
+            //     deps.borrow_mut(),
+            //     external_outputs.into_iter().map(Ok),
+            //     hash.to_vec(),
+            // )?;
 
-            for cons_key in &offline_signers {
-                let (_, address) = VALIDATORS.load(deps.storage, cons_key)?;
-                // punish_downtime(address)?;
-                #[cfg(debug_assertions)]
-                println!("need punish downtime for {}", address);
-            }
+            // for cons_key in &offline_signers {
+            //     let (_, address) = VALIDATORS.load(deps.storage, cons_key)?;
+            //     // punish_downtime(address)?;
+            //     println!("need punish downtime for {}", address);
+            // }
 
             Ok(Response::new())
         }

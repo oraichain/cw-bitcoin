@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use crate::app::ConsensusKey;
 use crate::constants::MAX_SIGNATORIES;
 use crate::state::get_validators;
+use crate::state::CONFIG;
 use crate::state::SIG_KEYS;
 use crate::state::XPUBS;
 
@@ -17,11 +18,14 @@ use bitcoin::blockdata::script::{read_scriptint, Instruction};
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
+use cosmwasm_std::Deps;
 use cosmwasm_std::Order;
 use cosmwasm_std::Storage;
 // use ed::Encode;
 
 use common::interface::Xpub;
+use lib_bitcoin::adapter::HashBinary;
+use lib_bitcoin::msg::QueryMsg;
 
 /// The maximum number of signatories in a signatory set.
 ///

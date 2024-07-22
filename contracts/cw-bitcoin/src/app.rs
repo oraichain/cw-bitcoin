@@ -18,7 +18,7 @@ use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
+use cosmwasm_std::{Addr, Coin, Deps, DepsMut, Env, Order, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -525,14 +525,15 @@ impl Bitcoin {
     /// `Signing` checkpoint.    
     pub fn sign(
         &mut self,
-        store: &mut dyn Storage,
+        deps: DepsMut,
         xpub: &Xpub,
         sigs: Vec<Signature>,
         cp_index: u32,
     ) -> ContractResult<()> {
+        let store = deps.storage;
         let btc_height = self.headers.height(store)?;
         self.checkpoints
-            .sign(store, xpub, sigs, cp_index, btc_height)
+            .sign(deps, xpub, sigs, cp_index, btc_height)
     }
 
     /// The amount of BTC in the reserve output of the most recent fully-signed
@@ -636,10 +637,11 @@ impl Bitcoin {
     pub fn begin_block_step(
         &mut self,
         env: Env,
-        store: &mut dyn Storage,
+        deps: DepsMut,
         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         timestamping_commitment: Vec<u8>,
     ) -> ContractResult<Vec<ConsensusKey>> {
+        let store = deps.storage;
         let has_completed_cp =
             if let Err(ContractError::App(err)) = self.checkpoints.last_completed_index(store) {
                 if err == "No completed checkpoints yet" {
@@ -674,7 +676,7 @@ impl Bitcoin {
         // TODO: remove expired outpoints from processed_outpoints
 
         if pushed {
-            self.offline_signers(store)
+            self.offline_signers(deps)
         } else {
             Ok(vec![])
         }
@@ -685,7 +687,8 @@ impl Bitcoin {
     ///
     /// This should be used to punish offline signers, by e.g. removing them
     /// from the validator set and slashing their stake.    
-    fn offline_signers(&mut self, store: &mut dyn Storage) -> ContractResult<Vec<ConsensusKey>> {
+    fn offline_signers(&mut self, deps: DepsMut) -> ContractResult<Vec<ConsensusKey>> {
+        let store = deps.storage;
         let mut validators = get_validators(store)?;
         validators.sort_by(|a, b| b.power.cmp(&a.power));
 
@@ -714,7 +717,7 @@ impl Bitcoin {
 
             let mut offline = true;
             for checkpoint in completed.iter().rev() {
-                if checkpoint.to_sign(&xpub)?.is_empty() {
+                if checkpoint.to_sign(deps.as_ref(), &xpub)?.is_empty() {
                     offline = false;
                     break;
                 }

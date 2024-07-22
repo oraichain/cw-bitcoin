@@ -7,12 +7,13 @@ use super::{
 use crate::{
     error::{ContractError, ContractResult},
     interface::Dest,
+    signatory::derive_pubkey,
     state::{CONFIG, RECOVERY_TXS},
 };
 use bitcoin::{secp256k1::PublicKey, OutPoint, Transaction, TxOut};
 use common::interface::Xpub;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Deps, Storage};
+use cosmwasm_std::{Deps, DepsMut, Storage};
 use lib_bitcoin::{adapter::HashBinary, msg::QueryMsg};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -132,6 +133,7 @@ impl RecoveryTxs {
             ));
         }
 
+        let store = deps.storage;
         for i in 0..RECOVERY_TXS.len(store)? {
             let mut tx = RECOVERY_TXS.get(store, i)?.ok_or_else(|| {
                 ContractError::Signer("Error getting recovery transaction".to_string())
@@ -154,7 +156,7 @@ impl RecoveryTxs {
                 sig_index += 1;
 
                 let input_was_signed = input.signatures.signed();
-                input.signatures.sign(pubkey.into(), sig)?;
+                input.signatures.sign(public_key.into(), sig)?;
 
                 if !input_was_signed && input.signatures.signed() {
                     tx.tx.signed_inputs += 1;

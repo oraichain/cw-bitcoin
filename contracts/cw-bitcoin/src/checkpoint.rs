@@ -17,7 +17,7 @@ use bitcoin::{hashes::Hash, Script};
 use common::interface::Xpub;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Coin, Env, Order, Storage};
+use cosmwasm_std::{Coin, Deps, DepsMut, Env, Order, Storage};
 use derive_more::{Deref, DerefMut};
 
 /// The status of a checkpoint. Checkpoints start as `Building`, and eventually
@@ -846,11 +846,12 @@ impl SigningCheckpoint {
     /// signatory is present in the signatory set.
     pub fn sign(
         &mut self,
+        deps: DepsMut,
         xpub: Xpub,
         sigs: Vec<Signature>,
         btc_height: u32,
     ) -> ContractResult<()> {
-        self.0.sign(&xpub, sigs, btc_height)?;
+        self.0.sign(deps, &xpub, sigs, btc_height)?;
         Ok(())
     }
 }
@@ -1885,12 +1886,13 @@ impl CheckpointQueue {
     /// cannot be used to DoS the network.
     pub fn sign(
         &mut self,
-        store: &mut dyn Storage,
+        deps: DepsMut,
         xpub: &Xpub,
         sigs: Vec<Signature>,
         index: u32,
         btc_height: u32,
     ) -> ContractResult<()> {
+        let store = deps.storage;
         let mut checkpoint = self.get(store, index)?;
         let status = checkpoint.status.clone();
         if matches!(status, CheckpointStatus::Building) {
@@ -1899,7 +1901,7 @@ impl CheckpointQueue {
             ));
         }
 
-        checkpoint.sign(xpub, sigs, btc_height)?;
+        checkpoint.sign(deps, xpub, sigs, btc_height)?;
 
         if matches!(status, CheckpointStatus::Signing) && checkpoint.signed() {
             let checkpoint_tx = checkpoint.checkpoint_tx()?;
