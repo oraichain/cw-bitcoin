@@ -6,7 +6,6 @@ use derive_more::Deref;
 /// A Bitcoin extended public key, used to derive Bitcoin public keys which
 /// signatories sign transactions with.
 #[derive(Copy, Clone, PartialEq, Deref, Eq, Debug, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Xpub {
     pub key: ExtendedPubKey,
 }

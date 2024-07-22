@@ -1,5 +1,11 @@
-use crate::{adapter::Adapter, interface::Xpub};
-use bitcoin::Transaction;
+use crate::{
+    adapter::{Adapter, HashBinary},
+    interface::Xpub,
+};
+use bitcoin::{
+    util::bip32::{ExtendedPrivKey, ExtendedPubKey},
+    Transaction,
+};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
 #[cw_serde]
@@ -12,7 +18,10 @@ pub enum ExecuteMsg {}
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     #[returns(GetDerivePubkeyResponse)]
-    GetDerivePubkey { xpub: Adapter<Xpub> },
+    GetDerivePubkey {
+        xpub: HashBinary<Xpub>,
+        sigset_index: u32,
+    },
 }
 
 #[cw_serde]
