@@ -557,6 +557,7 @@ pub struct ChangeRates {
 #[cw_serde]
 pub struct Config {
     pub token_factory_addr: Addr,
+    pub bitcoin_lib_addr: Addr,
     pub owner: Addr,
 }
 

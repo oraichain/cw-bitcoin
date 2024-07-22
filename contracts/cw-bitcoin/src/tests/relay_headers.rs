@@ -14,10 +14,19 @@ fn test_relay_headers() {
     let token_factory_addr = app
         .create_tokenfactory(Addr::unchecked("obtc_minter"))
         .unwrap();
+    let bitcoin_lib_addr = app
+        .create_bitcoin_lib(
+            Addr::unchecked("obtc_minter"),
+            &lib_bitcoin::msg::InstantiateMsg {},
+        )
+        .unwrap();
     let bridge_addr = app
         .create_bridge(
             Addr::unchecked("perfogic"),
-            &msg::InstantiateMsg { token_factory_addr },
+            &msg::InstantiateMsg {
+                token_factory_addr,
+                bitcoin_lib_addr,
+            },
         )
         .unwrap();
 
@@ -133,10 +142,19 @@ fn test_relay_headers_2() {
     let token_factory_addr = app
         .create_tokenfactory(Addr::unchecked("obtc_minter"))
         .unwrap();
+    let bitcoin_lib_addr = app
+        .create_bitcoin_lib(
+            Addr::unchecked("obtc_minter"),
+            &lib_bitcoin::msg::InstantiateMsg {},
+        )
+        .unwrap();
     let bridge_addr = app
         .create_bridge(
             Addr::unchecked("perfogic"),
-            &msg::InstantiateMsg { token_factory_addr },
+            &msg::InstantiateMsg {
+                token_factory_addr,
+                bitcoin_lib_addr,
+            },
         )
         .unwrap();
 

@@ -31,6 +31,7 @@ pub fn instantiate(
         &Config {
             owner: info.sender,
             token_factory_addr: msg.token_factory_addr,
+            bitcoin_lib_addr: msg.bitcoin_lib_addr,
         },
     )?;
 

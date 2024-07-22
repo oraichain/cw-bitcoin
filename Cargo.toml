@@ -31,6 +31,7 @@ cw2 = {version = "1.0.1"}
 cw20 = {version = "1.0.1"}
 cw20-base = {version = "1.0.1"}
 derive_more = "0.99.17"
+lib-bitcoin = {path = "contracts/lib-bitcoin"}
 
 sha2 = "0.10.6"
 

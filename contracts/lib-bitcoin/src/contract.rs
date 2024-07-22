@@ -6,7 +6,7 @@ use crate::{
     adapter::HashBinary,
     error::{ContractError, ContractResult},
     interface::Xpub,
-    msg::{InstantiateMsg, QueryMsg},
+    msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
 };
 use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
@@ -24,6 +24,16 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     Ok(Response::default())
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn execute(
+    _: DepsMut,
+    _env: Env,
+    _: MessageInfo,
+    _: ExecuteMsg,
+) -> Result<Response, ContractError> {
+    unimplemented!()
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]

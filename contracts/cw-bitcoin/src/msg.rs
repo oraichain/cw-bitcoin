@@ -11,6 +11,7 @@ use crate::{
 #[cw_serde]
 pub struct InstantiateMsg {
     pub token_factory_addr: Addr,
+    pub bitcoin_lib_addr: Addr,
 }
 
 #[cw_serde]
