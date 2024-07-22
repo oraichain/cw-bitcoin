@@ -3,14 +3,7 @@ use cosmwasm_std::{Order, Storage};
 use std::str::FromStr;
 
 use crate::{
-    adapter::{Adapter, HashBinary},
-    app::Bitcoin,
-    checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue},
-    error::{ContractError, ContractResult},
-    header::HeaderQueue,
-    recovery::{RecoveryTxs, SignedRecoveryTx},
-    signatory::SignatorySet,
-    state::{header_height, HEADER_CONFIG, OUTPOINTS},
+    adapter::{Adapter, HashBinary}, app::{Bitcoin, ConsensusKey}, checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue}, error::{ContractError, ContractResult}, header::HeaderQueue, interface::Xpub, recovery::{RecoveryTxs, SignedRecoveryTx}, signatory::SignatorySet, state::{header_height, HEADER_CONFIG, OUTPOINTS, SIG_KEYS}
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
@@ -127,4 +120,15 @@ pub fn query_process_outpoints(store: &dyn Storage) -> ContractResult<Vec<String
         })
         .collect::<ContractResult<Vec<String>>>()?;
     Ok(process_outpoints)
+}
+
+pub fn query_signatory_keys(store: &dyn Storage, cons_key: ConsensusKey) -> ContractResult<Option<Xpub>> {
+    let signatory_keys = SIG_KEYS.may_load(store, &cons_key)?;
+    Ok(signatory_keys)
+}
+
+pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
+    let checkpoints = CheckpointQueue::default();
+    let len = checkpoints.len(store)?;
+    Ok(len)
 }

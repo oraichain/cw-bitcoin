@@ -90,3 +90,16 @@ pub fn relay_deposit(
 
     Ok(response)
 }
+
+pub fn relay_checkpoint(
+    store: &mut dyn Storage,
+    btc_height: u32,
+    btc_proof: Adapter<PartialMerkleTree>,
+    cp_index: u32,
+) -> ContractResult<Response> {
+    let header_config = HEADER_CONFIG.load(store)?;
+    let mut btc = Bitcoin::new(header_config);
+    let response = Response::new().add_attribute("action", "relay_checkpoint");
+    btc.relay_checkpoint(store, btc_height, btc_proof, cp_index)?;
+    Ok(response)
+}
