@@ -3,8 +3,8 @@ use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
-use cosmwasm_std::from_slice;
-use cosmwasm_std::to_vec;
+use cosmwasm_std::from_json;
+use cosmwasm_std::to_json_vec;
 use cosmwasm_std::Addr;
 use cosmwasm_std::Binary;
 use cosmwasm_std::Coin;
@@ -81,7 +81,7 @@ impl<'a, T: Serialize + de::DeserializeOwned> DequeExtension<'a, T> {
     /// Sets the value at the given position in the queue. Returns [`StdError::NotFound`] if index is out of bounds
     pub fn set(&self, storage: &mut dyn Storage, pos: u32, value: &T) -> ContractResult<()> {
         let prefixed_key = self.get_key(pos);
-        storage.set(&prefixed_key, &to_vec(value)?);
+        storage.set(&prefixed_key, &to_json_vec(value)?);
         Ok(())
     }
 }
@@ -475,7 +475,7 @@ impl HeaderConfig {
     }
 
     pub fn from_bytes(checkpoint_json: &[u8]) -> ContractResult<Self> {
-        let checkpoint: (u32, BlockHeader) = from_slice(checkpoint_json)?;
+        let checkpoint: (u32, BlockHeader) = from_json(checkpoint_json)?;
         let (height, header) = checkpoint;
 
         Ok(Self {
