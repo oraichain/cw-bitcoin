@@ -4,7 +4,7 @@ documentation = {workspace = true}
 edition = {workspace = true}
 homepage = {workspace = true}
 license = {workspace = true}
-name = "lib-bitcoin"
+name = "common"
 repository = {workspace = true}
 version = {workspace = true}
 
@@ -19,14 +19,10 @@ library = []
 [dependencies]
 bitcoin = {workspace = true, features = ["serde"]}
 bitcoin-script = {workspace = true}
-common = {workspace = true}
 cosmwasm-schema = {workspace = true}
 cosmwasm-std = {workspace = true, features = ["ibc3"]}
 cw-storage-plus = {workspace = true}
 cw-utils = {workspace = true}
-cw2 = {workspace = true}
-cw20 = {workspace = true}
-cw20-base = {workspace = true}
 derive_more = {workspace = true}
 sha2 = {workspace = true}
 thiserror = {workspace = true}

@@ -1,9 +1,10 @@
 use crate::checkpoint::Checkpoint;
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
-use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, HeaderConfig, Validator, Xpub};
+use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, HeaderConfig, Validator};
 use crate::signatory::SignatoryKeys;
 use crate::state::{get_validators, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS};
 use crate::threshold_sig;
+use common::interface::Xpub;
 
 use super::checkpoint::Input;
 use super::recovery::{RecoveryTxInput, RecoveryTxs};

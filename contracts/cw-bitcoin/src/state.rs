@@ -8,11 +8,10 @@ use crate::{
     checkpoint::Checkpoint,
     error::ContractResult,
     header::WorkHeader,
-    interface::{
-        BitcoinConfig, CheckpointConfig, Config, DequeExtension, HeaderConfig, Validator, Xpub,
-    },
+    interface::{BitcoinConfig, CheckpointConfig, Config, DequeExtension, HeaderConfig, Validator},
     recovery::RecoveryTx,
 };
+use common::interface::Xpub;
 
 pub const CONFIG: Item<Config> = Item::new("config");
 

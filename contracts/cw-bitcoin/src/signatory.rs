@@ -21,7 +21,7 @@ use cosmwasm_std::Order;
 use cosmwasm_std::Storage;
 // use ed::Encode;
 
-use super::interface::Xpub;
+use common::interface::Xpub;
 
 /// The maximum number of signatories in a signatory set.
 ///

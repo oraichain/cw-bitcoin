@@ -26,6 +26,8 @@ cosmwasm-storage = {version = "1.5"}
 cosmwasm-vm = {version = "1.5"}
 thiserror = "1.0.26"
 
+common = {path = "./packages/common"}
+cw-multi-test = "0.16.6"
 cw-storage-plus = {version = "1.0.1"}
 cw2 = {version = "1.0.1"}
 cw20 = {version = "1.0.1"}

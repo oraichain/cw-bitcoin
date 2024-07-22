@@ -5,9 +5,9 @@ use cosmwasm_std::entry_point;
 use crate::{
     adapter::HashBinary,
     error::{ContractError, ContractResult},
-    interface::Xpub,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
 };
+use common::interface::Xpub;
 use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 

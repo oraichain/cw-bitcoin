@@ -1232,6 +1232,25 @@ dependencies = [
   "sha2 0.10.8",
   "thiserror",
 ]
+dependencies = [
+  "bitcoin 0.29.2 (registry+https://github.com/rust-lang/crates.io-index)",
+  "bitcoin-script",
+  "chrono",
+  "common",
+  "cosmwasm-schema",
+  "cosmwasm-std",
+  "cosmwasm-testing-util",
+  "cw-multi-test",
+  "cw-storage-plus 1.1.0",
+  "cw-utils 0.16.0",
+  "cw2 1.1.0",
+  "cw20",
+  "cw20-base",
+  "derive_more",
+  "serial_test",
+  "sha2 0.10.8",
+  "thiserror",
+]
 name = "lib-bitcoin"
 version = "0.1.0"
 

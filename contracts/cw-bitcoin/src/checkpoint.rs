@@ -5,7 +5,7 @@ use super::{
 
 use crate::{
     adapter::Adapter,
-    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest, Xpub},
+    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
     state::{to_output_script, CHECKPOINTS, RECOVERY_SCRIPTS},
 };
 use crate::{
@@ -14,6 +14,7 @@ use crate::{
 };
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
+use common::interface::Xpub;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Coin, Env, Order, Storage};

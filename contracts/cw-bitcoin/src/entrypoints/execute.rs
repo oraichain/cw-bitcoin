@@ -62,7 +62,6 @@ pub fn relay_deposit(
     dest: Dest,
 ) -> ContractResult<Response> {
     // dest validation?
-
     let header_config = HEADER_CONFIG.load(store)?;
     let mut btc = Bitcoin::new(header_config);
     let mut response = Response::new().add_attribute("action", "relay_deposit");
