@@ -10,7 +10,7 @@ use crate::{
     state::{CONFIG, HEADER_CONFIG, VALIDATORS},
 };
 
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 
 // version info for migration info
@@ -110,14 +110,18 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::DepositFees { index } => to_binary(&query_deposit_fees(deps.storage, index)?),
-        QueryMsg::WithdrawalFees { address, index } => {
-            to_binary(&query_withdrawal_fees(deps.storage, address, index)?)
+        QueryMsg::DepositFees { index } => {
+            to_json_binary(&query_deposit_fees(deps.storage, index)?)
         }
-        QueryMsg::HeaderHeight {} => to_binary(&query_header_height(deps.storage)?),
-        QueryMsg::SidechainBlockHash {} => to_binary(&query_sidechain_block_hash(deps.storage)?),
+        QueryMsg::WithdrawalFees { address, index } => {
+            to_json_binary(&query_withdrawal_fees(deps.storage, address, index)?)
+        }
+        QueryMsg::HeaderHeight {} => to_json_binary(&query_header_height(deps.storage)?),
+        QueryMsg::SidechainBlockHash {} => {
+            to_json_binary(&query_sidechain_block_hash(deps.storage)?)
+        }
         QueryMsg::CheckpointByIndex { index } => {
-            to_binary(&query_checkpoint_by_index(deps.storage, index)?)
+            to_json_binary(&query_checkpoint_by_index(deps.storage, index)?)
         }
     }
 }
@@ -125,6 +129,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
     let original_version =
-        cw_utils::ensure_from_older_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+        cw2::ensure_from_older_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     Ok(Response::new().add_attribute("new_version", original_version.to_string()))
 }

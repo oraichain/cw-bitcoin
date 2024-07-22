@@ -42,8 +42,13 @@ fn mint_token() {
     });
 
     // fails to mint token before creating it
-    app.execute(Addr::unchecked("alice"), contract.clone(), &msg, &[])
+    let error = app
+        .execute(Addr::unchecked("alice"), contract.clone(), &msg, &[])
         .unwrap_err();
+    assert!(error
+        .root_cause()
+        .to_string()
+        .contains("Token denom was never created"));
 
     // create the token now
     let create = TokenFactoryMsg::Token(TokenFactoryMsgOptions::CreateDenom {

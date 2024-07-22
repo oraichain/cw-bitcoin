@@ -4,8 +4,7 @@ use bitcoin::hashes::sha256d::Hash;
 use bitcoin::BlockHash;
 use bitcoin::{hash_types::TxMerkleNode, BlockHeader};
 use chrono::{TimeZone, Utc};
-use cosmwasm_std::Binary;
-use cosmwasm_std::{from_binary, testing::mock_dependencies, to_binary};
+use cosmwasm_std::{from_json, testing::mock_dependencies, to_json_binary, Binary};
 use serial_test::serial;
 
 use crate::adapter::Adapter;
@@ -32,8 +31,8 @@ fn primitive_adapter_encode_decode() {
     };
 
     let adapter = Adapter::new(header);
-    let encoded_adapter = to_binary(&adapter).unwrap();
-    let decoded_adapter: Adapter<BlockHeader> = from_binary(&encoded_adapter).unwrap();
+    let encoded_adapter = to_json_binary(&adapter).unwrap();
+    let decoded_adapter: Adapter<BlockHeader> = from_json(&encoded_adapter).unwrap();
 
     assert_eq!(*decoded_adapter, header);
 

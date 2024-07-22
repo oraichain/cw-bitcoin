@@ -23,17 +23,15 @@ cw-storage-plus = { workspace = true }
 cw2 = { workspace = true }
 cw20 = { workspace = true }
 cw20-base = { workspace = true }
-cw-utils = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true }
 cosmwasm-std = { workspace = true, features = ["ibc3"] }
 bitcoin-script = { workspace = true }
 sha2 = { workspace = true }
-tokenfactory = { git = "https://github.com/oraichain/token-bindings.git", rev = "d379675" }
-token-bindings = { git = "https://github.com/oraichain/token-bindings.git", rev = "d379675" }
+tokenfactory = { git = "https://github.com/oraichain/token-bindings.git", rev = "7861576" }
+token-bindings = { git = "https://github.com/oraichain/token-bindings.git", rev = "7861576" }
 
 [dev-dependencies]
-cw-multi-test = { workspace = true }
 chrono = "0.4.19"
 serial_test = "2.0.0"
-cosmwasm-testing-util = { git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "0c9c4d8" }
+cosmwasm-testing-util = { git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "33a262f" }

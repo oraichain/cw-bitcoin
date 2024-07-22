@@ -1,7 +1,7 @@
 use cosmwasm_std::{testing::mock_env, Env, Timestamp};
 use cosmwasm_std::{Addr, Coin};
 
-use cw_multi_test::ContractWrapper;
+use cosmwasm_testing_util::{ContractWrapper, MockResult};
 
 use crate::checkpoint::{BitcoinTx, Output};
 use crate::msg::{self};
@@ -76,7 +76,7 @@ impl MockApp {
         &mut self,
         sender: Addr,
         init_msg: &msg::InstantiateMsg,
-    ) -> Result<Addr, String> {
+    ) -> MockResult<Addr> {
         let code_id = self.bridge_id;
         let addr = self.instantiate(code_id, sender, init_msg, &[], "cw-bitcoin-bridge")?;
         Ok(addr)
