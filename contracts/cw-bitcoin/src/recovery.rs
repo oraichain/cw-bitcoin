@@ -13,7 +13,7 @@ use crate::{
 use bitcoin::{secp256k1::PublicKey, OutPoint, Transaction, TxOut};
 use common::interface::Xpub;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Deps, DepsMut, Storage};
+use cosmwasm_std::{Deps, DepsMut, QuerierWrapper, Storage};
 use lib_bitcoin::{adapter::HashBinary, msg::QueryMsg};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -102,7 +102,6 @@ impl RecoveryTxs {
     ) -> ContractResult<Vec<([u8; 32], u32)>> {
         let mut msgs = vec![];
 
-        let store = deps.storage;
         let config = CONFIG.load(store).unwrap();
         let bitcoin_lib_addr = config.bitcoin_lib_addr;
 
@@ -133,7 +132,6 @@ impl RecoveryTxs {
             ));
         }
 
-        let store = deps.storage;
         for i in 0..RECOVERY_TXS.len(store)? {
             let mut tx = RECOVERY_TXS.get(store, i)?.ok_or_else(|| {
                 ContractError::Signer("Error getting recovery transaction".to_string())

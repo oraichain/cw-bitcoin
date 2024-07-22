@@ -92,18 +92,22 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
                     vec![]
                 };
 
-            // let offline_signers = btc.begin_block_step(
-            //     env,
-            //     deps.borrow_mut(),
-            //     external_outputs.into_iter().map(Ok),
-            //     hash.to_vec(),
-            // )?;
+            let querier = deps.querier;
+            let storage = deps.storage;
 
-            // for cons_key in &offline_signers {
-            //     let (_, address) = VALIDATORS.load(deps.storage, cons_key)?;
-            //     // punish_downtime(address)?;
-            //     println!("need punish downtime for {}", address);
-            // }
+            let offline_signers = btc.begin_block_step(
+                env,
+                querier,
+                storage,
+                external_outputs.into_iter().map(Ok),
+                hash.to_vec(),
+            )?;
+
+            for cons_key in &offline_signers {
+                let (_, address) = VALIDATORS.load(storage, cons_key)?;
+                // punish_downtime(address)?;
+                println!("need punish downtime for {}", address);
+            }
 
             Ok(Response::new())
         }
