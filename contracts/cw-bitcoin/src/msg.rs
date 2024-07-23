@@ -1,13 +1,13 @@
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use common::interface::Xpub;
+use common::{adapter::Adapter, interface::Xpub};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary};
 
 use crate::{
     header::WrappedHeader,
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
+    threshold_sig::Signature,
 };
-use common::adapter::Adapter;
 use common::adapter::HashBinary;
 
 #[cw_serde]
@@ -37,6 +37,16 @@ pub enum ExecuteMsg {
         btc_vout: u32,
         sigset_index: u32,
         dest: Dest,
+    },
+    SubmitCheckpointSignature {
+        xpub: HashBinary<Xpub>,
+        sigs: Vec<Signature>,
+        checkpoint_index: u32,
+        btc_height: u32,
+    },
+    SubmitRecoverySignature {
+        xpub: HashBinary<Xpub>,
+        sigs: Vec<Signature>,
     },
 }
 

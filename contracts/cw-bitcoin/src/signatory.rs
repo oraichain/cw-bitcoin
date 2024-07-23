@@ -24,8 +24,8 @@ use cosmwasm_std::QuerierWrapper;
 use cosmwasm_std::Storage;
 // use ed::Encode;
 
+use common::adapter::HashBinary;
 use common::interface::Xpub;
-use lib_bitcoin::adapter::HashBinary;
 use lib_bitcoin::msg::QueryMsg;
 
 /// The maximum number of signatories in a signatory set.

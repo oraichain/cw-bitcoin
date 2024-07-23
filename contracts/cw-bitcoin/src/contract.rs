@@ -73,6 +73,22 @@ pub fn execute(
         ExecuteMsg::UpdateCheckpointConfig { config } => {
             update_checkpoint_config(deps.storage, config)
         }
+        ExecuteMsg::SubmitCheckpointSignature {
+            xpub,
+            sigs,
+            checkpoint_index,
+            btc_height,
+        } => submit_checkpoint_signature(
+            deps.querier,
+            deps.storage,
+            xpub,
+            sigs,
+            checkpoint_index,
+            btc_height,
+        ),
+        ExecuteMsg::SubmitRecoverySignature { xpub, sigs } => {
+            submit_recovery_signature(deps.querier, deps.storage, xpub, sigs)
+        }
     }
 }
 

@@ -5,10 +5,14 @@ use crate::{
     header::{HeaderList, HeaderQueue, WrappedHeader},
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, MintTokens},
     state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG},
+    threshold_sig::Signature,
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use common::adapter::Adapter;
-use cosmwasm_std::{wasm_execute, Env, Response, Storage};
+use common::{
+    adapter::{Adapter, HashBinary},
+    interface::Xpub,
+};
+use cosmwasm_std::{wasm_execute, Env, QuerierWrapper, Response, Storage};
 
 /// TODO: check logic
 pub fn update_checkpoint_config(
@@ -100,5 +104,35 @@ pub fn relay_checkpoint(
     let mut btc = Bitcoin::new(header_config);
     let response = Response::new().add_attribute("action", "relay_checkpoint");
     btc.relay_checkpoint(store, btc_height, btc_proof, cp_index)?;
+    Ok(response)
+}
+
+pub fn submit_checkpoint_signature(
+    querier: QuerierWrapper,
+    store: &mut dyn Storage,
+    xpub: HashBinary<Xpub>,
+    sigs: Vec<Signature>,
+    cp_index: u32,
+    btc_height: u32,
+) -> ContractResult<Response> {
+    let header_config = HEADER_CONFIG.load(store)?;
+    let btc = Bitcoin::new(header_config);
+    let mut checkpoints = btc.checkpoints;
+    let _ = checkpoints.sign(querier, store, &xpub.0, sigs, cp_index, btc_height);
+    let response = Response::new().add_attribute("action", "submit_checkpoint_signature");
+    Ok(response)
+}
+
+pub fn submit_recovery_signature(
+    querier: QuerierWrapper,
+    store: &mut dyn Storage,
+    xpub: HashBinary<Xpub>,
+    sigs: Vec<Signature>,
+) -> ContractResult<Response> {
+    let header_config = HEADER_CONFIG.load(store)?;
+    let btc = Bitcoin::new(header_config);
+    let mut recovery_txs = btc.recovery_txs;
+    let _ = recovery_txs.sign(querier, store, &xpub.0, sigs);
+    let response = Response::new().add_attribute("action", "submit_recovery_signature");
     Ok(response)
 }
