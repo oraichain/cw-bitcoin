@@ -3,8 +3,16 @@ use cosmwasm_std::{Order, Storage};
 use std::str::FromStr;
 
 use crate::{
-    adapter::{Adapter, HashBinary}, app::{Bitcoin, ConsensusKey}, checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue}, error::{ContractError, ContractResult}, header::HeaderQueue, interface::Xpub, recovery::{RecoveryTxs, SignedRecoveryTx}, signatory::SignatorySet, state::{header_height, HEADER_CONFIG, OUTPOINTS, SIG_KEYS}
+    adapter::{Adapter, HashBinary},
+    app::{Bitcoin, ConsensusKey},
+    checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue},
+    error::{ContractError, ContractResult},
+    header::HeaderQueue,
+    recovery::{RecoveryTxs, SignedRecoveryTx},
+    signatory::SignatorySet,
+    state::{header_height, HEADER_CONFIG, OUTPOINTS, SIG_KEYS},
 };
+use common::interface::Xpub;
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
     header_height(store)
@@ -122,7 +130,10 @@ pub fn query_process_outpoints(store: &dyn Storage) -> ContractResult<Vec<String
     Ok(process_outpoints)
 }
 
-pub fn query_signatory_keys(store: &dyn Storage, cons_key: ConsensusKey) -> ContractResult<Option<Xpub>> {
+pub fn query_signatory_keys(
+    store: &dyn Storage,
+    cons_key: ConsensusKey,
+) -> ContractResult<Option<Xpub>> {
     let signatory_keys = SIG_KEYS.may_load(store, &cons_key)?;
     Ok(signatory_keys)
 }
