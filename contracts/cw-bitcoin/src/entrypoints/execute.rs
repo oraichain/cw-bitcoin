@@ -148,3 +148,15 @@ pub fn set_signatory_key(
     let response = Response::new().add_attribute("action", "set_signatory_key");
     Ok(response)
 }
+
+pub fn set_recovery_script(
+    store: &mut dyn Storage,
+    info: MessageInfo,
+    script: Adapter<bitcoin::Script>,
+) -> ContractResult<Response> {
+    let header_config = HEADER_CONFIG.load(store)?;
+    let mut btc = Bitcoin::new(header_config);
+    let _ = btc.set_recovery_script(store, info.sender, script);
+    let response = Response::new().add_attribute("action", "set_recovery_script");
+    Ok(response)
+}

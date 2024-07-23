@@ -61,6 +61,8 @@ pub const EXPIRATION_QUEUE: Map<(u64, &str), ()> = Map::new("expiration_queue");
 /// A set of outpoints.
 pub const OUTPOINTS: Map<&str, ()> = Map::new("outpoints");
 
+pub const FEE_POOL: Item<i64> = Item::new("fee_pool");
+
 pub const CHECKPOINTS: DequeExtension<Checkpoint> = DequeExtension::new("checkpoints");
 /// Checkpoint building index
 pub const BUILDING_INDEX: Item<u32> = Item::new("building_index");

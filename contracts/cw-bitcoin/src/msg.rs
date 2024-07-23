@@ -1,4 +1,4 @@
-use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use bitcoin::{util::merkleblock::PartialMerkleTree, Script, Transaction};
 use common::{adapter::Adapter, interface::Xpub};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary};
@@ -50,6 +50,9 @@ pub enum ExecuteMsg {
     },
     SetSignatoryKey {
         xpub: HashBinary<Xpub>,
+    },
+    SetRecoveryScript {
+        signatory_script: Adapter<Script>,
     },
 }
 

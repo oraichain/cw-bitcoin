@@ -9,7 +9,10 @@ use crate::{
     error::ContractError,
     interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
-    state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG, VALIDATORS},
+    state::{
+        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL, HEADER_CONFIG,
+        VALIDATORS,
+    },
 };
 
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
@@ -40,6 +43,8 @@ pub fn instantiate(
     HEADER_CONFIG.save(deps.storage, &HeaderConfig::mainnet()?)?;
     CHECKPOINT_CONFIG.save(deps.storage, &CheckpointConfig::default())?;
     BITCOIN_CONFIG.save(deps.storage, &&BitcoinConfig::default())?;
+    FEE_POOL.save(deps.storage, &0)?;
+    BUILDING_INDEX.save(deps.storage, &0)?;
 
     Ok(Response::default())
 }
@@ -92,6 +97,9 @@ pub fn execute(
             submit_recovery_signature(deps.querier, deps.storage, xpub, sigs)
         }
         ExecuteMsg::SetSignatoryKey { xpub } => set_signatory_key(deps.storage, info, xpub),
+        ExecuteMsg::SetRecoveryScript { signatory_script } => {
+            set_recovery_script(deps.storage, info, signatory_script)
+        }
     }
 }
 
