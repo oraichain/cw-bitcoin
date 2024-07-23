@@ -1,6 +1,5 @@
 // #![feature(trait_alias)]
 
-mod adapter;
 mod app;
 mod checkpoint;
 mod constants;

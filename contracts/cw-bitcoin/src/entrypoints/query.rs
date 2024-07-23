@@ -1,17 +1,17 @@
 use bitcoin::{BlockHash, Transaction};
-use cosmwasm_std::{Order, Storage};
+use cosmwasm_std::{Order, QuerierWrapper, Storage};
 use std::str::FromStr;
 
 use crate::{
-    adapter::{Adapter, HashBinary},
     app::{Bitcoin, ConsensusKey},
-    checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue},
+    checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue, CheckpointStatus},
     error::{ContractError, ContractResult},
     header::HeaderQueue,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
     state::{header_height, HEADER_CONFIG, OUTPOINTS, SIG_KEYS},
 };
+use common::adapter::{Adapter, HashBinary};
 use common::interface::Xpub;
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
@@ -95,10 +95,13 @@ pub fn query_signed_recovery_txs(store: &dyn Storage) -> ContractResult<Vec<Sign
     Ok(signed_recovery_txs)
 }
 
-pub fn query_last_complete_index(store: &dyn Storage) -> ContractResult<u32> {
-    let checkpoints = CheckpointQueue::default();
-    let last_complete_index = checkpoints.last_completed_index(store)?;
-    Ok(last_complete_index)
+pub fn query_signing_recovery_txs(
+    querier: QuerierWrapper,
+    store: &dyn Storage,
+    xpub: HashBinary<Xpub>,
+) -> ContractResult<Vec<([u8; 32], u32)>> {
+    let recovery_txs = RecoveryTxs::default();
+    recovery_txs.to_sign(querier, store, &xpub.0)
 }
 
 pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<u32> {
@@ -142,4 +145,18 @@ pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
     let checkpoints = CheckpointQueue::default();
     let len = checkpoints.len(store)?;
     Ok(len)
+}
+
+pub fn query_signing_txs_at_checkpoint_index(
+    querier: QuerierWrapper,
+    store: &dyn Storage,
+    xpub: HashBinary<Xpub>,
+    cp_index: u32,
+) -> ContractResult<Vec<([u8; 32], u32)>> {
+    let checkpoints = CheckpointQueue::default();
+    let checkpoint = checkpoints.get(store, cp_index)?;
+    if checkpoint.status != CheckpointStatus::Signing {
+        return Err(ContractError::App("checkpoint is not signing".to_string()));
+    }
+    Ok(checkpoint.to_sign(querier, store, &xpub.0).unwrap())
 }

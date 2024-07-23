@@ -15,7 +15,6 @@ use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use sha2::{Digest, Sha256};
 
-use crate::adapter::Adapter;
 use crate::app::ConsensusKey;
 use crate::app::NETWORK;
 use crate::constants::MAX_CHECKPOINT_AGE;
@@ -38,6 +37,7 @@ use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::header::WorkHeader;
 use crate::header::WrappedHeader;
+use common::adapter::Adapter;
 use libsecp256k1_core::curve::{Affine, ECMultContext, Field, Scalar};
 use libsecp256k1_core::util::{TAG_PUBKEY_EVEN, TAG_PUBKEY_ODD};
 

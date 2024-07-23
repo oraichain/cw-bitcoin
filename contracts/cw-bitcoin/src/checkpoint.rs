@@ -4,16 +4,16 @@ use super::{
 };
 
 use crate::{
-    adapter::Adapter,
-    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
-    state::{to_output_script, CHECKPOINTS, RECOVERY_SCRIPTS},
-};
-use crate::{
     constants::DEFAULT_FEE_RATE,
     error::{ContractError, ContractResult},
 };
+use crate::{
+    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
+    state::{to_output_script, CHECKPOINTS, RECOVERY_SCRIPTS},
+};
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
+use common::adapter::Adapter;
 use common::interface::Xpub;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};

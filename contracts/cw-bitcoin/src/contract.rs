@@ -130,6 +130,20 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::CheckpointByIndex { index } => {
             to_json_binary(&query_checkpoint_by_index(deps.storage, index)?)
         }
+        QueryMsg::SigningRecoveryTxs { xpub } => to_binary(&query_signing_recovery_txs(
+            deps.querier,
+            deps.storage,
+            xpub,
+        )?),
+        QueryMsg::SigningTxsAtCheckpointIndex {
+            xpub,
+            checkpoint_index,
+        } => to_binary(&query_signing_txs_at_checkpoint_index(
+            deps.querier,
+            deps.storage,
+            xpub,
+            checkpoint_index,
+        )?),
     }
 }
 

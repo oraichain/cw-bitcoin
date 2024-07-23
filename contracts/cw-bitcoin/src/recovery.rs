@@ -1,5 +1,4 @@
 use super::{
-    adapter::Adapter,
     checkpoint::{BitcoinTx, Input},
     signatory::SignatorySet,
     threshold_sig::Signature,
@@ -8,13 +7,13 @@ use crate::{
     error::{ContractError, ContractResult},
     interface::Dest,
     signatory::derive_pubkey,
-    state::{CONFIG, RECOVERY_TXS},
+    state::RECOVERY_TXS,
 };
-use bitcoin::{secp256k1::PublicKey, OutPoint, Transaction, TxOut};
+use bitcoin::{OutPoint, Transaction, TxOut};
+use common::adapter::Adapter;
 use common::interface::Xpub;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Deps, DepsMut, QuerierWrapper, Storage};
-use lib_bitcoin::{adapter::HashBinary, msg::QueryMsg};
+use cosmwasm_std::{QuerierWrapper, Storage};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "cosmwasm_schema::serde")]
@@ -101,9 +100,6 @@ impl RecoveryTxs {
         xpub: &Xpub,
     ) -> ContractResult<Vec<([u8; 32], u32)>> {
         let mut msgs = vec![];
-
-        let config = CONFIG.load(store).unwrap();
-        let bitcoin_lib_addr = config.bitcoin_lib_addr;
 
         for tx in RECOVERY_TXS.iter(store)? {
             let tx = tx?;

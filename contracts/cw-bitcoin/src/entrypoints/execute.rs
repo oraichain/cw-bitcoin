@@ -1,5 +1,4 @@
 use crate::{
-    adapter::Adapter,
     app::Bitcoin,
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
@@ -8,6 +7,7 @@ use crate::{
     state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG},
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use common::adapter::Adapter;
 use cosmwasm_std::{wasm_execute, Env, Response, Storage};
 
 /// TODO: check logic

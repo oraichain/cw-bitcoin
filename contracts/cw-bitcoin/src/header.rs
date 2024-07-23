@@ -1,4 +1,3 @@
-use crate::adapter::Adapter;
 use crate::constants::MAX_HEADERS_RELAY_ONE_TIME;
 use crate::error::ContractError;
 use crate::error::ContractResult;
@@ -10,6 +9,7 @@ use bitcoin::blockdata::block::BlockHeader;
 use bitcoin::util::uint::Uint256;
 use bitcoin::BlockHash;
 use bitcoin::TxMerkleNode;
+use common::adapter::Adapter;
 use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Storage;

@@ -1,12 +1,14 @@
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use common::interface::Xpub;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary};
 
 use crate::{
-    adapter::Adapter,
     header::WrappedHeader,
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
 };
+use common::adapter::Adapter;
+use common::adapter::HashBinary;
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -52,10 +54,17 @@ pub enum QueryMsg {
     DepositFees { index: Option<u32> },
     #[returns(u64)]
     WithdrawalFees { address: String, index: Option<u32> },
-    #[returns(crate::adapter::HashBinary<bitcoin::BlockHash>)]
+    #[returns(HashBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
     #[returns(u64)]
     CheckpointByIndex { index: u32 },
+    #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
+    SigningRecoveryTxs { xpub: HashBinary<Xpub> },
+    #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
+    SigningTxsAtCheckpointIndex {
+        xpub: HashBinary<Xpub>,
+        checkpoint_index: u32,
+    },
 }
 
 #[cw_serde]

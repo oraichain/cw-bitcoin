@@ -10,13 +10,13 @@ use super::checkpoint::Input;
 use super::recovery::{RecoveryTxInput, RecoveryTxs};
 use super::threshold_sig::Signature;
 
-use super::adapter::Adapter;
 use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
 use super::error::{ContractError, ContractResult};
 use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use common::adapter::Adapter;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{
     Addr, Coin, Deps, DepsMut, Env, Order, Querier, QuerierWrapper, Storage, Uint128,
