@@ -82,8 +82,11 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
         SudoMsg::ClockEndBlock { hash } => {
             let header_config = HEADER_CONFIG.load(deps.storage)?;
             let mut btc = Bitcoin::new(header_config);
+            let querier = deps.querier;
+            let storage = deps.storage;
+
             let external_outputs: Vec<bitcoin::TxOut> =
-                if btc.should_push_checkpoint(env.clone(), deps.storage)? {
+                if btc.should_push_checkpoint(env.clone(), querier, storage)? {
                     // TODO: build output
                     vec![]
                     // self.cosmos
@@ -91,9 +94,6 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
                 } else {
                     vec![]
                 };
-
-            let querier = deps.querier;
-            let storage = deps.storage;
 
             let offline_signers = btc.begin_block_step(
                 env,

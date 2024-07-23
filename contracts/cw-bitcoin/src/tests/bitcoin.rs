@@ -19,7 +19,7 @@ use error::ContractResult;
 use interface::{Dest, HeaderConfig};
 use state::{HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS};
 use std::cell::RefCell;
-use tests::helper::set_time;
+use tests::helper::{set_time, MockApp};
 
 use crate::interface::IbcDest;
 
@@ -380,7 +380,7 @@ fn relay_height_validity() -> ContractResult<()> {
 //             };
 
 //             let to_sign = cp.to_sign(&Xpub::new(xpub[i]))?;
-//             let secp2 = Secp256k1::signing_only();
+//             let secp2 = Secp256k1::signing_only()
 //             let sigs = sign(&secp2, &xpriv[i], &to_sign)?;
 //             queue.sign(store, &Xpub::new(xpub[i]), sigs, sigset_index, btc_height)?;
 //         }

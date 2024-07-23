@@ -1551,6 +1551,7 @@ impl CheckpointQueue {
     pub fn maybe_step(
         &mut self,
         env: Env,
+        querier: QuerierWrapper,
         store: &mut dyn Storage,
         nbtc_accounts: &Accounts,
         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
@@ -1560,12 +1561,18 @@ impl CheckpointQueue {
         fee_pool: &mut i64,
         parent_config: &BitcoinConfig,
     ) -> ContractResult<bool> {
-        if !self.should_push(env.clone(), store, &timestamping_commitment, btc_height)? {
+        if !self.should_push(
+            env.clone(),
+            querier,
+            store,
+            &timestamping_commitment,
+            btc_height,
+        )? {
             return Ok(false);
         }
 
         if self
-            .maybe_push(env.clone(), store, should_allow_deposits)?
+            .maybe_push(env.clone(), querier, store, should_allow_deposits)?
             .is_none()
         {
             return Ok(false);
@@ -1692,6 +1699,7 @@ impl CheckpointQueue {
     pub fn should_push(
         &mut self,
         env: Env,
+        querier: QuerierWrapper,
         store: &dyn Storage,
         timestamping_commitment: &[u8],
         btc_height: u32,
@@ -1797,7 +1805,8 @@ impl CheckpointQueue {
 
         // Build the signatory set for the new checkpoint based on the current
         // validator set.
-        let sigset = SignatorySet::from_validator_ctx(store, env.block.time.seconds(), index)?;
+        let sigset =
+            SignatorySet::from_validator_ctx(querier, store, env.block.time.seconds(), index)?;
         // Do not push if there are no validators in the signatory set.
         if sigset.possible_vp() == 0 {
             return Ok(false);
@@ -1829,6 +1838,7 @@ impl CheckpointQueue {
     pub fn maybe_push(
         &mut self,
         env: Env,
+        querier: QuerierWrapper,
         store: &mut dyn Storage,
         deposits_enabled: bool,
     ) -> ContractResult<Option<BuildingCheckpoint>> {
@@ -1841,7 +1851,8 @@ impl CheckpointQueue {
 
         // Build the signatory set for the new checkpoint based on the current
         // validator set.
-        let sigset = SignatorySet::from_validator_ctx(store, env.block.time.seconds(), index)?;
+        let sigset =
+            SignatorySet::from_validator_ctx(querier, store, env.block.time.seconds(), index)?;
 
         // Do not push if there are no validators in the signatory set.
         if sigset.possible_vp() == 0 {

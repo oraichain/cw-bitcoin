@@ -182,10 +182,11 @@ impl Bitcoin {
     pub fn should_push_checkpoint(
         &mut self,
         env: Env,
+        querier: QuerierWrapper,
         store: &dyn Storage,
     ) -> ContractResult<bool> {
         self.checkpoints
-            .should_push(env, store, &[0; 32], self.headers.height(store)?)
+            .should_push(env, querier, store, &[0; 32], self.headers.height(store)?)
         // TODO: we shouldn't need this slice, commitment should be fixed-length
     }
 
@@ -666,6 +667,7 @@ impl Bitcoin {
 
         let pushed = self.checkpoints.maybe_step(
             env,
+            querier,
             store,
             &self.accounts,
             external_outputs,
