@@ -2,15 +2,16 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::{Signature, ThresholdSig},
 };
-
 use crate::{
     constants::DEFAULT_FEE_RATE,
     error::{ContractError, ContractResult},
+    state::{CHECKPOINT_CONFIG, CONFIRMED_INDEX, FIRST_UNHANDLED_CONFIRMED_INDEX},
 };
 use crate::{
     interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
     state::{to_output_script, CHECKPOINTS, RECOVERY_SCRIPTS},
 };
+use crate::{signatory::derive_pubkey, state::BUILDING_INDEX};
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
 use common::adapter::Adapter;
@@ -810,22 +811,7 @@ impl Checkpoint {
 /// confirmed in a Bitcoin block.
 #[cw_serde]
 #[derive(Default)]
-pub struct CheckpointQueue {
-    /// The index of the checkpoint currently being built.
-    pub index: u32,
-
-    /// The index of the last checkpoint which has been confirmed in a Bitcoin
-    /// block. Since checkpoints are a sequential cahin, each spending an output
-    /// from the previous, all checkpoints with an index lower than this must
-    /// have also been confirmed.
-    pub confirmed_index: Option<u32>,
-
-    // the first confirmed checkpoint that we have not handled its pending deposit
-    pub first_unhandled_confirmed_cp_index: u32,
-
-    /// Configuration parameters used in processing checkpoints.
-    pub config: CheckpointConfig,
-}
+pub struct CheckpointQueue {}
 
 /// A wrapper around  an immutable reference to a `Checkpoint` which adds type
 /// information guaranteeing that the checkpoint is in the `Complete` state.
@@ -1287,20 +1273,32 @@ impl BuildingCheckpoint {
 }
 
 impl CheckpointQueue {
-    /// Set the queue's configuration parameters.
-    pub fn configure(&mut self, config: CheckpointConfig) {
-        self.config = config;
+    /// The queue's current configuration parameters.
+    pub fn config(&self, store: &dyn Storage) -> CheckpointConfig {
+        let checkpoint_config = CHECKPOINT_CONFIG.load(store).unwrap();
+        checkpoint_config
     }
 
-    /// The queue's current configuration parameters.
-    pub fn config(&self) -> CheckpointConfig {
-        self.config.clone()
+    pub fn index(&self, store: &dyn Storage) -> u32 {
+        let building_index = BUILDING_INDEX.load(store).unwrap();
+        building_index
+    }
+
+    pub fn first_unhandled_confirmed_index(&self, store: &dyn Storage) -> u32 {
+        let index = FIRST_UNHANDLED_CONFIRMED_INDEX.load(store).unwrap();
+        index
+    }
+
+    pub fn confirmed_index(&self, store: &dyn Storage) -> Option<u32> {
+        let index = CONFIRMED_INDEX.may_load(store).unwrap();
+        index
     }
 
     /// Removes all checkpoints from the queue and resets the index to zero.
     pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
-        self.index = 0;
-
+        BUILDING_INDEX.save(store, &0);
+        FIRST_UNHANDLED_CONFIRMED_INDEX.save(store, &0);
+        CONFIRMED_INDEX.remove(store);
         CHECKPOINTS.clear(store)
     }
 
@@ -1309,7 +1307,7 @@ impl CheckpointQueue {
     /// If the index is out of bounds or was pruned, an error is returned.
     pub fn get(&self, store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {
         let queue_len = CHECKPOINTS.len(store)?;
-        let index = self.get_deque_index(index, queue_len)?;
+        let index = self.get_deque_index(store, index, queue_len)?;
         let checkpoint = CHECKPOINTS.get(store, index)?.unwrap();
         Ok(checkpoint)
     }
@@ -1321,7 +1319,7 @@ impl CheckpointQueue {
         checkpoint: &Checkpoint,
     ) -> ContractResult<()> {
         let queue_len = CHECKPOINTS.len(store)?;
-        let index = self.get_deque_index(index, queue_len)?;
+        let index = self.get_deque_index(store, index, queue_len)?;
         CHECKPOINTS.set(store, index, checkpoint)?;
         Ok(())
     }
@@ -1334,9 +1332,14 @@ impl CheckpointQueue {
     /// representing indexes 30 to 34. Checkpoint index 30 is at deque index 0,
     /// checkpoint 34 is at deque index 4, and checkpoint index 29 is now
     /// out-of-bounds.
-    fn get_deque_index(&self, index: u32, queue_len: u32) -> ContractResult<u32> {
-        let start = self.index + 1 - queue_len;
-        if index > self.index || index < start {
+    fn get_deque_index(
+        &self,
+        store: &dyn Storage,
+        index: u32,
+        queue_len: u32,
+    ) -> ContractResult<u32> {
+        let start = self.index(store) + 1 - queue_len;
+        if index > self.index(store) || index < start {
             Err(ContractError::App("Index out of bounds".into()))
         } else {
             Ok(index - start)
@@ -1363,12 +1366,6 @@ impl CheckpointQueue {
         Ok(self.len(store)? == 0)
     }
 
-    /// The index of the last checkpoint in the queue (aka the `Building`
-    /// checkpoint).
-    pub fn index(&self) -> u32 {
-        self.index
-    }
-
     /// All checkpoints in the queue, in order from oldest to newest.
     ///
     /// The return value is a vector of tuples, where the first element is the
@@ -1382,7 +1379,7 @@ impl CheckpointQueue {
 
         for i in 0..queue_len {
             let checkpoint = CHECKPOINTS.get(store, i)?.unwrap();
-            out.push(((self.index + 1 - (queue_len - i)), checkpoint));
+            out.push(((self.index(store) + 1 - (queue_len - i)), checkpoint));
         }
 
         Ok(out)
@@ -1406,7 +1403,7 @@ impl CheckpointQueue {
         }
 
         let skip = if self.signing(store)?.is_some() { 2 } else { 1 };
-        let end = self.index.saturating_sub(skip - 1);
+        let end = self.index(store).saturating_sub(skip - 1);
 
         let start = end - limit.min(length - skip);
 
@@ -1421,15 +1418,15 @@ impl CheckpointQueue {
     /// The index of the last completed checkpoint.
     pub fn last_completed_index(&self, store: &dyn Storage) -> ContractResult<u32> {
         if self.signing(store)?.is_some() {
-            self.index.checked_sub(2)
+            self.index(store).checked_sub(2)
         } else {
-            self.index.checked_sub(1)
+            self.index(store).checked_sub(1)
         }
         .ok_or_else(|| ContractError::App("No completed checkpoints yet".to_string()))
     }
 
     pub fn first_index(&self, store: &dyn Storage) -> ContractResult<u32> {
-        Ok(self.index + 1 - self.len(store)?)
+        Ok(self.index(store) + 1 - self.len(store)?)
     }
 
     /// A reference to the last completed checkpoint.
@@ -1495,7 +1492,7 @@ impl CheckpointQueue {
             return Ok(None);
         }
 
-        let second = self.get(store, self.index - 1)?;
+        let second = self.get(store, self.index(store) - 1)?;
         if !matches!(second.status, CheckpointStatus::Signing) {
             return Ok(None);
         }
@@ -1510,7 +1507,7 @@ impl CheckpointQueue {
     /// deposit has been received, there will always be a checkpoint in this
     /// state.
     pub fn building(&self, store: &dyn Storage) -> ContractResult<BuildingCheckpoint> {
-        let last = self.get(store, self.index)?;
+        let last = self.get(store, self.index(store))?;
         Ok(BuildingCheckpoint(last))
     }
 
@@ -1580,11 +1577,11 @@ impl CheckpointQueue {
 
         self.prune(store)?;
 
-        if self.index > 0 {
-            let prev_index = self.index - 1;
+        if self.index(store) > 0 {
+            let prev_index = self.index(store) - 1;
             let cp_fees = self.calc_fee_checkpoint(store, prev_index, &timestamping_commitment)?;
 
-            let config = self.config();
+            let config = self.config(store);
             let prev = self.get(store, prev_index)?;
             let sigset = prev.sigset.clone();
             let prev_fee_rate = prev.fee_rate;
@@ -1669,7 +1666,8 @@ impl CheckpointQueue {
                 checkpoint_tx.output.push(output);
             }
 
-            self.set(store, self.index, &building)?;
+            let index = self.index(store);
+            self.set(store, index, &building)?;
         }
 
         Ok(true)
@@ -1685,7 +1683,7 @@ impl CheckpointQueue {
                 break;
             }
 
-            if latest - oldest.create_time() <= self.config.max_age {
+            if latest - oldest.create_time() <= self.config(store).max_age {
                 break;
             }
 
@@ -1716,7 +1714,7 @@ impl CheckpointQueue {
 
             // Do not push if the minimum checkpoint interval has not elapsed
             // since creating the current `Building` checkpoint.
-            if elapsed < self.config.min_checkpoint_interval {
+            if elapsed < self.config(store).min_checkpoint_interval {
                 return Ok(false);
             }
 
@@ -1731,16 +1729,16 @@ impl CheckpointQueue {
                 }
             }
             let cp_miner_fees =
-                self.calc_fee_checkpoint(store, self.index, timestamping_commitment)?;
+                self.calc_fee_checkpoint(store, self.index(store), timestamping_commitment)?;
             let building = self.building(store)?;
 
             // Don't push if there are no pending deposits, withdrawals, or
             // transfers, or if not enough has been collected to pay for the
             // miner fee, unless the maximum checkpoint interval has elapsed
             // since creating the current `Building` checkpoint.
-            if elapsed < self.config.max_checkpoint_interval || self.index == 0 {
+            if elapsed < self.config(store).max_checkpoint_interval || self.index(store) == 0 {
                 let checkpoint_tx = building.checkpoint_tx()?;
-                let has_pending_deposit = if self.index == 0 {
+                let has_pending_deposit = if self.index(store) == 0 {
                     !checkpoint_tx.input.is_empty()
                 } else {
                     checkpoint_tx.input.len() > 1
@@ -1765,7 +1763,7 @@ impl CheckpointQueue {
 
             // Do not push if the reserve value is not enough to spend the output & miner fees
             let (input_amount, output_amount) =
-                building.calc_total_input_and_output(&self.config)?;
+                building.calc_total_input_and_output(&self.config(store))?;
             if input_amount < output_amount + cp_miner_fees {
                 #[cfg(debug_assertions)]
                 println!(
@@ -1792,13 +1790,13 @@ impl CheckpointQueue {
         // issue is simply with relayers failing to report the confirmation of the
         // checkpoint transactions.
         let unconfs = self.num_unconfirmed(store)?;
-        if unconfs >= self.config.max_unconfirmed_checkpoints {
+        if unconfs >= self.config(store).max_unconfirmed_checkpoints {
             return Ok(false);
         }
 
         // Increment the index. For the first checkpoint, leave the index at
         // zero.
-        let mut index = self.index;
+        let mut index = self.index(store);
         if !CHECKPOINTS.is_empty(store)? {
             index += 1;
         }
@@ -1828,8 +1826,8 @@ impl CheckpointQueue {
         timestamping_commitment: &[u8],
     ) -> ContractResult<u64> {
         let cp = self.get(store, cp_index)?;
-        let additional_fees = self.fee_adjustment(store, cp.fee_rate, &self.config)?;
-        let base_fee = cp.base_fee(&self.config, timestamping_commitment)?;
+        let additional_fees = self.fee_adjustment(store, cp.fee_rate, &self.config(store))?;
+        let base_fee = cp.base_fee(&self.config(store), timestamping_commitment)?;
         let total_fee = base_fee + additional_fees;
 
         Ok(total_fee)
@@ -1844,7 +1842,7 @@ impl CheckpointQueue {
     ) -> ContractResult<Option<BuildingCheckpoint>> {
         // Increment the index. For the first checkpoint, leave the index at
         // zero.
-        let mut index = self.index;
+        let mut index = self.index(store);
         if !CHECKPOINTS.is_empty(store)? {
             index += 1;
         }
@@ -1864,13 +1862,14 @@ impl CheckpointQueue {
             return Ok(None);
         }
 
-        self.index = index;
-
+        let _ = BUILDING_INDEX.save(store, &index);
         CHECKPOINTS.push_back(store, &Checkpoint::new(sigset)?)?;
 
         let mut building = self.building(store)?;
         building.deposits_enabled = deposits_enabled;
-        self.set(store, self.index, &building)?;
+
+        let index = self.index(store);
+        self.set(store, index, &building)?;
 
         Ok(Some(building))
     }
@@ -1949,13 +1948,13 @@ impl CheckpointQueue {
         let has_signing = self.signing(store)?.is_some();
         let signing_offset = has_signing as u32;
 
-        let last_completed_index = self.index.checked_sub(1 + signing_offset);
+        let last_completed_index = self.index(store).checked_sub(1 + signing_offset);
         let last_completed_index = match last_completed_index {
             None => return Ok(0),
             Some(index) => index,
         };
 
-        let confirmed_index = match self.confirmed_index {
+        let confirmed_index = match self.confirmed_index(store) {
             None => return Ok(self.len(store)? - 1 - signing_offset),
             Some(index) => index,
         };
@@ -1972,14 +1971,14 @@ impl CheckpointQueue {
         let has_signing = self.signing(store)?.is_some();
         let signing_offset = has_signing as u32;
 
-        Ok(Some(self.index - num_unconf - signing_offset))
+        Ok(Some(self.index(store) - num_unconf - signing_offset))
     }
 
     pub fn unconfirmed(&self, store: &dyn Storage) -> ContractResult<Vec<Checkpoint>> {
         let first_unconf_index = self.first_unconfirmed_index(store)?;
         if let Some(index) = first_unconf_index {
             let mut out = vec![];
-            for i in index..=self.index {
+            for i in index..=self.index(store) {
                 let cp = self.get(store, i)?;
                 if !matches!(cp.status, CheckpointStatus::Complete) {
                     break;
@@ -1993,12 +1992,13 @@ impl CheckpointQueue {
     }
 
     pub fn unhandled_confirmed(&self, store: &dyn Storage) -> ContractResult<Vec<u32>> {
-        if self.confirmed_index.is_none() {
+        if self.confirmed_index(store).is_none() {
             return Ok(vec![]);
         }
 
         let mut out = vec![];
-        for i in self.first_unhandled_confirmed_cp_index..=self.confirmed_index.unwrap() {
+        for i in self.first_unhandled_confirmed_index(store)..=self.confirmed_index(store).unwrap()
+        {
             let cp = self.get(store, i)?;
             if !matches!(cp.status, CheckpointStatus::Complete) {
                 #[cfg(debug_assertions)]

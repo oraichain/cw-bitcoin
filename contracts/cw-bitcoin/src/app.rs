@@ -2,7 +2,10 @@ use crate::checkpoint::Checkpoint;
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
 use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, HeaderConfig, Validator};
 use crate::signatory::SignatoryKeys;
-use crate::state::{get_validators, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS};
+use crate::state::{
+    get_validators, CONFIRMED_INDEX, FIRST_UNHANDLED_CONFIRMED_INDEX, RECOVERY_SCRIPTS, SIGNERS,
+    SIG_KEYS,
+};
 use crate::threshold_sig;
 use common::interface::Xpub;
 
@@ -24,7 +27,7 @@ use cosmwasm_std::{
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
-use std::borrow::BorrowMut;
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 
 pub const NETWORK: ::bitcoin::Network = ::bitcoin::Network::Bitcoin;
@@ -59,6 +62,7 @@ pub struct Bitcoin {
     /// and pay out requested withdrawals.    
     pub checkpoints: CheckpointQueue,
 
+    /// TODO: remove this, for flow withdrawing money we don't need to use this when using factory module
     /// The map of nBTC accounts, which hold the nBTC balances of users.
     pub accounts: Accounts,
 
@@ -113,7 +117,7 @@ impl Bitcoin {
     ) -> ContractResult<Checkpoint> {
         let checkpoint = match index {
             Some(index) => self.checkpoints.get(store, index)?,
-            None => self.checkpoints.get(store, self.checkpoints.index)?, // get current checkpoint being built
+            None => self.checkpoints.get(store, self.checkpoints.index(store))?, // get current checkpoint being built
         };
 
         Ok(checkpoint)
@@ -190,17 +194,28 @@ impl Bitcoin {
         // TODO: we shouldn't need this slice, commitment should be fixed-length
     }
 
-    pub fn calc_minimum_deposit_fees(&self, input_vsize: u64, fee_rate: u64) -> u64 {
-        input_vsize * fee_rate * self.checkpoints.config.user_fee_factor / 10_000
+    pub fn calc_minimum_deposit_fees(
+        &self,
+        store: &dyn Storage,
+        input_vsize: u64,
+        fee_rate: u64,
+    ) -> u64 {
+        input_vsize * fee_rate * self.checkpoints.config(store).user_fee_factor / 10_000
             * self.config.units_per_sat
     }
 
-    pub fn calc_minimum_withdrawal_fees(&self, script_pubkey_length: u64, fee_rate: u64) -> u64 {
-        (9 + script_pubkey_length) * fee_rate * self.checkpoints.config.user_fee_factor / 10_000
+    pub fn calc_minimum_withdrawal_fees(
+        &self,
+        store: &dyn Storage,
+        script_pubkey_length: u64,
+        fee_rate: u64,
+    ) -> u64 {
+        (9 + script_pubkey_length) * fee_rate * self.checkpoints.config(store).user_fee_factor
+            / 10_000
             * self.config.units_per_sat
     }
 
-    /// Verifies and processes a deposit of BTC into the reserve.
+    /// Verifies and processes a deposit of BTC into the reserve.   
     ///
     /// This will check that the Bitcoin transaction has been sufficiently
     /// confirmed on the Bitcoin blockchain, then will add the deposit to the
@@ -270,7 +285,7 @@ impl Bitcoin {
 
         let dest_bytes = dest.commitment_bytes()?;
         let expected_script =
-            sigset.output_script(&dest_bytes, self.checkpoints.config.sigset_threshold)?;
+            sigset.output_script(&dest_bytes, self.checkpoints.config(store).sigset_threshold)?;
         if output.script_pubkey != expected_script {
             return Err(ContractError::App(
                 "Output script does not match signature set".to_string(),
@@ -294,6 +309,7 @@ impl Bitcoin {
 
         if now > deposit_timeout {
             let checkpoint = self.checkpoints.building(store)?;
+            let checkpoint_config = self.checkpoints.config(store);
             self.recovery_txs.create_recovery_tx(
                 store,
                 RecoveryTxInput {
@@ -304,7 +320,7 @@ impl Bitcoin {
                     dest,
                     fee_rate: checkpoint.fee_rate,
                     //TODO: Hold checkpoint config on state
-                    threshold: self.checkpoints.config.sigset_threshold,
+                    threshold: checkpoint_config.sigset_threshold,
                 },
             )?;
 
@@ -320,7 +336,7 @@ impl Bitcoin {
             &sigset,
             &dest_bytes,
             output.value,
-            self.checkpoints.config.sigset_threshold,
+            self.checkpoints.config(store).sigset_threshold,
         )?;
         let input_size = input.est_vsize();
         // mint token_factory here
@@ -329,7 +345,7 @@ impl Bitcoin {
             denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
             amount: mint_amount,
         };
-        let fee_amount = self.calc_minimum_deposit_fees(input_size, checkpoint.fee_rate);
+        let fee_amount = self.calc_minimum_deposit_fees(store, input_size, checkpoint.fee_rate);
         let deposit_fees = calc_deposit_fee(nbtc.amount);
         let fee = (fee_amount + deposit_fees).into();
         nbtc.amount = nbtc.amount.checked_sub(fee).map_err(|_| {
@@ -357,8 +373,8 @@ impl Bitcoin {
             .building(store)?
             .insert_pending(dest, nbtc)?;
 
-        self.checkpoints
-            .set(store, self.checkpoints.index, &building_mut)?;
+        let index = self.checkpoints.index(store);
+        self.checkpoints.set(store, index, &building_mut)?;
 
         Ok(Some(mint_amount))
     }
@@ -372,7 +388,7 @@ impl Bitcoin {
         btc_proof: Adapter<PartialMerkleTree>,
         cp_index: u32,
     ) -> ContractResult<()> {
-        if let Some(conf_index) = self.checkpoints.confirmed_index {
+        if let Some(conf_index) = self.checkpoints.confirmed_index(store) {
             if cp_index <= conf_index {
                 return Err(ContractError::App(
                     "Checkpoint has already been relayed".to_string(),
@@ -414,8 +430,7 @@ impl Bitcoin {
             ))?;
         }
 
-        self.checkpoints.confirmed_index = Some(cp_index);
-        #[cfg(debug_assertions)]
+        CONFIRMED_INDEX.save(store, &cp_index)?;
         println!(
             "Checkpoint {} confirmed at Bitcoin height {}",
             cp_index, btc_height
@@ -460,6 +475,7 @@ impl Bitcoin {
         }
 
         let fee_amount = self.calc_minimum_withdrawal_fees(
+            store,
             script_pubkey.len() as u64,
             self.checkpoints.building(store)?.fee_rate,
         );
@@ -493,8 +509,8 @@ impl Bitcoin {
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.output.push(Adapter::new(output));
 
-        self.checkpoints
-            .set(store, self.checkpoints.index, &checkpoint)?;
+        let index = self.checkpoints.index(store);
+        self.checkpoints.set(store, index, &checkpoint)?;
         // TODO: push to excess if full
 
         Ok(())
@@ -519,8 +535,8 @@ impl Bitcoin {
 
         checkpoint.insert_pending(dest, coins)?;
 
-        self.checkpoints
-            .set(store, self.checkpoints.index, &checkpoint)?;
+        let index = self.checkpoints.index(store);
+        self.checkpoints.set(store, index, &checkpoint)?;
 
         Ok(())
     }
@@ -580,7 +596,7 @@ impl Bitcoin {
 
         let completed = self.checkpoints.completed(
             store,
-            (interval / self.checkpoints.config.min_checkpoint_interval) as u32 + 1,
+            (interval / self.checkpoints.config(store).min_checkpoint_interval) as u32 + 1,
         )?;
         if completed.is_empty() {
             return Ok(ChangeRates::default());
@@ -764,7 +780,7 @@ impl Bitcoin {
             self.checkpoints.set(store, *confirmed_index, &checkpoint)?;
         }
         if let Some(last_index) = unhandled_confirmed_cps.last() {
-            self.checkpoints.first_unhandled_confirmed_cp_index = *last_index + 1;
+            FIRST_UNHANDLED_CONFIRMED_INDEX.save(store, &(*last_index + 1));
         }
         Ok(confirmed_dests)
     }
@@ -791,7 +807,7 @@ impl Bitcoin {
             Ok(val) => val,
         };
 
-        let confirmed_index = self.checkpoints.confirmed_index.unwrap_or_default();
+        let confirmed_index = self.checkpoints.confirmed_index(store).unwrap_or_default();
         let mut completed_dests = vec![];
         for checkpoint_index in confirmed_index..=last_completed_index {
             let mut checkpoint = self.checkpoints.get(store, checkpoint_index)?;
@@ -814,8 +830,9 @@ impl Bitcoin {
         self.fee_pool += amount as i64;
         let mut checkpoint = self.checkpoints.building(store)?;
         checkpoint.fees_collected += amount / self.config.units_per_sat;
-        self.checkpoints
-            .set(store, self.checkpoints.index, &checkpoint)?;
+
+        let index = self.checkpoints.index(store);
+        self.checkpoints.set(store, index, &checkpoint)?;
 
         Ok(())
     }

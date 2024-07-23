@@ -62,6 +62,12 @@ pub const EXPIRATION_QUEUE: Map<(u64, &str), ()> = Map::new("expiration_queue");
 pub const OUTPOINTS: Map<&str, ()> = Map::new("outpoints");
 
 pub const CHECKPOINTS: DequeExtension<Checkpoint> = DequeExtension::new("checkpoints");
+/// Checkpoint building index
+pub const BUILDING_INDEX: Item<u32> = Item::new("building_index");
+/// Checkpoint confirmed index
+pub const CONFIRMED_INDEX: Item<u32> = Item::new("confirmed_index");
+/// Checkpoint unhandled confirmed index
+pub const FIRST_UNHANDLED_CONFIRMED_INDEX: Item<u32> = Item::new("first_unhandled_confirmed_index");
 
 pub fn to_output_script(store: &dyn Storage, dest: &str) -> ContractResult<Option<Script>> {
     Ok(RECOVERY_SCRIPTS

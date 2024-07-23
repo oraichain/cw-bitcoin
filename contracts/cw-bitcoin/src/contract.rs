@@ -7,9 +7,9 @@ use crate::{
     app::Bitcoin,
     entrypoints::*,
     error::ContractError,
-    interface::{Config, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
-    state::{CONFIG, HEADER_CONFIG, VALIDATORS},
+    state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG, VALIDATORS},
 };
 
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
@@ -38,6 +38,8 @@ pub fn instantiate(
     )?;
 
     HEADER_CONFIG.save(deps.storage, &HeaderConfig::mainnet()?)?;
+    CHECKPOINT_CONFIG.save(deps.storage, &CheckpointConfig::default())?;
+    BITCOIN_CONFIG.save(deps.storage, &&BitcoinConfig::default())?;
 
     Ok(Response::default())
 }
