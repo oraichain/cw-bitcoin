@@ -48,7 +48,7 @@ pub fn instantiate(
 pub fn execute(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
@@ -91,6 +91,7 @@ pub fn execute(
         ExecuteMsg::SubmitRecoverySignature { xpub, sigs } => {
             submit_recovery_signature(deps.querier, deps.storage, xpub, sigs)
         }
+        ExecuteMsg::SetSignatoryKey { xpub } => set_signatory_key(deps.storage, info, xpub),
     }
 }
 

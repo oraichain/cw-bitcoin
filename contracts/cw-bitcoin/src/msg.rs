@@ -48,6 +48,9 @@ pub enum ExecuteMsg {
         xpub: HashBinary<Xpub>,
         sigs: Vec<Signature>,
     },
+    SetSignatoryKey {
+        xpub: HashBinary<Xpub>,
+    },
 }
 
 #[cw_serde]
