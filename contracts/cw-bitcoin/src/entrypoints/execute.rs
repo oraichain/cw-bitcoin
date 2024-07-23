@@ -12,7 +12,7 @@ use common::{
     adapter::{Adapter, HashBinary},
     interface::Xpub,
 };
-use cosmwasm_std::{wasm_execute, Env, QuerierWrapper, Response, Storage};
+use cosmwasm_std::{wasm_execute, Env, MessageInfo, QuerierWrapper, Response, Storage};
 
 /// TODO: check logic
 pub fn update_checkpoint_config(
@@ -134,5 +134,17 @@ pub fn submit_recovery_signature(
     let mut recovery_txs = btc.recovery_txs;
     let _ = recovery_txs.sign(querier, store, &xpub.0, sigs);
     let response = Response::new().add_attribute("action", "submit_recovery_signature");
+    Ok(response)
+}
+
+pub fn set_signatory_key(
+    store: &mut dyn Storage,
+    info: MessageInfo,
+    xpub: HashBinary<Xpub>,
+) -> ContractResult<Response> {
+    let header_config = HEADER_CONFIG.load(store)?;
+    let mut btc = Bitcoin::new(header_config);
+    let _ = btc.set_signatory_key(store, info.sender, xpub.0);
+    let response = Response::new().add_attribute("action", "set_signatory_key");
     Ok(response)
 }
