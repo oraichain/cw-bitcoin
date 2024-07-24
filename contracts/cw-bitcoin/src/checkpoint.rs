@@ -398,7 +398,7 @@ pub struct Checkpoint {
     /// disbursal.
     ///
     /// These transfers can be initiated by a simple nBTC send or by a deposit.    
-    pub pending: Vec<(String, Coin)>,
+    pub pending: Vec<(Dest, Coin)>,
 
     /// The batches of transactions in the checkpoint, to each be signed
     /// atomically, in order. The first batch contains the "final emergency
@@ -1045,7 +1045,7 @@ impl BuildingCheckpoint {
             .pending
             .iter()
             .filter_map(|(dest, coin)| {
-                let script_pubkey = match to_output_script(store, dest) {
+                let script_pubkey = match to_output_script(store, &dest.to_source_addr()) {
                     Err(err) => return Some(Err(err)),
                     Ok(maybe_script) => maybe_script,
                 }?;
@@ -1260,14 +1260,7 @@ impl BuildingCheckpoint {
     /// being signed, but will be represented in this checkpoint's emergency
     /// disbursal before they are processed.
     pub fn insert_pending(&mut self, dest: Dest, coin: Coin) -> ContractResult<()> {
-        let dest_key = dest.to_receiver_addr();
-        match self.pending.iter_mut().find(|item| item.0 == dest_key) {
-            Some((_, existed_coin)) => {
-                existed_coin.amount += coin.amount;
-            }
-            None => self.pending.push((dest_key, coin)),
-        };
-
+        self.pending.push((dest, coin));
         Ok(())
     }
 }
@@ -1296,8 +1289,8 @@ impl CheckpointQueue {
 
     /// Removes all checkpoints from the queue and resets the index to zero.
     pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
-        BUILDING_INDEX.save(store, &0)?;
-        FIRST_UNHANDLED_CONFIRMED_INDEX.save(store, &0)?;
+        let _ = BUILDING_INDEX.save(store, &0).unwrap();
+        FIRST_UNHANDLED_CONFIRMED_INDEX.remove(store);
         CONFIRMED_INDEX.remove(store);
         CHECKPOINTS.clear(store)
     }

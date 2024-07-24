@@ -109,6 +109,27 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
             let querier = deps.querier;
             let storage = deps.storage;
 
+            let pending_nbtc_transfers = btc.take_pending_completed(storage)?;
+
+            let config = CONFIG.load(storage)?;
+            let token_factory = config.token_factory_addr;
+
+            let mut msgs = vec![];
+            for pending in pending_nbtc_transfers {
+                for (dest, coin) in pending {
+                    // TODO: if dest is IBC packet, then forward to ibc bridge wasm
+                    msgs.push(WasmMsg::Execute {
+                        contract_addr: token_factory.to_string(),
+                        msg: to_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
+                            denom: coin.denom.to_owned(),
+                            amount: coin.amount,
+                            mint_to_address: dest.to_source_addr(),
+                        })?,
+                        funds: vec![],
+                    });
+                }
+            }
+
             let external_outputs: Vec<bitcoin::TxOut> =
                 if btc.should_push_checkpoint(env.clone(), querier, storage)? {
                     // TODO: build output

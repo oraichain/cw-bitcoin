@@ -3,7 +3,8 @@ use crate::constants::BTC_NATIVE_TOKEN_DENOM;
 use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
-    get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS
+    get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX,
+    RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS,
 };
 use crate::threshold_sig;
 use common::interface::Xpub;
@@ -20,9 +21,7 @@ use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use common::adapter::Adapter;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{
-    Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128
-};
+use cosmwasm_std::{Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -74,11 +73,10 @@ pub struct Bitcoin {
 
     // TODO: turn into Coin<Nbtc>
     // pub(crate) fee_pool: i64, // FEE_POOL
-
     /// The configuration parameters for the Bitcoin module.
     pub config: BitcoinConfig, // BITCOIN_CONFIG
 
-    pub recovery_txs: RecoveryTxs, // ? 
+    pub recovery_txs: RecoveryTxs, // ?
 }
 
 /// A Tendermint/CometBFT public key.
@@ -117,7 +115,11 @@ impl Bitcoin {
     }
 
     /// Sets the configuration parameters to the given values.
-    pub fn configure(&mut self, store: &mut dyn Storage,config: BitcoinConfig) -> ContractResult<()> {
+    pub fn configure(
+        &mut self,
+        store: &mut dyn Storage,
+        config: BitcoinConfig,
+    ) -> ContractResult<()> {
         BITCOIN_CONFIG.save(store, &config)?;
         Ok(())
     }
@@ -197,8 +199,10 @@ impl Bitcoin {
         fee_rate: u64,
     ) -> ContractResult<u64> {
         let config = self.config(store)?;
-        Ok(input_vsize * fee_rate * self.checkpoints.config(store).user_fee_factor / 10_000
-            * config.units_per_sat)
+        Ok(
+            input_vsize * fee_rate * self.checkpoints.config(store).user_fee_factor / 10_000
+                * config.units_per_sat,
+        )
     }
 
     pub fn calc_minimum_withdrawal_fees(
@@ -208,9 +212,11 @@ impl Bitcoin {
         fee_rate: u64,
     ) -> ContractResult<u64> {
         let config = self.config(store)?;
-        Ok((9 + script_pubkey_length) * fee_rate * self.checkpoints.config(store).user_fee_factor
-            / 10_000
-            * config.units_per_sat)
+        Ok(
+            (9 + script_pubkey_length) * fee_rate * self.checkpoints.config(store).user_fee_factor
+                / 10_000
+                * config.units_per_sat,
+        )
     }
 
     /// Verifies and processes a deposit of BTC into the reserve.   
@@ -768,7 +774,7 @@ impl Bitcoin {
     pub fn take_pending(
         &mut self,
         store: &mut dyn Storage,
-    ) -> ContractResult<Vec<Vec<(String, Coin)>>> {
+    ) -> ContractResult<Vec<Vec<(Dest, Coin)>>> {
         let unhandled_confirmed_cps = match self.checkpoints.unhandled_confirmed(store) {
             Err(_) => return Ok(vec![]),
             Ok(val) => val,
@@ -784,7 +790,9 @@ impl Bitcoin {
             self.checkpoints.set(store, *confirmed_index, &checkpoint)?;
         }
         if let Some(last_index) = unhandled_confirmed_cps.last() {
-            FIRST_UNHANDLED_CONFIRMED_INDEX.save(store, &(*last_index + 1))?;
+            let _ = FIRST_UNHANDLED_CONFIRMED_INDEX
+                .save(store, &(*last_index + 1))
+                .unwrap();
         }
         Ok(confirmed_dests)
     }
@@ -798,7 +806,7 @@ impl Bitcoin {
     pub fn take_pending_completed(
         &mut self,
         store: &mut dyn Storage,
-    ) -> ContractResult<Vec<Vec<(String, Coin)>>> {
+    ) -> ContractResult<Vec<Vec<(Dest, Coin)>>> {
         let last_completed_index = match self.checkpoints.last_completed_index(store) {
             Err(err) => {
                 if let ContractError::App(err_str) = &err {
@@ -849,14 +857,12 @@ impl Bitcoin {
     pub fn give_rewards(&mut self, store: &mut dyn Storage, amount: Uint128) -> ContractResult<()> {
         let config = self.config(store)?;
         let fee_pool = FEE_POOL.load(store)?;
-        if fee_pool < (config.fee_pool_target_balance * config.units_per_sat) as i64
-        {
+        if fee_pool < (config.fee_pool_target_balance * config.units_per_sat) as i64 {
             let amount: u64 = amount.u128() as u64;
             // TODO:// tokenfactory coin.burn();
 
             let reward_amount = (amount as u128 * config.fee_pool_reward_split.0 as u128
-                / config.fee_pool_reward_split.1 as u128)
-                as u64;
+                / config.fee_pool_reward_split.1 as u128) as u64;
             let fee_amount = amount - reward_amount;
 
             // self.reward_pool.give(Coin::mint(reward_amount))?;

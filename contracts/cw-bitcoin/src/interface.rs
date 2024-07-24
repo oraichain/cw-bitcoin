@@ -143,6 +143,13 @@ impl Dest {
         }
     }
 
+    pub fn to_source_addr(&self) -> String {
+        match self {
+            Self::Address(addr) => addr.to_string(),
+            Self::Ibc(dest) => dest.sender.to_string(),
+        }
+    }
+
     pub fn commitment_bytes(&self) -> ContractResult<Vec<u8>> {
         let bytes = match self {
             Self::Address(addr) => addr.as_bytes().into(),
