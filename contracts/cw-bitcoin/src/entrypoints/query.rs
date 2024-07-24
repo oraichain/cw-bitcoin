@@ -19,8 +19,7 @@ pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
 }
 
 pub fn query_deposit_fees(store: &dyn Storage, index: Option<u32>) -> ContractResult<u64> {
-    let header_config = HEADER_CONFIG.load(store)?;
-    let btc = Bitcoin::new(header_config);
+    let btc = Bitcoin::new(store);
     let checkpoint = btc.get_checkpoint(store, index)?;
     let input_vsize = checkpoint.sigset.est_witness_vsize() + 40;
     let deposit_fees = btc.calc_minimum_deposit_fees(store, input_vsize, checkpoint.fee_rate);
@@ -32,8 +31,7 @@ pub fn query_withdrawal_fees(
     address: String,
     index: Option<u32>,
 ) -> ContractResult<u64> {
-    let header_config = HEADER_CONFIG.load(store)?;
-    let btc = Bitcoin::new(header_config);
+    let btc = Bitcoin::new(store);
     let checkpoint = btc.get_checkpoint(store, index)?;
     let btc_address = bitcoin::Address::from_str(address.as_str())
         .map_err(|err| ContractError::App(err.to_string()))?;

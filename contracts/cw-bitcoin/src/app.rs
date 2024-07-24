@@ -3,8 +3,7 @@ use crate::constants::BTC_NATIVE_TOKEN_DENOM;
 use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, HeaderConfig, Validator};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
-    get_validators, CONFIRMED_INDEX, FIRST_UNHANDLED_CONFIRMED_INDEX, RECOVERY_SCRIPTS, SIGNERS,
-    SIG_KEYS,
+    get_validators, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX, HEADER_CONFIG, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS
 };
 use crate::threshold_sig;
 use common::interface::Xpub;
@@ -87,16 +86,11 @@ pub struct Bitcoin {
 pub type ConsensusKey = [u8; 32];
 
 impl Bitcoin {
-    pub fn new(header_config: HeaderConfig) -> Self {
+    pub fn new(store: &dyn Storage) -> Self {
+        let header_config = HEADER_CONFIG.load(store).unwrap();
+        let fee_pool = FEE_POOL.load(store).unwrap_or_default();
         let headers = HeaderQueue::new(header_config);
         let checkpoints = CheckpointQueue::default();
-        Self::from_checkpoints_and_headers(checkpoints, headers)
-    }
-
-    pub fn from_checkpoints_and_headers(
-        checkpoints: CheckpointQueue,
-        headers: HeaderQueue,
-    ) -> Self {
         Self {
             headers,
             checkpoints,
@@ -104,7 +98,7 @@ impl Bitcoin {
             accounts: Accounts::default(),
             signatory_keys: SignatoryKeys::default(),
             reward_pool: Coin::default(),
-            fee_pool: 0,
+            fee_pool: fee_pool,
             config: BitcoinConfig::default(),
             recovery_txs: RecoveryTxs::default(),
         }
