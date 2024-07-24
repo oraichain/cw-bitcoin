@@ -105,7 +105,7 @@ pub fn execute(
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
         SudoMsg::ClockEndBlock { hash } => {
-            let mut btc = Bitcoin::new(deps.storage);
+            let mut btc = Bitcoin::default();
             let querier = deps.querier;
             let storage = deps.storage;
 

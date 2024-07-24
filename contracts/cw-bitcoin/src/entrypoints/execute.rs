@@ -39,8 +39,8 @@ pub fn update_header_config(
     config: HeaderConfig,
 ) -> ContractResult<Response> {
     HEADER_CONFIG.save(store, &config)?;
-    let header_config = HEADER_CONFIG.load(store)?;
-    let mut header_queue = HeaderQueue::new(header_config);
+    // let header_config = HEADER_CONFIG.load(store)?;
+    let mut header_queue = HeaderQueue::default();
     let _ = header_queue.configure(store, config.clone())?;
     Ok(Response::new().add_attribute("action", "update_header_config"))
 }
@@ -49,8 +49,8 @@ pub fn relay_headers(
     store: &mut dyn Storage,
     headers: Vec<WrappedHeader>,
 ) -> ContractResult<Response> {
-    let header_config = HEADER_CONFIG.load(store)?;
-    let mut header_queue = HeaderQueue::new(header_config);
+    // let header_config = HEADER_CONFIG.load(store)?;
+    let mut header_queue = HeaderQueue::default();
     header_queue.add(store, HeaderList::from(headers)).unwrap();
     Ok(Response::new().add_attribute("action", "add_headers"))
 }
@@ -66,7 +66,7 @@ pub fn relay_deposit(
     dest: Dest,
 ) -> ContractResult<Response> {
     // dest validation?
-    let mut btc = Bitcoin::new(store);
+    let mut btc = Bitcoin::default();
     let mut response = Response::new().add_attribute("action", "relay_deposit");
     if let Some(mint_amount) = btc.relay_deposit(
         env.clone(),
@@ -99,7 +99,7 @@ pub fn relay_checkpoint(
     btc_proof: Adapter<PartialMerkleTree>,
     cp_index: u32,
 ) -> ContractResult<Response> {
-    let mut btc = Bitcoin::new(store);
+    let mut btc = Bitcoin::default();
     let response = Response::new().add_attribute("action", "relay_checkpoint");
     btc.relay_checkpoint(store, btc_height, btc_proof, cp_index)?;
     Ok(response)
@@ -113,7 +113,7 @@ pub fn submit_checkpoint_signature(
     cp_index: u32,
     btc_height: u32,
 ) -> ContractResult<Response> {
-    let btc = Bitcoin::new(store);
+    let btc = Bitcoin::default();
     let mut checkpoints = btc.checkpoints;
     let _ = checkpoints.sign(querier, store, &xpub.0, sigs, cp_index, btc_height);
     let response = Response::new().add_attribute("action", "submit_checkpoint_signature");
@@ -126,7 +126,7 @@ pub fn submit_recovery_signature(
     xpub: HashBinary<Xpub>,
     sigs: Vec<Signature>,
 ) -> ContractResult<Response> {
-    let btc = Bitcoin::new(store);
+    let btc = Bitcoin::default();
     let mut recovery_txs = btc.recovery_txs;
     let _ = recovery_txs.sign(querier, store, &xpub.0, sigs);
     let response = Response::new().add_attribute("action", "submit_recovery_signature");
@@ -138,7 +138,7 @@ pub fn set_signatory_key(
     info: MessageInfo,
     xpub: HashBinary<Xpub>,
 ) -> ContractResult<Response> {
-    let mut btc = Bitcoin::new(store);
+    let mut btc = Bitcoin::default();
     let _ = btc.set_signatory_key(store, info.sender, xpub.0);
     let response = Response::new().add_attribute("action", "set_signatory_key");
     Ok(response)
@@ -149,7 +149,7 @@ pub fn set_recovery_script(
     info: MessageInfo,
     script: Adapter<bitcoin::Script>,
 ) -> ContractResult<Response> {
-    let mut btc = Bitcoin::new(store);
+    let mut btc = Bitcoin::default();
     let _ = btc.set_recovery_script(store, info.sender, script);
     let response = Response::new().add_attribute("action", "set_recovery_script");
     Ok(response)

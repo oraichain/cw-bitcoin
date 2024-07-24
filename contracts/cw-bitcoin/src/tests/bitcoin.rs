@@ -38,7 +38,7 @@ fn relay_height_validity() -> ContractResult<()> {
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
     HEADERS.push_back(deps.as_mut().storage, &header)?;
 
-    let mut btc = Bitcoin::new(&deps.storage);
+    let mut btc = Bitcoin::default();
 
     for _ in 0..10 {
         let btc_height = btc.headers.height(deps.as_ref().storage)?;

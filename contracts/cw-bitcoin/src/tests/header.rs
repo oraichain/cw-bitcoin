@@ -210,7 +210,7 @@ fn add_multiple() {
         .push_back(deps.as_mut().storage, &test_config.work_header())
         .unwrap();
 
-    let mut q = HeaderQueue::new(test_config.clone());
+    let mut q = HeaderQueue::default();
     q.configure(deps.as_mut().storage, test_config).unwrap();
     q.add(deps.as_mut().storage, header_list.into()).unwrap();
 }
@@ -274,7 +274,7 @@ fn add_into_iterator() {
 
     let adapter = Adapter::new(header);
     let header_list = [WrappedHeader::new(adapter, 43)];
-    let mut q = HeaderQueue::new(test_config.clone());
+    let mut q = HeaderQueue::default();
     q.configure(deps.as_mut().storage, test_config).unwrap();
     q.add_into_iter(deps.as_mut().storage, header_list).unwrap();
 }
@@ -338,7 +338,7 @@ fn add_wrong_bits_non_retarget() {
 
     let adapter = Adapter::new(header);
     let header_list = [WrappedHeader::new(adapter, 43)];
-    let mut q = HeaderQueue::new(test_config.clone());
+    let mut q = HeaderQueue::default();
     q.configure(deps.as_mut().storage, test_config).unwrap();
     q.add_into_iter(deps.as_mut().storage, header_list).unwrap();
 }
