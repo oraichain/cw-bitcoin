@@ -1296,8 +1296,8 @@ impl CheckpointQueue {
 
     /// Removes all checkpoints from the queue and resets the index to zero.
     pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
-        BUILDING_INDEX.save(store, &0);
-        FIRST_UNHANDLED_CONFIRMED_INDEX.save(store, &0);
+        BUILDING_INDEX.save(store, &0)?;
+        FIRST_UNHANDLED_CONFIRMED_INDEX.save(store, &0)?;
         CONFIRMED_INDEX.remove(store);
         CHECKPOINTS.clear(store)
     }

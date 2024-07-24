@@ -1,5 +1,3 @@
-use std::borrow::BorrowMut;
-
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 

@@ -90,15 +90,14 @@ impl Bitcoin {
         let header_config = HEADER_CONFIG.load(store).unwrap();
         let fee_pool = FEE_POOL.load(store).unwrap_or_default();
         let headers = HeaderQueue::new(header_config);
-        let checkpoints = CheckpointQueue::default();
         Self {
             headers,
-            checkpoints,
+            checkpoints: CheckpointQueue::default(),
             processed_outpoints: OutpointSet::default(),
             accounts: Accounts::default(),
             signatory_keys: SignatoryKeys::default(),
             reward_pool: Coin::default(),
-            fee_pool: fee_pool,
+            fee_pool,
             config: BitcoinConfig::default(),
             recovery_txs: RecoveryTxs::default(),
         }
