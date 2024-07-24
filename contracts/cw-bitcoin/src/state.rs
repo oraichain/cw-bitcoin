@@ -1,4 +1,4 @@
-use bitcoin::Script;
+use bitcoin::{util::uint::Uint256, Script};
 use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
 
@@ -70,6 +70,8 @@ pub const BUILDING_INDEX: Item<u32> = Item::new("building_index");
 pub const CONFIRMED_INDEX: Item<u32> = Item::new("confirmed_index");
 /// Checkpoint unhandled confirmed index
 pub const FIRST_UNHANDLED_CONFIRMED_INDEX: Item<u32> = Item::new("first_unhandled_confirmed_index");
+/// Header current work
+pub const CURRENT_WORK: Item<Adapter<Uint256>> = Item::new("current_work");
 
 pub fn to_output_script(store: &dyn Storage, dest: &str) -> ContractResult<Option<Script>> {
     Ok(RECOVERY_SCRIPTS

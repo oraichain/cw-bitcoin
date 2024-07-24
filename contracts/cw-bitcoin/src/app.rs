@@ -49,58 +49,59 @@ pub fn calc_deposit_fee(_: Uint128) -> u64 {
 pub struct Bitcoin {
     /// A light client of the Bitcoin blockchain, keeping track of the headers
     /// of the highest-work chain.    
-    pub headers: HeaderQueue,
+    pub headers: HeaderQueue, // HEADERS
 
     /// The set of outpoints which have been relayed to the bridge. This is used
     /// to prevent replay attacks of deposits.
-    pub processed_outpoints: OutpointSet,
+    pub processed_outpoints: OutpointSet, // OUTPOINT_SET
 
     /// The checkpoint queue, which manages the checkpointing process,
     /// periodically moving the reserve of BTC on the Bitcoin blockchain to
     /// collect incoming deposits, move the funds to the latest signatory set,
     /// and pay out requested withdrawals.    
-    pub checkpoints: CheckpointQueue,
+    pub checkpoints: CheckpointQueue, // CHECKPOINTS
 
     /// TODO: remove this, for flow withdrawing money we don't need to use this when using factory module
     /// The map of nBTC accounts, which hold the nBTC balances of users.
-    pub accounts: Accounts,
+    pub accounts: Accounts, // ?
 
     /// The public keys declared by signatories, which are used to sign Bitcoin
     /// transactions.
     // TODO: store recovery script data in account struct
-    pub signatory_keys: SignatoryKeys,
+    pub signatory_keys: SignatoryKeys, // ?
 
     /// A pool of BTC where bridge fees are collected.
-    pub(crate) reward_pool: Coin,
+    pub(crate) reward_pool: Coin, // ?
 
     // TODO: turn into Coin<Nbtc>
-    pub(crate) fee_pool: i64,
+    // pub(crate) fee_pool: i64, // FEE_POOL
 
     /// The configuration parameters for the Bitcoin module.
-    pub config: BitcoinConfig,
+    pub config: BitcoinConfig, // BITCOIN_CONFIG
 
-    pub recovery_txs: RecoveryTxs,
+    pub recovery_txs: RecoveryTxs, // ? 
 }
 
 /// A Tendermint/CometBFT public key.
 pub type ConsensusKey = [u8; 32];
 
 impl Bitcoin {
-    pub fn new(store: &dyn Storage) -> Self {
-        let header_config = HEADER_CONFIG.load(store).unwrap();
-        let fee_pool = FEE_POOL.load(store).unwrap_or_default();
-        let headers = HeaderQueue::new(header_config);
+    pub fn default() -> Self {
         Self {
-            headers,
+            headers: HeaderQueue::default(),
             checkpoints: CheckpointQueue::default(),
             processed_outpoints: OutpointSet::default(),
             accounts: Accounts::default(),
             signatory_keys: SignatoryKeys::default(),
             reward_pool: Coin::default(),
-            fee_pool,
+            // fee_pool: 0,
             config: BitcoinConfig::default(),
             recovery_txs: RecoveryTxs::default(),
         }
+    }
+
+    pub fn fee_pool(&self, store: &dyn Storage) -> ContractResult<i64> {
+        Ok(FEE_POOL.load(store).unwrap_or_default())
     }
 
     pub fn get_checkpoint(
@@ -674,6 +675,7 @@ impl Bitcoin {
 
         let btc_height = self.headers.height(store)?;
 
+        // let fee_pool = self.fee_pool(store)?;
         let pushed = self.checkpoints.maybe_step(
             env,
             querier,
@@ -683,7 +685,7 @@ impl Bitcoin {
             btc_height,
             !reached_capacity_limit,
             timestamping_commitment,
-            &mut self.fee_pool,
+            // fee_pool,
             &self.config,
         )?;
 
@@ -820,7 +822,10 @@ impl Bitcoin {
         // TODO: burn via token factory
         // coin.burn();
 
-        self.fee_pool += amount as i64;
+        // self.fee_pool += amount as i64;
+        let fee_pool = self.fee_pool(store)?;
+        FEE_POOL.save(store, &fee_pool)?;
+
         let mut checkpoint = self.checkpoints.building(store)?;
         checkpoint.fees_collected += amount / self.config.units_per_sat;
 
@@ -831,7 +836,8 @@ impl Bitcoin {
     }
 
     pub fn give_rewards(&mut self, store: &mut dyn Storage, amount: Uint128) -> ContractResult<()> {
-        if self.fee_pool < (self.config.fee_pool_target_balance * self.config.units_per_sat) as i64
+        let fee_pool = FEE_POOL.load(store)?;
+        if fee_pool < (self.config.fee_pool_target_balance * self.config.units_per_sat) as i64
         {
             let amount: u64 = amount.u128() as u64;
             // TODO:// tokenfactory coin.burn();

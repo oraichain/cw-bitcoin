@@ -3,7 +3,9 @@ use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::interface::HeaderConfig;
 use crate::state::header_height;
+use crate::state::CURRENT_WORK;
 use crate::state::HEADERS;
+use crate::state::HEADER_CONFIG;
 use bitcoin::blockdata::block::BlockHeader;
 
 use bitcoin::util::uint::Uint256;
@@ -188,18 +190,18 @@ impl WorkHeader {
 /// configured pruning level based on the `max_length` config parameter).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(crate = "cosmwasm_schema::serde")]
-pub struct HeaderQueue {
-    pub(crate) current_work: Adapter<Uint256>,
-    pub(crate) config: HeaderConfig,
-}
+#[derive(Default)]
+pub struct HeaderQueue {}
 
 impl HeaderQueue {
-    pub fn new(config: HeaderConfig) -> Self {
-        let current_work = Adapter::new(config.work_header().work());
-        Self {
-            current_work,
-            config,
-        }
+    pub fn config(&self, store: &dyn Storage) -> ContractResult<HeaderConfig> {
+        let config = HEADER_CONFIG.load(store)?;
+        Ok(config)
+    }
+
+    pub fn current_work(&self, store: &dyn Storage) -> ContractResult<Adapter<Uint256>> {
+        let work = CURRENT_WORK.load(store)?;
+        Ok(work)
     }
 
     /// Verify and add a list of headers to the header queue.
@@ -247,6 +249,7 @@ impl HeaderQueue {
     {
         let headers: Vec<WrappedHeader> = headers.into_iter().collect();
         let current_height = self.height(store)?;
+        let config = self.config(store)?;
 
         let first = headers
             .first()
@@ -273,8 +276,8 @@ impl HeaderQueue {
         }
 
         // Prune the header queue if it has grown too large.
-        let mut queue_len = self.len(store);
-        while queue_len > self.config.max_length {
+        let mut queue_len = self.len(store)?;
+        while queue_len > config.max_length {
             let header = match HEADERS.pop_front(store)? {
                 Some(inner) => inner,
                 None => {
@@ -282,9 +285,11 @@ impl HeaderQueue {
                 }
             };
             queue_len -= 1;
+
             // TODO: do we really want to subtract work when pruning?
-            let current_work = *self.current_work - header.work();
-            self.current_work = Adapter::new(current_work);
+            let current_work = *self.current_work(store)? - header.work();
+            // self.current_work = Adapter::new(current_work);
+            CURRENT_WORK.save(store, &Adapter::new(current_work))?;
         }
 
         Ok(())
@@ -347,10 +352,11 @@ impl HeaderQueue {
             let header_work = header.work();
             work = work + header_work;
 
-            let chain_work = *self.current_work + header_work;
+            let chain_work = *self.current_work(store)? + header_work;
             let work_header = WorkHeader::new(header.clone(), chain_work);
             HEADERS.push_back(store, &work_header)?;
-            self.current_work = Adapter::new(chain_work);
+            // self.current_work = Adapter::new(chain_work);
+            CURRENT_WORK.save(store, &Adapter::new(chain_work))?;
         }
 
         Ok(work)
@@ -364,25 +370,26 @@ impl HeaderQueue {
         header: &WrappedHeader,
         previous_header: &WrappedHeader,
     ) -> ContractResult<Uint256> {
-        if header.height() % self.config.retarget_interval == 0 {
-            let first_reorg_height = header.height() - self.config.retarget_interval;
+        let config = self.config(store)?;
+        if header.height() % config.retarget_interval == 0 {
+            let first_reorg_height = header.height() - config.retarget_interval;
             return self.calculate_next_target(store, previous_header, first_reorg_height);
         }
 
-        if !self.config.min_difficulty_blocks {
+        if !config.min_difficulty_blocks {
             return Ok(previous_header.target());
         }
 
-        if header.time() > previous_header.time() + self.config.target_spacing * 2 {
-            return Ok(WrappedHeader::u256_from_compact(self.config.max_target));
+        if header.time() > previous_header.time() + config.target_spacing * 2 {
+            return Ok(WrappedHeader::u256_from_compact(config.max_target));
         }
 
         let mut current_header_index = previous_header.height();
         let mut current_header = previous_header.to_owned();
 
         while current_header_index > 0
-            && current_header_index % self.config.retarget_interval != 0
-            && current_header.bits() == self.config.max_target
+            && current_header_index % config.retarget_interval != 0
+            && current_header.bits() == config.max_target
         {
             current_header_index -= 1;
 
@@ -404,11 +411,12 @@ impl HeaderQueue {
         header: &WrappedHeader,
         first_reorg_height: u32,
     ) -> ContractResult<Uint256> {
-        if !self.config.retargeting {
+        let config = self.config(store)?;
+        if !config.retargeting {
             return Ok(WrappedHeader::u256_from_compact(header.bits()));
         }
 
-        if header.height() < self.config.retarget_interval {
+        if header.height() < config.retarget_interval {
             return Err(ContractError::Header("Invalid trusted header. Trusted header have height which is a multiple of the retarget interval".into()));
         }
 
@@ -423,23 +431,23 @@ impl HeaderQueue {
 
         let mut timespan = header.time() - prev_retarget;
 
-        if timespan < self.config.target_timespan / 4 {
-            timespan = self.config.target_timespan / 4;
+        if timespan < config.target_timespan / 4 {
+            timespan = config.target_timespan / 4;
         }
 
-        if timespan > self.config.target_timespan * 4 {
-            timespan = self.config.target_timespan * 4;
+        if timespan > config.target_timespan * 4 {
+            timespan = config.target_timespan * 4;
         }
 
-        let target_timespan = WrappedHeader::u32_to_u256(self.config.target_timespan);
+        let target_timespan = WrappedHeader::u32_to_u256(config.target_timespan);
         let timespan = WrappedHeader::u32_to_u256(timespan);
 
         let target = header.target() * timespan / target_timespan;
         let target_u32 = BlockHeader::compact_target_from_u256(&target);
         let target = WrappedHeader::u256_from_compact(target_u32);
 
-        if target > WrappedHeader::u256_from_compact(self.config.max_target) {
-            Ok(WrappedHeader::u256_from_compact(self.config.max_target))
+        if target > WrappedHeader::u256_from_compact(config.max_target) {
+            Ok(WrappedHeader::u256_from_compact(config.max_target))
         } else {
             Ok(target)
         }
@@ -530,16 +538,16 @@ impl HeaderQueue {
     /// The number of headers in the header queue.
     // TODO: remove this attribute, not sure why clippy is complaining when is_empty is defined
     #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self, store: &dyn Storage) -> u64 {
-        HEADERS.len(store).unwrap_or(0) as u64
+    pub fn len(&self, store: &dyn Storage) -> ContractResult<u64> {
+        Ok(HEADERS.len(store).unwrap_or(0) as u64)
     }
 
     /// Whether or not the header queue is empty.
     ///
     /// This will always return `false`, as the header queue is initialized with
     /// a trusted header.
-    pub fn is_empty(&self, store: &dyn Storage) -> bool {
-        self.len(store) == 0
+    pub fn is_empty(&self, store: &dyn Storage) -> ContractResult<bool> {
+        Ok(self.len(store)? == 0)
     }
 
     /// Get a header from the header queue by its height.
@@ -576,8 +584,9 @@ impl HeaderQueue {
     }
 
     /// The height of the configured trusted header.    
-    pub fn trusted_height(&self) -> u32 {
-        self.config.trusted_height
+    pub fn trusted_height(&self, store: &dyn Storage) -> ContractResult<u32> {
+        let config = HEADER_CONFIG.load(store).unwrap();
+        Ok(config.trusted_height)
     }
 
     /// Clears the header queue and configures it with the passed config,
@@ -591,11 +600,13 @@ impl HeaderQueue {
         let wrapped_header = WrappedHeader::new(config.trusted_header, config.trusted_height);
         let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
 
-        self.current_work = work_header.chain_work;
+        // self.current_work = work_header.chain_work;
+        CURRENT_WORK.save(store, &work_header.chain_work)?;
 
         HEADERS.push_front(store, &work_header)?;
 
-        self.config = config;
+        // self.config = config;
+        HEADER_CONFIG.save(store, &config)?;
 
         Ok(())
     }

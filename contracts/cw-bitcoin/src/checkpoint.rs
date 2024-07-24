@@ -5,7 +5,7 @@ use super::{
 use crate::{
     constants::DEFAULT_FEE_RATE,
     error::{ContractError, ContractResult},
-    state::{CHECKPOINT_CONFIG, CONFIRMED_INDEX, FIRST_UNHANDLED_CONFIRMED_INDEX},
+    state::{CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX},
 };
 use crate::{
     interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
@@ -1555,7 +1555,7 @@ impl CheckpointQueue {
         btc_height: u32,
         should_allow_deposits: bool,
         timestamping_commitment: Vec<u8>,
-        fee_pool: &mut i64,
+        // fee_pool: &mut i64,
         parent_config: &BitcoinConfig,
     ) -> ContractResult<bool> {
         if !self.should_push(
@@ -1599,7 +1599,9 @@ impl CheckpointQueue {
             // update checkpoint
             self.set(store, prev_index, &building_checkpoint)?;
 
-            *fee_pool -= (fees_paid * parent_config.units_per_sat) as i64;
+            let mut fee_pool = FEE_POOL.load(store)?;
+            fee_pool -= (fees_paid * parent_config.units_per_sat) as i64;
+            FEE_POOL.save(store, &fee_pool)?;
 
             // Adjust the fee rate for the next checkpoint based on whether past
             // checkpoints have been confirmed in greater or less than the
