@@ -18,7 +18,7 @@ use common::adapter::Adapter;
 use common::interface::Xpub;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Coin, Deps, DepsMut, Env, Order, QuerierWrapper, Storage};
+use cosmwasm_std::{Coin, Env, Order, QuerierWrapper, Storage};
 use derive_more::{Deref, DerefMut};
 
 /// The status of a checkpoint. Checkpoints start as `Building`, and eventually

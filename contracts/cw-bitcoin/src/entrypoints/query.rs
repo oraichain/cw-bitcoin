@@ -22,7 +22,7 @@ pub fn query_deposit_fees(store: &dyn Storage, index: Option<u32>) -> ContractRe
     let btc = Bitcoin::default();
     let checkpoint = btc.get_checkpoint(store, index)?;
     let input_vsize = checkpoint.sigset.est_witness_vsize() + 40;
-    let deposit_fees = btc.calc_minimum_deposit_fees(store, input_vsize, checkpoint.fee_rate);
+    let deposit_fees = btc.calc_minimum_deposit_fees(store, input_vsize, checkpoint.fee_rate)?;
     Ok(deposit_fees)
 }
 
@@ -37,7 +37,7 @@ pub fn query_withdrawal_fees(
         .map_err(|err| ContractError::App(err.to_string()))?;
     let script = btc_address.script_pubkey();
     let withdrawal_fees =
-        btc.calc_minimum_withdrawal_fees(store, script.len() as u64, checkpoint.fee_rate);
+        btc.calc_minimum_withdrawal_fees(store, script.len() as u64, checkpoint.fee_rate)?;
     Ok(withdrawal_fees)
 }
 

@@ -18,7 +18,6 @@ use bitcoin::blockdata::script::{read_scriptint, Instruction};
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::Deps;
 use cosmwasm_std::Order;
 use cosmwasm_std::QuerierWrapper;
 use cosmwasm_std::Storage;

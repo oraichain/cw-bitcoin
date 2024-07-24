@@ -6,7 +6,6 @@ use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
 use cosmwasm_std::to_json_vec;
 use cosmwasm_std::Addr;
-use cosmwasm_std::Binary;
 use cosmwasm_std::Coin;
 use cosmwasm_std::Storage;
 use cosmwasm_std::Uint128;

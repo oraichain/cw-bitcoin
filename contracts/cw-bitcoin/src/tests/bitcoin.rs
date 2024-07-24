@@ -17,7 +17,7 @@ use cosmwasm_std::testing::{mock_dependencies, mock_env};
 use cosmwasm_std::{Addr, Coin, Env, Storage};
 use error::ContractResult;
 use interface::{Dest, HeaderConfig};
-use state::{HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS};
+use state::{BITCOIN_CONFIG, HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS};
 use std::cell::RefCell;
 use tests::helper::{set_time, MockApp};
 
@@ -32,13 +32,13 @@ use crate::{
 fn relay_height_validity() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::mainnet()?;
-
     let header = header_config.work_header();
 
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
     HEADERS.push_back(deps.as_mut().storage, &header)?;
 
     let mut btc = Bitcoin::default();
+    BITCOIN_CONFIG.save(deps.as_mut().storage, &btc.config)?;
 
     for _ in 0..10 {
         let btc_height = btc.headers.height(deps.as_ref().storage)?;
