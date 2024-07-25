@@ -28,10 +28,14 @@ derive_more = { workspace = true }
 cosmwasm-std = { workspace = true, features = ["ibc3"] }
 bitcoin-script = { workspace = true }
 sha2 = { workspace = true }
-tokenfactory = { git = "https://github.com/oraichain/token-bindings.git", rev = "7861576" }
-token-bindings = { git = "https://github.com/oraichain/token-bindings.git", rev = "7861576" }
+
+arrayref = "0.3"
+libsecp256k1-core = "0.3.0"
+
 
 [dev-dependencies]
+getrandom = { version = "0.2", features = ["js"] }
 chrono = "0.4.19"
 serial_test = "2.0.0"
-cosmwasm-testing-util = { git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "33a262f" }
+cosmwasm-testing-util = { workspace = true }
+token-bindings = { workspace = true }

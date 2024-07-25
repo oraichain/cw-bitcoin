@@ -4,7 +4,7 @@ use crate::{
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, MintTokens},
     state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG},
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
@@ -61,7 +61,7 @@ pub fn relay_deposit(
     sigset_index: u32,
     dest: Dest,
 ) -> ContractResult<Response> {
-    // dest validation? 
+    // dest validation?
 
     let header_config = HEADER_CONFIG.load(store)?;
     let mut btc = Bitcoin::new(header_config);
@@ -79,7 +79,7 @@ pub fn relay_deposit(
         let config = CONFIG.load(store)?;
         response = response.add_message(wasm_execute(
             config.token_factory_addr,
-            &tokenfactory::msg::ExecuteMsg::MintTokens {
+            &MintTokens {
                 denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
                 amount: mint_amount,
                 mint_to_address: env.contract.address.to_string(),

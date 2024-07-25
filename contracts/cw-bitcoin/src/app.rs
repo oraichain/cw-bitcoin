@@ -14,7 +14,6 @@ use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
 use super::error::{ContractError, ContractResult};
 use super::header::HeaderQueue;
-use bitcoin::util::bip32::ChildNumber;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
@@ -592,7 +591,6 @@ impl Bitcoin {
         let reserve_decrease = amount_prev.saturating_sub(amount_now);
 
         let vp_shares = |sigset: &SignatorySet| -> ContractResult<_> {
-            let secp = bitcoin::secp256k1::Secp256k1::verification_only();
             let sigset_index = sigset.index();
             let total_vp = sigset.present_vp() as f64;
             let sigset_fractions: HashMap<_, _> = sigset
@@ -602,9 +600,7 @@ impl Bitcoin {
             let mut sigset: HashMap<_, _> = Default::default();
             for entry in SIG_KEYS.range_raw(store, None, None, Order::Ascending) {
                 let (_, xpub) = entry?;
-                let derive_path = [ChildNumber::from_normal_idx(sigset_index)?];
-                let pubkey: threshold_sig::Pubkey =
-                    xpub.derive_pub(&secp, &derive_path)?.public_key.into();
+                let pubkey: threshold_sig::Pubkey = xpub.derive_pubkey(sigset_index)?.into();
                 sigset.insert(
                     xpub.inner().encode(),
                     *sigset_fractions.get(pubkey.as_slice()).unwrap_or(&0.0),

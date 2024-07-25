@@ -2,7 +2,7 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::{Signature, ThresholdSig},
 };
-use crate::signatory::derive_pubkey;
+
 use crate::{
     adapter::Adapter,
     interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest, Xpub},
@@ -489,8 +489,6 @@ impl Checkpoint {
     /// to be signed. If the signatory provides more or less signatures than
     /// expected, `sign()` will return an error.
     fn sign(&mut self, xpub: &Xpub, sigs: Vec<Signature>, btc_height: u32) -> ContractResult<()> {
-        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
-
         let cp_was_signed = self.signed();
         let mut sig_index = 0;
 
@@ -506,7 +504,7 @@ impl Checkpoint {
                 // Iterate over all inputs in the transaction.
                 for k in 0..tx.input.len() {
                     let input = tx.input.get_mut(k).unwrap();
-                    let pubkey = derive_pubkey(&secp, xpub, input.sigset_index)?;
+                    let pubkey = xpub.derive_pubkey(input.sigset_index)?;
 
                     // Skip input if either the signatory is not part of this
                     // input's signatory set, or the signatory has already
@@ -603,15 +601,12 @@ impl Checkpoint {
     /// sigset_index)` - the sighash to be signed and the index of the signatory
     /// set associated with the input.    
     pub fn to_sign(&self, xpub: &Xpub) -> ContractResult<Vec<([u8; 32], u32)>> {
-        // TODO: thread local secpk256k1 context
-        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
-
         let mut msgs = vec![];
 
         for batch in &self.batches {
             for tx in &batch.batch {
                 for input in &tx.input {
-                    let pubkey = derive_pubkey(&secp, xpub, input.sigset_index)?;
+                    let pubkey = xpub.derive_pubkey(input.sigset_index)?;
                     if input.signatures.needs_sig(pubkey.into()) {
                         msgs.push((input.signatures.message(), input.sigset_index));
                     }

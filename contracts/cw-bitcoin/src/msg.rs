@@ -1,11 +1,11 @@
-use bitcoin::{util::{bip32::ExtendedPubKey, merkleblock::PartialMerkleTree}, Transaction};
+use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary};
 
 use crate::{
     adapter::Adapter,
     header::WrappedHeader,
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
 };
 
 #[cw_serde]

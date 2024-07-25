@@ -1,3 +1,4 @@
+use bitcoin::secp256k1;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
@@ -37,6 +38,7 @@ use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::header::WorkHeader;
 use crate::header::WrappedHeader;
+use crate::utils::add_exp_tweak;
 
 #[derive(Deref, DerefMut)]
 pub struct DequeExtension<'a, T> {
@@ -395,6 +397,14 @@ impl Xpub {
     pub fn inner(&self) -> &ExtendedPubKey {
         &self.key
     }
+
+    /// Deterministically derive the public key for a signatory in a signatory set,
+    /// based on the current signatory set index.
+    pub fn derive_pubkey(&self, sigset_index: u32) -> ContractResult<secp256k1::PublicKey> {
+        let child_number = bitcoin::util::bip32::ChildNumber::from_normal_idx(sigset_index)?;
+        let (sk, _) = self.ckd_pub_tweak(child_number)?;
+        add_exp_tweak(&self.public_key, &sk)
+    }
 }
 
 impl From<ExtendedPubKey> for Xpub {
@@ -511,4 +521,12 @@ pub struct ChangeRates {
 pub struct Config {
     pub token_factory_addr: Addr,
     pub owner: Addr,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
+pub struct MintTokens {
+    pub denom: String,
+    pub amount: Uint128,
+    pub mint_to_address: String,
 }

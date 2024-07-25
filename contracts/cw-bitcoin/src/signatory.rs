@@ -14,11 +14,6 @@ use bitcoin::blockdata::opcodes::all::{
 };
 use bitcoin::blockdata::opcodes::{self, OP_FALSE};
 use bitcoin::blockdata::script::{read_scriptint, Instruction};
-use bitcoin::secp256k1::Context as SecpContext;
-use bitcoin::secp256k1::PublicKey;
-use bitcoin::secp256k1::Secp256k1;
-use bitcoin::secp256k1::Verification;
-use bitcoin::util::bip32::ChildNumber;
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
@@ -48,26 +43,6 @@ use super::interface::Xpub;
 pub struct Signatory {
     pub voting_power: u64,
     pub pubkey: Pubkey,
-}
-
-/// Deterministically derive the public key for a signatory in a signatory set,
-/// based on the current signatory set index.
-pub fn derive_pubkey<T>(
-    secp: &Secp256k1<T>,
-    xpub: &Xpub,
-    sigset_index: u32,
-) -> ContractResult<PublicKey>
-where
-    T: SecpContext + Verification,
-{
-    Ok(xpub
-        .derive_pub(
-            secp,
-            &[bitcoin::util::bip32::ChildNumber::from_normal_idx(
-                sigset_index,
-            )?],
-        )?
-        .public_key)
 }
 
 /// A signatory set is a set of signers who secure a UTXO in the network
@@ -119,14 +94,11 @@ impl SignatorySet {
 
         let val_set = get_validators(store)?;
 
-        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
-        let derive_path = [ChildNumber::from_normal_idx(index)?];
-
         for entry in &val_set {
             sigset.possible_vp += entry.power;
 
             let signatory_key = match SIG_KEYS.load(store, &entry.pubkey) {
-                Ok(xpub) => xpub.derive_pub(&secp, &derive_path)?.public_key.into(),
+                Ok(xpub) => xpub.derive_pubkey(index)?.into(),
                 _ => continue,
             };
 
