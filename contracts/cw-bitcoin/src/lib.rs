@@ -9,7 +9,6 @@ pub mod error;
 mod header;
 mod interface;
 pub mod msg;
-pub mod utils;
 
 mod outpoint_set;
 mod recovery;
