@@ -602,7 +602,7 @@ impl Bitcoin {
                 let (_, xpub) = entry?;
                 let pubkey: threshold_sig::Pubkey = xpub.derive_pubkey(sigset_index)?.into();
                 sigset.insert(
-                    xpub.inner().encode(),
+                    xpub.key.encode(),
                     *sigset_fractions.get(pubkey.as_slice()).unwrap_or(&0.0),
                 );
             }

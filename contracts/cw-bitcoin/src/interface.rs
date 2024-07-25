@@ -394,11 +394,6 @@ impl Xpub {
         Xpub { key }
     }
 
-    /// Gets the `ExtendedPubKey` from the `Xpub`.
-    pub fn inner(&self) -> &ExtendedPubKey {
-        &self.key
-    }
-
     fn parse_pubkey(&self) -> ContractResult<Affine> {
         let bytes = self.public_key.serialize();
         let mut x = Field::default();
