@@ -36,7 +36,6 @@ sha2 = "0.10.6"
 
 tokenfactory = { git = "https://github.com/oraichain/token-bindings.git", rev = "7861576" }
 token-bindings = { git = "https://github.com/oraichain/token-bindings.git", rev = "7861576" }
-
 cosmwasm-testing-util = { git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "ed58567" }
 
 [profile.release]
