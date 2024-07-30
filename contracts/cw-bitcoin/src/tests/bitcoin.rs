@@ -32,6 +32,7 @@ use crate::{
 fn relay_height_validity() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::mainnet()?;
+    #[cfg(debug_assertions)]
     println!("hello world: {:?}", header_config);
     let header = header_config.work_header();
 

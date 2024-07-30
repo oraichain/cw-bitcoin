@@ -99,6 +99,7 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
             for cons_key in &offline_signers {
                 let (_, address) = VALIDATORS.load(deps.storage, cons_key)?;
                 // punish_downtime(address)?;
+                #[cfg(debug_assertions)]
                 println!("need punish downtime for {}", address);
             }
 

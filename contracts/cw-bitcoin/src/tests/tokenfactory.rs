@@ -76,7 +76,7 @@ fn mint_token() {
         .unwrap();
     let expected = Coin { denom, amount };
     assert_eq!(end, expected);
-
+    #[cfg(debug_assertions)]
     println!("{:?}", end);
 
     // but no minting of unprefixed version
@@ -95,6 +95,6 @@ fn mint_token() {
             .into(),
         )
         .unwrap();
-
+    #[cfg(debug_assertions)]
     println!("{:?} {}", denoms, contract);
 }

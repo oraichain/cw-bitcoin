@@ -330,6 +330,7 @@ impl Bitcoin {
         nbtc.amount = nbtc.amount.checked_sub(fee).map_err(|_| {
             ContractError::App("Deposit amount is too small to pay its spending fee".to_string())
         })?;
+        #[cfg(debug_assertions)]
         println!(
             "Relay deposit with output value: {}, input size: {}, checkpoint fee rate: {}",
             output.value, input_size, checkpoint.fee_rate
@@ -409,6 +410,7 @@ impl Bitcoin {
         }
 
         self.checkpoints.confirmed_index = Some(cp_index);
+        #[cfg(debug_assertions)]
         println!(
             "Checkpoint {} confirmed at Bitcoin height {}",
             cp_index, btc_height

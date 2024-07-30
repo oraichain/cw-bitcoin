@@ -933,6 +933,7 @@ impl BuildingCheckpoint {
         let intermediate_tx_len = intermediate_tx.output.len() as u64;
 
         if intermediate_tx_len == 0 {
+            #[cfg(debug_assertions)]
             println!("Generated empty emergency disbursal");
             return Ok(());
         }
@@ -1742,6 +1743,7 @@ impl CheckpointQueue {
                 }
 
                 if building.fees_collected < cp_miner_fees {
+                    #[cfg(debug_assertions)]
                     println!(
                         "Not enough collected to pay miner fee: {} < {}",
                         building.fees_collected, cp_miner_fees,
@@ -1754,6 +1756,7 @@ impl CheckpointQueue {
             let (input_amount, output_amount) =
                 building.calc_total_input_and_output(&self.config)?;
             if input_amount < output_amount + cp_miner_fees {
+                #[cfg(debug_assertions)]
                 println!(
                     "Total reserve value is not enough to spend the output + miner fee: {} < {}. Output amount: {}; cp_miner_fees: {}",
                     input_amount,
@@ -1899,6 +1902,7 @@ impl CheckpointQueue {
 
         if matches!(status, CheckpointStatus::Signing) && checkpoint.signed() {
             let checkpoint_tx = checkpoint.checkpoint_tx()?;
+            #[cfg(debug_assertions)]
             println!("Checkpoint signing complete {:?}", checkpoint_tx);
             checkpoint.advance();
             checkpoint.status = CheckpointStatus::Complete
@@ -1982,6 +1986,7 @@ impl CheckpointQueue {
         for i in self.first_unhandled_confirmed_cp_index..=self.confirmed_index.unwrap() {
             let cp = self.get(store, i)?;
             if !matches!(cp.status, CheckpointStatus::Complete) {
+                #[cfg(debug_assertions)]
                 println!("Existing confirmed checkpoint without 'complete' status.");
                 break;
             }

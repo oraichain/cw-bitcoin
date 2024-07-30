@@ -324,10 +324,14 @@ impl HeaderQueue {
                     "Non-consecutive headers passed".into(),
                 ));
             }
-            
+
             if header.prev_blockhash() != prev_header.block_hash() {
-                println!("header.prev_blockhash(): {:?}", header);
-                println!("prev_header.block_hash(): {:?}", prev_header);
+                #[cfg(debug_assertions)]
+                println!(
+                    "header.prev_blockhash(): {:?}\nprev_header.block_hash(): {:?}",
+                    header, prev_header
+                );
+
                 return Err(ContractError::Header(
                     "Passed header references incorrect previous block hash".into(),
                 ));
