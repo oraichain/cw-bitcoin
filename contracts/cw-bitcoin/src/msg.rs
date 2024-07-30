@@ -39,7 +39,7 @@ pub enum ExecuteMsg {
 
 #[cw_serde]
 pub enum SudoMsg {
-    ClockBeginBlock { hash: Binary },
+    ClockEndBlock { hash: Binary },
 }
 
 #[cw_serde]

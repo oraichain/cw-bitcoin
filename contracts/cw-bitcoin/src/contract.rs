@@ -76,7 +76,7 @@ pub fn execute(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
-        SudoMsg::ClockBeginBlock { hash } => {
+        SudoMsg::ClockEndBlock { hash } => {
             let header_config = HEADER_CONFIG.load(deps.storage)?;
             let mut btc = Bitcoin::new(header_config);
             let external_outputs: Vec<bitcoin::TxOut> =
