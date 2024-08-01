@@ -1,11 +1,11 @@
 use super::helper::MockApp;
+use crate::adapter::Adapter;
 use crate::header::WrappedHeader;
 use crate::interface::HeaderConfig;
 use crate::msg;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
 use chrono::{TimeZone, Utc};
-use common::adapter::Adapter;
 use cosmwasm_std::Addr;
 
 #[test]
@@ -14,19 +14,10 @@ fn test_relay_headers() {
     let token_factory_addr = app
         .create_tokenfactory(Addr::unchecked("obtc_minter"))
         .unwrap();
-    let bitcoin_lib_addr = app
-        .create_bitcoin_lib(
-            Addr::unchecked("obtc_minter"),
-            &lib_bitcoin::msg::InstantiateMsg {},
-        )
-        .unwrap();
     let bridge_addr = app
         .create_bridge(
             Addr::unchecked("perfogic"),
-            &msg::InstantiateMsg {
-                token_factory_addr,
-                bitcoin_lib_addr,
-            },
+            &msg::InstantiateMsg { token_factory_addr },
         )
         .unwrap();
 
@@ -142,19 +133,10 @@ fn test_relay_headers_2() {
     let token_factory_addr = app
         .create_tokenfactory(Addr::unchecked("obtc_minter"))
         .unwrap();
-    let bitcoin_lib_addr = app
-        .create_bitcoin_lib(
-            Addr::unchecked("obtc_minter"),
-            &lib_bitcoin::msg::InstantiateMsg {},
-        )
-        .unwrap();
     let bridge_addr = app
         .create_bridge(
             Addr::unchecked("perfogic"),
-            &msg::InstantiateMsg {
-                token_factory_addr,
-                bitcoin_lib_addr,
-            },
+            &msg::InstantiateMsg { token_factory_addr },
         )
         .unwrap();
 

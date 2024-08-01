@@ -1,13 +1,13 @@
+use crate::adapter::Adapter;
 use crate::checkpoint::Checkpoint;
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
-use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator};
+use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
     get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX,
     RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS,
 };
 use crate::threshold_sig;
-use common::interface::Xpub;
 
 use super::checkpoint::Input;
 use super::recovery::{RecoveryTxInput, RecoveryTxs};
@@ -19,7 +19,6 @@ use super::error::{ContractError, ContractResult};
 use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use common::adapter::Adapter;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
 
@@ -752,7 +751,7 @@ impl Bitcoin {
 
             let mut offline = true;
             for checkpoint in completed.iter().rev() {
-                if checkpoint.to_sign(querier, store, &xpub)?.is_empty() {
+                if checkpoint.to_sign(&xpub)?.is_empty() {
                     offline = false;
                     break;
                 }

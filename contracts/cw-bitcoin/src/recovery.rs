@@ -4,14 +4,12 @@ use super::{
     threshold_sig::Signature,
 };
 use crate::{
+    adapter::Adapter,
     error::{ContractError, ContractResult},
-    interface::Dest,
-    signatory::derive_pubkey,
+    interface::{Dest, Xpub},
     state::RECOVERY_TXS,
 };
 use bitcoin::{OutPoint, Transaction, TxOut};
-use common::adapter::Adapter;
-use common::interface::Xpub;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{QuerierWrapper, Storage};
 
@@ -150,7 +148,7 @@ impl RecoveryTxs {
                 sig_index += 1;
 
                 let input_was_signed = input.signatures.signed();
-                input.signatures.sign(public_key.into(), sig)?;
+                input.signatures.sign(pubkey.into(), sig)?;
 
                 if !input_was_signed && input.signatures.signed() {
                     tx.tx.signed_inputs += 1;

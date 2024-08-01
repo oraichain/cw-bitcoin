@@ -1,9 +1,10 @@
 use crate::{
+    adapter::{Adapter, HashBinary},
     app::{Bitcoin, ConsensusKey},
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, MintTokens},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, MintTokens, Xpub},
     state::{
         get_full_btc_denom, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG, SIGNERS,
         VALIDATORS,
@@ -11,10 +12,7 @@ use crate::{
     threshold_sig::Signature,
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use common::{
-    adapter::{Adapter, HashBinary},
-    interface::Xpub,
-};
+
 use cosmwasm_std::{
     to_binary, wasm_execute, Env, MessageInfo, QuerierWrapper, Response, Storage, WasmMsg,
 };
@@ -158,7 +156,7 @@ pub fn submit_recovery_signature(
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut recovery_txs = btc.recovery_txs;
-    let _ = recovery_txs.sign(querier, store, &xpub.0, sigs);
+    let _ = recovery_txs.sign(store, &xpub.0, sigs);
     let response = Response::new().add_attribute("action", "submit_recovery_signature");
     Ok(response)
 }

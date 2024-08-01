@@ -13,7 +13,9 @@ use crate::{
     },
 };
 
-use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{
+    to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, WasmMsg,
+};
 use cw2::set_contract_version;
 
 // version info for migration info
@@ -34,7 +36,6 @@ pub fn instantiate(
         &Config {
             owner: info.sender,
             token_factory_addr: msg.token_factory_addr,
-            bitcoin_lib_addr: msg.bitcoin_lib_addr,
         },
     )?;
 
@@ -129,7 +130,7 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
                     // TODO: if dest is IBC packet, then forward to ibc bridge wasm
                     msgs.push(WasmMsg::Execute {
                         contract_addr: token_factory.to_string(),
-                        msg: to_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
+                        msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
                             denom: coin.denom.to_owned(),
                             amount: coin.amount,
                             mint_to_address: dest.to_source_addr(),
@@ -184,7 +185,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::CheckpointByIndex { index } => {
             to_json_binary(&query_checkpoint_by_index(deps.storage, index)?)
         }
-        QueryMsg::SigningRecoveryTxs { xpub } => to_binary(&query_signing_recovery_txs(
+        QueryMsg::SigningRecoveryTxs { xpub } => to_json_binary(&query_signing_recovery_txs(
             deps.querier,
             deps.storage,
             xpub,
@@ -192,7 +193,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::SigningTxsAtCheckpointIndex {
             xpub,
             checkpoint_index,
-        } => to_binary(&query_signing_txs_at_checkpoint_index(
+        } => to_json_binary(&query_signing_txs_at_checkpoint_index(
             deps.querier,
             deps.storage,
             xpub,

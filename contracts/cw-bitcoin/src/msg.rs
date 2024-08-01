@@ -1,21 +1,19 @@
 use bitcoin::{util::merkleblock::PartialMerkleTree, Script, Transaction};
-use common::{adapter::Adapter, interface::Xpub};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary};
 use token_bindings::Metadata;
 
 use crate::{
+    adapter::{Adapter, HashBinary},
     app::ConsensusKey,
     header::WrappedHeader,
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
     threshold_sig::Signature,
 };
-use common::adapter::HashBinary;
 
 #[cw_serde]
 pub struct InstantiateMsg {
     pub token_factory_addr: Addr,
-    pub bitcoin_lib_addr: Addr,
 }
 
 #[cw_serde]

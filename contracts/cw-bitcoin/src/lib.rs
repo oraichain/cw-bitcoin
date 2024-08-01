@@ -9,6 +9,7 @@ mod header;
 mod interface;
 pub mod msg;
 
+mod adapter;
 mod outpoint_set;
 mod recovery;
 mod signatory;

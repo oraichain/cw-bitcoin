@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use crate::app::ConsensusKey;
 use crate::constants::MAX_SIGNATORIES;
+use crate::interface::Xpub;
 use crate::state::get_validators;
 use crate::state::CONFIG;
 use crate::state::SIG_KEYS;
@@ -22,10 +23,6 @@ use cosmwasm_std::Order;
 use cosmwasm_std::QuerierWrapper;
 use cosmwasm_std::Storage;
 // use ed::Encode;
-
-use common::adapter::HashBinary;
-use common::interface::Xpub;
-use lib_bitcoin::msg::QueryMsg;
 
 /// The maximum number of signatories in a signatory set.
 ///

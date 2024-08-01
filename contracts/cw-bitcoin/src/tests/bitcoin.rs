@@ -1,4 +1,5 @@
 use super::helper::sign;
+use adapter::Adapter;
 use app::Bitcoin;
 use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::ExtendedPubKey;
@@ -10,8 +11,6 @@ use bitcoin::{
 };
 use bitcoin::{Script, Transaction};
 use checkpoint::{BatchType, Input};
-use common::adapter::Adapter;
-use common::interface::Xpub;
 use constants::BTC_NATIVE_TOKEN_DENOM;
 use cosmwasm_std::testing::{mock_dependencies, mock_env};
 use cosmwasm_std::{Addr, Coin, Env, Storage};

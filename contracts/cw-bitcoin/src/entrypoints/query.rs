@@ -3,16 +3,16 @@ use cosmwasm_std::{Order, QuerierWrapper, Storage};
 use std::str::FromStr;
 
 use crate::{
+    adapter::{Adapter, HashBinary},
     app::{Bitcoin, ConsensusKey},
     checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue, CheckpointStatus},
     error::{ContractError, ContractResult},
     header::HeaderQueue,
+    interface::Xpub,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
     state::{header_height, HEADER_CONFIG, OUTPOINTS, SIG_KEYS},
 };
-use common::adapter::{Adapter, HashBinary};
-use common::interface::Xpub;
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
     header_height(store)
@@ -99,7 +99,7 @@ pub fn query_signing_recovery_txs(
     xpub: HashBinary<Xpub>,
 ) -> ContractResult<Vec<([u8; 32], u32)>> {
     let recovery_txs = RecoveryTxs::default();
-    recovery_txs.to_sign(querier, store, &xpub.0)
+    recovery_txs.to_sign(store, &xpub.0)
 }
 
 pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<u32> {
@@ -156,5 +156,5 @@ pub fn query_signing_txs_at_checkpoint_index(
     if checkpoint.status != CheckpointStatus::Signing {
         return Err(ContractError::App("checkpoint is not signing".to_string()));
     }
-    Ok(checkpoint.to_sign(querier, store, &xpub.0).unwrap())
+    Ok(checkpoint.to_sign(&xpub.0).unwrap())
 }

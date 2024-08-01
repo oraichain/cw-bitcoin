@@ -55,7 +55,6 @@ pub struct MockApp {
     #[deref_mut]
     app: cosmwasm_testing_util::MockApp,
     bridge_id: u64,
-    bitcoin_lib_id: u64,
 }
 
 #[allow(dead_code)]
@@ -69,17 +68,7 @@ impl MockApp {
             crate::contract::query,
         )));
 
-        let bitcoin_lib_id = app.upload(Box::new(ContractWrapper::new_with_empty(
-            lib_bitcoin::contract::execute,
-            lib_bitcoin::contract::instantiate,
-            lib_bitcoin::contract::query,
-        )));
-
-        Self {
-            app,
-            bridge_id,
-            bitcoin_lib_id,
-        }
+        Self { app, bridge_id }
     }
 
     /// external method
@@ -90,17 +79,6 @@ impl MockApp {
     ) -> MockResult<Addr> {
         let code_id = self.bridge_id;
         let addr = self.instantiate(code_id, sender, init_msg, &[], "cw-bitcoin-bridge")?;
-        Ok(addr)
-    }
-
-    /// external method
-    pub fn create_bitcoin_lib(
-        &mut self,
-        sender: Addr,
-        init_msg: &lib_bitcoin::msg::InstantiateMsg,
-    ) -> Result<Addr, String> {
-        let code_id = self.bitcoin_lib_id;
-        let addr = self.instantiate(code_id, sender, init_msg, &[], "lib-bitcoin-bridge")?;
         Ok(addr)
     }
 }

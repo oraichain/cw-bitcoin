@@ -4,16 +4,17 @@ use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
-use cosmwasm_std::to_json_vec;
 use cosmwasm_std::Addr;
 use cosmwasm_std::Coin;
 use cosmwasm_std::Storage;
 use cosmwasm_std::Uint128;
 use cosmwasm_std::{from_json, StdError};
+use cosmwasm_std::{to_json_vec, Binary};
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use sha2::{Digest, Sha256};
 
+use crate::adapter::Adapter;
 use crate::app::ConsensusKey;
 use crate::app::NETWORK;
 use crate::constants::MAX_CHECKPOINT_AGE;
@@ -36,7 +37,6 @@ use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::header::WorkHeader;
 use crate::header::WrappedHeader;
-use common::adapter::Adapter;
 use libsecp256k1_core::curve::{Affine, ECMultContext, Field, Scalar};
 use libsecp256k1_core::util::{TAG_PUBKEY_EVEN, TAG_PUBKEY_ODD};
 
@@ -563,7 +563,6 @@ pub struct ChangeRates {
 #[cw_serde]
 pub struct Config {
     pub token_factory_addr: Addr,
-    pub bitcoin_lib_addr: Addr,
     pub owner: Addr,
 }
 

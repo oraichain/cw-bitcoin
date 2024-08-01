@@ -3,16 +3,17 @@ use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
 
 use crate::{
+    adapter::Adapter,
     app::ConsensusKey,
     checkpoint::Checkpoint,
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::WorkHeader,
-    interface::{BitcoinConfig, CheckpointConfig, Config, DequeExtension, HeaderConfig, Validator},
+    interface::{
+        BitcoinConfig, CheckpointConfig, Config, DequeExtension, HeaderConfig, Validator, Xpub,
+    },
     recovery::RecoveryTx,
 };
-use common::adapter::Adapter;
-use common::interface::Xpub;
 
 pub const CONFIG: Item<Config> = Item::new("config");
 

@@ -2,6 +2,7 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::{Signature, ThresholdSig},
 };
+use crate::{adapter::Adapter, interface::Xpub, state::BUILDING_INDEX};
 use crate::{
     constants::DEFAULT_FEE_RATE,
     error::{ContractError, ContractResult},
@@ -11,11 +12,8 @@ use crate::{
     interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
     state::{to_output_script, CHECKPOINTS, RECOVERY_SCRIPTS},
 };
-use crate::{signatory::derive_pubkey, state::BUILDING_INDEX};
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use bitcoin::{hashes::Hash, Script};
-use common::adapter::Adapter;
-use common::interface::Xpub;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Coin, Env, Order, QuerierWrapper, Storage};
@@ -838,7 +836,7 @@ impl SigningCheckpoint {
         sigs: Vec<Signature>,
         btc_height: u32,
     ) -> ContractResult<()> {
-        self.0.sign(querier, store, &xpub, sigs, btc_height)?;
+        self.0.sign(&xpub, sigs, btc_height)?;
         Ok(())
     }
 }
@@ -1907,7 +1905,7 @@ impl CheckpointQueue {
             ));
         }
 
-        checkpoint.sign(querier, store, xpub, sigs, btc_height)?;
+        checkpoint.sign(xpub, sigs, btc_height)?;
 
         if matches!(status, CheckpointStatus::Signing) && checkpoint.signed() {
             let checkpoint_tx = checkpoint.checkpoint_tx()?;
