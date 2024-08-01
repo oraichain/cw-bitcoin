@@ -27,7 +27,6 @@ use crate::{
     *,
 };
 
-#[serial_test::serial]
 #[test]
 fn relay_height_validity() -> ContractResult<()> {
     let mut deps = mock_dependencies();
@@ -100,7 +99,6 @@ fn relay_height_validity() -> ContractResult<()> {
     Ok(())
 }
 
-#[serial_test::serial]
 #[test]
 fn check_change_rates() -> ContractResult<()> {
     let mut deps = mock_dependencies();
@@ -308,7 +306,6 @@ fn check_change_rates() -> ContractResult<()> {
 }
 
 #[test]
-#[serial_test::serial]
 fn test_take_pending() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::mainnet()?;

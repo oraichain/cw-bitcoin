@@ -5,7 +5,6 @@ use bitcoin::BlockHash;
 use bitcoin::{hash_types::TxMerkleNode, BlockHeader};
 use chrono::{TimeZone, Utc};
 use cosmwasm_std::{from_json, testing::mock_dependencies, to_json_binary, Binary};
-use serial_test::serial;
 
 use crate::adapter::Adapter;
 use crate::header::{HeaderQueue, WrappedHeader};
@@ -45,7 +44,6 @@ fn primitive_adapter_encode_decode() {
 }
 
 #[test]
-#[serial]
 fn add_multiple() {
     let mut deps = mock_dependencies();
 

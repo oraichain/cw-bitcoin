@@ -35,6 +35,5 @@ libsecp256k1-core = "0.3.0"
 
 [dev-dependencies]
 chrono = "0.4.19"
-serial_test = "2.0.0"
 cosmwasm-testing-util = { workspace = true }
 token-bindings = { workspace = true }

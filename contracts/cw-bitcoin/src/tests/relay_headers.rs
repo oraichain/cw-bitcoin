@@ -7,10 +7,8 @@ use bitcoin::hashes::hex::FromHex;
 use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
 use chrono::{TimeZone, Utc};
 use cosmwasm_std::Addr;
-use serial_test::serial;
 
 #[test]
-#[serial]
 fn test_relay_headers() {
     let mut app = MockApp::new(&[]);
     let token_factory_addr = app
@@ -130,7 +128,6 @@ fn test_relay_headers() {
 }
 
 #[test]
-#[serial]
 fn test_relay_headers_2() {
     let mut app = MockApp::new(&[]);
     let token_factory_addr = app
