@@ -1,4 +1,4 @@
-use bitcoin::Script;
+use bitcoin::{util::uint::Uint256, Script};
 use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
 
@@ -6,6 +6,7 @@ use crate::{
     adapter::Adapter,
     app::ConsensusKey,
     checkpoint::Checkpoint,
+    constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::WorkHeader,
     interface::{
@@ -62,7 +63,17 @@ pub const EXPIRATION_QUEUE: Map<(u64, &str), ()> = Map::new("expiration_queue");
 /// A set of outpoints.
 pub const OUTPOINTS: Map<&str, ()> = Map::new("outpoints");
 
+pub const FEE_POOL: Item<i64> = Item::new("fee_pool");
+
 pub const CHECKPOINTS: DequeExtension<Checkpoint> = DequeExtension::new("checkpoints");
+/// Checkpoint building index
+pub const BUILDING_INDEX: Item<u32> = Item::new("building_index");
+/// Checkpoint confirmed index
+pub const CONFIRMED_INDEX: Item<u32> = Item::new("confirmed_index");
+/// Checkpoint unhandled confirmed index
+pub const FIRST_UNHANDLED_CONFIRMED_INDEX: Item<u32> = Item::new("first_unhandled_confirmed_index");
+/// Header current work
+pub const CURRENT_WORK: Item<Adapter<Uint256>> = Item::new("current_work");
 
 pub fn to_output_script(store: &dyn Storage, dest: &str) -> ContractResult<Option<Script>> {
     Ok(RECOVERY_SCRIPTS
@@ -87,4 +98,10 @@ pub fn header_height(store: &dyn Storage) -> ContractResult<u32> {
         Some(inner) => Ok(inner.height()),
         None => Ok(0),
     }
+}
+
+pub fn get_full_btc_denom(store: &dyn Storage) -> ContractResult<String> {
+    let config = CONFIG.load(store)?;
+    let token_factory_addr = config.token_factory_addr;
+    Ok(format!("factory/{}/{}", token_factory_addr, BTC_NATIVE_TOKEN_DENOM).to_string())
 }

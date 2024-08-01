@@ -1,11 +1,14 @@
-use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use bitcoin::{util::merkleblock::PartialMerkleTree, Script, Transaction};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary};
+use token_bindings::Metadata;
 
 use crate::{
-    adapter::Adapter,
+    adapter::{Adapter, HashBinary},
+    app::ConsensusKey,
     header::WrappedHeader,
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
+    threshold_sig::Signature,
 };
 
 #[cw_serde]
@@ -35,6 +38,33 @@ pub enum ExecuteMsg {
         sigset_index: u32,
         dest: Dest,
     },
+    WithdrawToBitcoin {
+        script_pubkey: Adapter<Script>,
+    },
+    SubmitCheckpointSignature {
+        xpub: HashBinary<Xpub>,
+        sigs: Vec<Signature>,
+        checkpoint_index: u32,
+        btc_height: u32,
+    },
+    SubmitRecoverySignature {
+        xpub: HashBinary<Xpub>,
+        sigs: Vec<Signature>,
+    },
+    SetSignatoryKey {
+        xpub: HashBinary<Xpub>,
+    },
+    AddValidators {
+        addrs: Vec<String>,
+        infos: Vec<(u64, ConsensusKey)>,
+    },
+    RegisterDenom {
+        subdenom: String,
+        metadata: Option<Metadata>,
+    },
+    SetRecoveryScript {
+        signatory_script: Adapter<Script>,
+    },
 }
 
 #[cw_serde]
@@ -51,10 +81,17 @@ pub enum QueryMsg {
     DepositFees { index: Option<u32> },
     #[returns(u64)]
     WithdrawalFees { address: String, index: Option<u32> },
-    #[returns(crate::adapter::HashBinary<bitcoin::BlockHash>)]
+    #[returns(HashBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
     #[returns(u64)]
     CheckpointByIndex { index: u32 },
+    #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
+    SigningRecoveryTxs { xpub: HashBinary<Xpub> },
+    #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
+    SigningTxsAtCheckpointIndex {
+        xpub: HashBinary<Xpub>,
+        checkpoint_index: u32,
+    },
 }
 
 #[cw_serde]

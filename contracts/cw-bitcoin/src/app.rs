@@ -1,15 +1,18 @@
+use crate::adapter::Adapter;
 use crate::checkpoint::Checkpoint;
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
-use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, HeaderConfig, Validator, Xpub};
+use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
-use crate::state::{get_validators, RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS};
+use crate::state::{
+    get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX,
+    RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS,
+};
 use crate::threshold_sig;
 
 use super::checkpoint::Input;
 use super::recovery::{RecoveryTxInput, RecoveryTxs};
 use super::threshold_sig::Signature;
 
-use super::adapter::Adapter;
 use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
 use super::error::{ContractError, ContractResult};
@@ -17,7 +20,7 @@ use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
+use cosmwasm_std::{Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -43,63 +46,58 @@ pub fn calc_deposit_fee(_: Uint128) -> u64 {
 pub struct Bitcoin {
     /// A light client of the Bitcoin blockchain, keeping track of the headers
     /// of the highest-work chain.    
-    pub headers: HeaderQueue,
+    pub headers: HeaderQueue, // HEADERS
 
     /// The set of outpoints which have been relayed to the bridge. This is used
     /// to prevent replay attacks of deposits.
-    pub processed_outpoints: OutpointSet,
+    pub processed_outpoints: OutpointSet, // OUTPOINT_SET
 
     /// The checkpoint queue, which manages the checkpointing process,
     /// periodically moving the reserve of BTC on the Bitcoin blockchain to
     /// collect incoming deposits, move the funds to the latest signatory set,
     /// and pay out requested withdrawals.    
-    pub checkpoints: CheckpointQueue,
+    pub checkpoints: CheckpointQueue, // CHECKPOINTS
 
+    /// TODO: remove this, for flow withdrawing money we don't need to use this when using factory module
     /// The map of nBTC accounts, which hold the nBTC balances of users.
-    pub accounts: Accounts,
+    pub accounts: Accounts, // ?
 
     /// The public keys declared by signatories, which are used to sign Bitcoin
     /// transactions.
     // TODO: store recovery script data in account struct
-    pub signatory_keys: SignatoryKeys,
+    pub signatory_keys: SignatoryKeys, // ?
 
     /// A pool of BTC where bridge fees are collected.
-    pub(crate) reward_pool: Coin,
+    pub(crate) reward_pool: Coin, // ?
 
     // TODO: turn into Coin<Nbtc>
-    pub(crate) fee_pool: i64,
-
+    // pub(crate) fee_pool: i64, // FEE_POOL
     /// The configuration parameters for the Bitcoin module.
-    pub config: BitcoinConfig,
+    pub config: BitcoinConfig, // BITCOIN_CONFIG
 
-    pub recovery_txs: RecoveryTxs,
+    pub recovery_txs: RecoveryTxs, // ?
 }
 
 /// A Tendermint/CometBFT public key.
 pub type ConsensusKey = [u8; 32];
 
 impl Bitcoin {
-    pub fn new(header_config: HeaderConfig) -> Self {
-        let headers = HeaderQueue::new(header_config);
-        let checkpoints = CheckpointQueue::default();
-        Self::from_checkpoints_and_headers(checkpoints, headers)
-    }
-
-    pub fn from_checkpoints_and_headers(
-        checkpoints: CheckpointQueue,
-        headers: HeaderQueue,
-    ) -> Self {
+    pub fn default() -> Self {
         Self {
-            headers,
-            checkpoints,
+            headers: HeaderQueue::default(),
+            checkpoints: CheckpointQueue::default(),
             processed_outpoints: OutpointSet::default(),
             accounts: Accounts::default(),
             signatory_keys: SignatoryKeys::default(),
             reward_pool: Coin::default(),
-            fee_pool: 0,
+            // fee_pool: 0,
             config: BitcoinConfig::default(),
             recovery_txs: RecoveryTxs::default(),
         }
+    }
+
+    pub fn fee_pool(&self, store: &dyn Storage) -> ContractResult<i64> {
+        Ok(FEE_POOL.load(store).unwrap_or_default())
     }
 
     pub fn get_checkpoint(
@@ -109,20 +107,26 @@ impl Bitcoin {
     ) -> ContractResult<Checkpoint> {
         let checkpoint = match index {
             Some(index) => self.checkpoints.get(store, index)?,
-            None => self.checkpoints.get(store, self.checkpoints.index)?, // get current checkpoint being built
+            None => self.checkpoints.get(store, self.checkpoints.index(store))?, // get current checkpoint being built
         };
 
         Ok(checkpoint)
     }
 
     /// Sets the configuration parameters to the given values.
-    pub fn configure(&mut self, config: BitcoinConfig) {
-        self.config = config;
+    pub fn configure(
+        &mut self,
+        store: &mut dyn Storage,
+        config: BitcoinConfig,
+    ) -> ContractResult<()> {
+        BITCOIN_CONFIG.save(store, &config)?;
+        Ok(())
     }
 
     /// Gets the configuration parameters.
-    pub fn config() -> BitcoinConfig {
-        BitcoinConfig::default()
+    pub fn config(&self, store: &dyn Storage) -> ContractResult<BitcoinConfig> {
+        let config = BITCOIN_CONFIG.load(store)?;
+        Ok(config)
     }
 
     /// Called by validators to store their signatory public key, which will be
@@ -161,7 +165,8 @@ impl Bitcoin {
         signer: Addr,
         signatory_script: Adapter<Script>,
     ) -> ContractResult<()> {
-        if signatory_script.len() as u64 > self.config.max_withdrawal_script_length {
+        let config = self.config(store)?;
+        if signatory_script.len() as u64 > config.max_withdrawal_script_length {
             return Err(ContractError::App(
                 "Script exceeds maximum length".to_string(),
             ));
@@ -178,24 +183,42 @@ impl Bitcoin {
     pub fn should_push_checkpoint(
         &mut self,
         env: Env,
+        querier: QuerierWrapper,
         store: &dyn Storage,
     ) -> ContractResult<bool> {
         self.checkpoints
-            .should_push(env, store, &[0; 32], self.headers.height(store)?)
+            .should_push(env, querier, store, &[0; 32], self.headers.height(store)?)
         // TODO: we shouldn't need this slice, commitment should be fixed-length
     }
 
-    pub fn calc_minimum_deposit_fees(&self, input_vsize: u64, fee_rate: u64) -> u64 {
-        input_vsize * fee_rate * self.checkpoints.config.user_fee_factor / 10_000
-            * self.config.units_per_sat
+    pub fn calc_minimum_deposit_fees(
+        &self,
+        store: &dyn Storage,
+        input_vsize: u64,
+        fee_rate: u64,
+    ) -> ContractResult<u64> {
+        let config = self.config(store)?;
+        Ok(
+            input_vsize * fee_rate * self.checkpoints.config(store).user_fee_factor / 10_000
+                * config.units_per_sat,
+        )
     }
 
-    pub fn calc_minimum_withdrawal_fees(&self, script_pubkey_length: u64, fee_rate: u64) -> u64 {
-        (9 + script_pubkey_length) * fee_rate * self.checkpoints.config.user_fee_factor / 10_000
-            * self.config.units_per_sat
+    pub fn calc_minimum_withdrawal_fees(
+        &self,
+        store: &dyn Storage,
+        script_pubkey_length: u64,
+        fee_rate: u64,
+    ) -> ContractResult<u64> {
+        let config = self.config(store)?;
+        Ok(
+            (9 + script_pubkey_length) * fee_rate * self.checkpoints.config(store).user_fee_factor
+                / 10_000
+                * config.units_per_sat,
+        )
     }
 
-    /// Verifies and processes a deposit of BTC into the reserve.
+    /// Verifies and processes a deposit of BTC into the reserve.   
     ///
     /// This will check that the Bitcoin transaction has been sufficiently
     /// confirmed on the Bitcoin blockchain, then will add the deposit to the
@@ -212,7 +235,8 @@ impl Bitcoin {
         btc_vout: u32,
         sigset_index: u32,
         dest: Dest,
-    ) -> ContractResult<Option<Uint128>> {
+    ) -> ContractResult<()> {
+        let config = self.config(store)?;
         let now = env.block.time.seconds();
 
         let btc_header = self
@@ -220,7 +244,7 @@ impl Bitcoin {
             .get_by_height(store, btc_height)?
             .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
 
-        if self.headers.height(store)? - btc_height < self.config.min_confirmations {
+        if self.headers.height(store)? - btc_height < config.min_confirmations {
             return Err(ContractError::App(
                 "Block is not sufficiently confirmed".to_string(),
             ));
@@ -265,7 +289,7 @@ impl Bitcoin {
 
         let dest_bytes = dest.commitment_bytes()?;
         let expected_script =
-            sigset.output_script(&dest_bytes, self.checkpoints.config.sigset_threshold)?;
+            sigset.output_script(&dest_bytes, self.checkpoints.config(store).sigset_threshold)?;
         if output.script_pubkey != expected_script {
             return Err(ContractError::App(
                 "Output script does not match signature set".to_string(),
@@ -277,7 +301,7 @@ impl Bitcoin {
                 "Output has already been relayed".to_string(),
             ))?;
         }
-        let deposit_timeout = sigset.create_time() + self.config.max_deposit_age;
+        let deposit_timeout = sigset.create_time() + config.max_deposit_age;
         self.processed_outpoints
             .insert(store, outpoint, deposit_timeout)?;
 
@@ -289,6 +313,7 @@ impl Bitcoin {
 
         if now > deposit_timeout {
             let checkpoint = self.checkpoints.building(store)?;
+            let checkpoint_config = self.checkpoints.config(store);
             self.recovery_txs.create_recovery_tx(
                 store,
                 RecoveryTxInput {
@@ -299,11 +324,11 @@ impl Bitcoin {
                     dest,
                     fee_rate: checkpoint.fee_rate,
                     //TODO: Hold checkpoint config on state
-                    threshold: self.checkpoints.config.sigset_threshold,
+                    threshold: checkpoint_config.sigset_threshold,
                 },
             )?;
 
-            return Ok(None);
+            return Ok(());
         }
 
         let prevout = bitcoin::OutPoint {
@@ -315,16 +340,17 @@ impl Bitcoin {
             &sigset,
             &dest_bytes,
             output.value,
-            self.checkpoints.config.sigset_threshold,
+            self.checkpoints.config(store).sigset_threshold,
         )?;
         let input_size = input.est_vsize();
-        // mint token_factory here
-        let mint_amount = (output.value * self.config.units_per_sat).into();
+
+        // note: we only mint nbtc when it is send to destination
+        let mint_amount = (output.value * config.units_per_sat).into();
         let mut nbtc = Coin {
             denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
             amount: mint_amount,
         };
-        let fee_amount = self.calc_minimum_deposit_fees(input_size, checkpoint.fee_rate);
+        let fee_amount = self.calc_minimum_deposit_fees(store, input_size, checkpoint.fee_rate)?;
         let deposit_fees = calc_deposit_fee(nbtc.amount);
         let fee = (fee_amount + deposit_fees).into();
         nbtc.amount = nbtc.amount.checked_sub(fee).map_err(|_| {
@@ -352,10 +378,10 @@ impl Bitcoin {
             .building(store)?
             .insert_pending(dest, nbtc)?;
 
-        self.checkpoints
-            .set(store, self.checkpoints.index, &building_mut)?;
+        let index = self.checkpoints.index(store);
+        self.checkpoints.set(store, index, &building_mut)?;
 
-        Ok(Some(mint_amount))
+        Ok(())
     }
 
     /// Records proof that a checkpoint produced by the network has been
@@ -367,7 +393,8 @@ impl Bitcoin {
         btc_proof: Adapter<PartialMerkleTree>,
         cp_index: u32,
     ) -> ContractResult<()> {
-        if let Some(conf_index) = self.checkpoints.confirmed_index {
+        let config = self.config(store)?;
+        if let Some(conf_index) = self.checkpoints.confirmed_index(store) {
             if cp_index <= conf_index {
                 return Err(ContractError::App(
                     "Checkpoint has already been relayed".to_string(),
@@ -380,7 +407,7 @@ impl Bitcoin {
             .get_by_height(store, btc_height)?
             .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
 
-        if self.headers.height(store)? - btc_height < self.config.min_checkpoint_confirmations {
+        if self.headers.height(store)? - btc_height < config.min_checkpoint_confirmations {
             return Err(ContractError::App(
                 "Block is not sufficiently confirmed".to_string(),
             ));
@@ -409,8 +436,7 @@ impl Bitcoin {
             ))?;
         }
 
-        self.checkpoints.confirmed_index = Some(cp_index);
-        #[cfg(debug_assertions)]
+        CONFIRMED_INDEX.save(store, &cp_index)?;
         println!(
             "Checkpoint {} confirmed at Bitcoin height {}",
             cp_index, btc_height
@@ -428,7 +454,7 @@ impl Bitcoin {
         script_pubkey: Adapter<Script>,
         amount: Uint128,
     ) -> ContractResult<()> {
-        let coin = self.accounts.withdraw(signer, amount)?;
+        let coin = self.accounts.withdraw(signer, amount)?; // ?
 
         self.add_withdrawal(store, script_pubkey, coin.amount)
     }
@@ -441,23 +467,25 @@ impl Bitcoin {
         script_pubkey: Adapter<Script>,
         mut amount: Uint128,
     ) -> ContractResult<()> {
-        if script_pubkey.len() as u64 > self.config.max_withdrawal_script_length {
+        let config = self.config(store)?;
+        if script_pubkey.len() as u64 > config.max_withdrawal_script_length {
             return Err(ContractError::App(
                 "Script exceeds maximum length".to_string(),
             ));
         }
 
-        if self.checkpoints.len(store)? < self.config.min_withdrawal_checkpoints {
+        if self.checkpoints.len(store)? < config.min_withdrawal_checkpoints {
             return Err(ContractError::App(format!(
                 "Withdrawals are disabled until the network has produced at least {} checkpoints",
-                self.config.min_withdrawal_checkpoints
+                config.min_withdrawal_checkpoints
             )));
         }
 
         let fee_amount = self.calc_minimum_withdrawal_fees(
+            store,
             script_pubkey.len() as u64,
             self.checkpoints.building(store)?.fee_rate,
-        );
+        )?;
         let fee = fee_amount.into();
         amount = amount.checked_sub(fee).map_err(|_| {
             ContractError::App("Withdrawal is too small to pay its miner fee".to_string())
@@ -466,7 +494,7 @@ impl Bitcoin {
         self.give_miner_fee(store, fee)?;
         // TODO: record as collected for excess if full
 
-        let value = (amount.u128() as u64) / self.config.units_per_sat;
+        let value = (amount.u128() as u64) / config.units_per_sat;
         // if value < self.config.min_withdrawal_amount {
         //     return Err(ContractError::App(
         //         "Withdrawal is smaller than than minimum amount".to_string(),
@@ -488,8 +516,8 @@ impl Bitcoin {
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.output.push(Adapter::new(output));
 
-        self.checkpoints
-            .set(store, self.checkpoints.index, &checkpoint)?;
+        let index = self.checkpoints.index(store);
+        self.checkpoints.set(store, index, &checkpoint)?;
         // TODO: push to excess if full
 
         Ok(())
@@ -509,13 +537,13 @@ impl Bitcoin {
         // self.give_rewards(transfer_fee)?;
 
         let dest = Dest::Address(to);
-        let coins = self.accounts.withdraw(signer, amount)?;
+        let coins = self.accounts.withdraw(signer, amount)?; // ?
         let mut checkpoint = self.checkpoints.building(store)?;
 
         checkpoint.insert_pending(dest, coins)?;
 
-        self.checkpoints
-            .set(store, self.checkpoints.index, &checkpoint)?;
+        let index = self.checkpoints.index(store);
+        self.checkpoints.set(store, index, &checkpoint)?;
 
         Ok(())
     }
@@ -524,6 +552,7 @@ impl Bitcoin {
     /// `Signing` checkpoint.    
     pub fn sign(
         &mut self,
+        querier: QuerierWrapper,
         store: &mut dyn Storage,
         xpub: &Xpub,
         sigs: Vec<Signature>,
@@ -531,7 +560,7 @@ impl Bitcoin {
     ) -> ContractResult<()> {
         let btc_height = self.headers.height(store)?;
         self.checkpoints
-            .sign(store, xpub, sigs, cp_index, btc_height)
+            .sign(querier, store, xpub, sigs, cp_index, btc_height)
     }
 
     /// The amount of BTC in the reserve output of the most recent fully-signed
@@ -574,7 +603,7 @@ impl Bitcoin {
 
         let completed = self.checkpoints.completed(
             store,
-            (interval / self.checkpoints.config.min_checkpoint_interval) as u32 + 1,
+            (interval / self.checkpoints.config(store).min_checkpoint_interval) as u32 + 1,
         )?;
         if completed.is_empty() {
             return Ok(ChangeRates::default());
@@ -635,10 +664,12 @@ impl Bitcoin {
     pub fn begin_block_step(
         &mut self,
         env: Env,
+        querier: QuerierWrapper,
         store: &mut dyn Storage,
         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         timestamping_commitment: Vec<u8>,
     ) -> ContractResult<Vec<ConsensusKey>> {
+        let config = self.config(store)?;
         let has_completed_cp =
             if let Err(ContractError::App(err)) = self.checkpoints.last_completed_index(store) {
                 if err == "No completed checkpoints yet" {
@@ -651,29 +682,31 @@ impl Bitcoin {
             };
 
         let reached_capacity_limit = if has_completed_cp {
-            self.value_locked(store)? >= self.config.capacity_limit
+            self.value_locked(store)? >= config.capacity_limit
         } else {
             false
         };
 
         let btc_height = self.headers.height(store)?;
 
+        // let fee_pool = self.fee_pool(store)?;
         let pushed = self.checkpoints.maybe_step(
             env,
+            querier,
             store,
-            &self.accounts,
+            &self.accounts, // ?
             external_outputs,
             btc_height,
             !reached_capacity_limit,
             timestamping_commitment,
-            &mut self.fee_pool,
-            &self.config,
+            // fee_pool,
+            &config,
         )?;
 
         // TODO: remove expired outpoints from processed_outpoints
 
         if pushed {
-            self.offline_signers(store)
+            self.offline_signers(querier, store)
         } else {
             Ok(vec![])
         }
@@ -684,11 +717,16 @@ impl Bitcoin {
     ///
     /// This should be used to punish offline signers, by e.g. removing them
     /// from the validator set and slashing their stake.    
-    fn offline_signers(&mut self, store: &mut dyn Storage) -> ContractResult<Vec<ConsensusKey>> {
+    fn offline_signers(
+        &mut self,
+        querier: QuerierWrapper,
+        store: &mut dyn Storage,
+    ) -> ContractResult<Vec<ConsensusKey>> {
+        let config = self.config(store)?;
         let mut validators = get_validators(store)?;
         validators.sort_by(|a, b| b.power.cmp(&a.power));
 
-        let offline_threshold = self.config.max_offline_checkpoints;
+        let offline_threshold = config.max_offline_checkpoints;
         let sigset = self.checkpoints.active_sigset(store)?;
         let lowest_power = sigset.signatories.last().unwrap().voting_power;
         let completed = self.checkpoints.completed(store, offline_threshold)?;
@@ -736,7 +774,7 @@ impl Bitcoin {
     pub fn take_pending(
         &mut self,
         store: &mut dyn Storage,
-    ) -> ContractResult<Vec<Vec<(String, Coin)>>> {
+    ) -> ContractResult<Vec<Vec<(Dest, Coin)>>> {
         let unhandled_confirmed_cps = match self.checkpoints.unhandled_confirmed(store) {
             Err(_) => return Ok(vec![]),
             Ok(val) => val,
@@ -752,7 +790,9 @@ impl Bitcoin {
             self.checkpoints.set(store, *confirmed_index, &checkpoint)?;
         }
         if let Some(last_index) = unhandled_confirmed_cps.last() {
-            self.checkpoints.first_unhandled_confirmed_cp_index = *last_index + 1;
+            let _ = FIRST_UNHANDLED_CONFIRMED_INDEX
+                .save(store, &(*last_index + 1))
+                .unwrap();
         }
         Ok(confirmed_dests)
     }
@@ -766,7 +806,7 @@ impl Bitcoin {
     pub fn take_pending_completed(
         &mut self,
         store: &mut dyn Storage,
-    ) -> ContractResult<Vec<Vec<(String, Coin)>>> {
+    ) -> ContractResult<Vec<Vec<(Dest, Coin)>>> {
         let last_completed_index = match self.checkpoints.last_completed_index(store) {
             Err(err) => {
                 if let ContractError::App(err_str) = &err {
@@ -779,7 +819,7 @@ impl Bitcoin {
             Ok(val) => val,
         };
 
-        let confirmed_index = self.checkpoints.confirmed_index.unwrap_or_default();
+        let confirmed_index = self.checkpoints.confirmed_index(store).unwrap_or_default();
         let mut completed_dests = vec![];
         for checkpoint_index in confirmed_index..=last_completed_index {
             let mut checkpoint = self.checkpoints.get(store, checkpoint_index)?;
@@ -795,65 +835,72 @@ impl Bitcoin {
         store: &mut dyn Storage,
         amount: Uint128,
     ) -> ContractResult<()> {
+        let config = self.config(store)?;
         let amount: u64 = amount.u128() as u64;
-        // TODO: burn via token factory
+        // note: we don't need to burn coin here
         // coin.burn();
 
-        self.fee_pool += amount as i64;
+        // self.fee_pool += amount as i64;
+        let fee_pool = self.fee_pool(store)?;
+        FEE_POOL.save(store, &fee_pool)?;
+
         let mut checkpoint = self.checkpoints.building(store)?;
-        checkpoint.fees_collected += amount / self.config.units_per_sat;
-        self.checkpoints
-            .set(store, self.checkpoints.index, &checkpoint)?;
+        checkpoint.fees_collected += amount / config.units_per_sat;
+
+        let index = self.checkpoints.index(store);
+        self.checkpoints.set(store, index, &checkpoint)?;
 
         Ok(())
     }
 
-    pub fn give_rewards(&mut self, store: &mut dyn Storage, amount: Uint128) -> ContractResult<()> {
-        if self.fee_pool < (self.config.fee_pool_target_balance * self.config.units_per_sat) as i64
-        {
-            let amount: u64 = amount.u128() as u64;
-            // TODO:// tokenfactory coin.burn();
+    // TODO: reward pool ...
+    // pub fn give_rewards(&mut self, store: &mut dyn Storage, amount: Uint128) -> ContractResult<()> {
+    //     let config = self.config(store)?;
+    //     let fee_pool = FEE_POOL.load(store)?;
+    //     if fee_pool < (config.fee_pool_target_balance * config.units_per_sat) as i64 {
+    //         let amount: u64 = amount.u128() as u64;
+    //         // TODO:// tokenfactory coin.burn();
 
-            let reward_amount = (amount as u128 * self.config.fee_pool_reward_split.0 as u128
-                / self.config.fee_pool_reward_split.1 as u128)
-                as u64;
-            let fee_amount = amount - reward_amount;
+    //         let reward_amount = (amount as u128 * config.fee_pool_reward_split.0 as u128
+    //             / config.fee_pool_reward_split.1 as u128) as u64;
+    //         let fee_amount = amount - reward_amount;
 
-            // self.reward_pool.give(Coin::mint(reward_amount))?;
-            self.reward_pool.amount = self.reward_pool.amount.checked_sub(reward_amount.into())?;
-            self.give_miner_fee(store, fee_amount.into())?;
+    //         // self.reward_pool.give(Coin::mint(reward_amount))?;
+    //         self.reward_pool.amount = self.reward_pool.amount.checked_sub(reward_amount.into())?;
+    //         self.give_miner_fee(store, fee_amount.into())?;
 
-            assert_eq!(reward_amount + fee_amount, amount);
-        } else {
-            // self.reward_pool.give(coin)?;
-            self.reward_pool.amount = self.reward_pool.amount.checked_sub(amount)?;
-        }
+    //         assert_eq!(reward_amount + fee_amount, amount);
+    //     } else {
+    //         // self.reward_pool.give(coin)?;
+    //         self.reward_pool.amount = self.reward_pool.amount.checked_sub(amount)?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn give_funding_to_fee_pool(
-        &mut self,
-        store: &mut dyn Storage,
-        amount: Uint128,
-    ) -> ContractResult<()> {
-        // TODO: update total paid?
-        self.give_miner_fee(store, amount)
-    }
+    // pub fn give_funding_to_fee_pool(
+    //     &mut self,
+    //     store: &mut dyn Storage,
+    //     amount: Uint128,
+    // ) -> ContractResult<()> {
+    //     // TODO: update total paid?
+    //     self.give_miner_fee(store, amount)
+    // }
 
-    pub fn transfer_to_fee_pool(
-        &mut self,
-        store: &mut dyn Storage,
-        signer: Addr,
-        amount: Uint128,
-    ) -> ContractResult<()> {
-        if amount < (100 * self.config.units_per_sat).into() {
-            return Err(ContractError::App(
-                "Minimum transfer to fee pool is 100 sat".into(),
-            ));
-        }
+    // pub fn transfer_to_fee_pool(
+    //     &mut self,
+    //     store: &mut dyn Storage,
+    //     signer: Addr,
+    //     amount: Uint128,
+    // ) -> ContractResult<()> {
+    //     let config = self.config(store)?;
+    //     if amount < (100 * config.units_per_sat).into() {
+    //         return Err(ContractError::App(
+    //             "Minimum transfer to fee pool is 100 sat".into(),
+    //         ));
+    //     }
 
-        let coins = self.accounts.withdraw(signer, amount)?;
-        self.give_miner_fee(store, coins.amount)
-    }
+    //     let coins = self.accounts.withdraw(signer, amount)?;
+    //     self.give_miner_fee(store, coins.amount)
+    // }
 }

@@ -4,13 +4,12 @@ use bitcoin::BlockHeader;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
-use cosmwasm_std::to_json_vec;
 use cosmwasm_std::Addr;
-use cosmwasm_std::Binary;
 use cosmwasm_std::Coin;
 use cosmwasm_std::Storage;
 use cosmwasm_std::Uint128;
 use cosmwasm_std::{from_json, StdError};
+use cosmwasm_std::{to_json_vec, Binary};
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use sha2::{Digest, Sha256};
@@ -141,6 +140,13 @@ impl Dest {
         match self {
             Self::Address(addr) => addr.to_string(),
             Self::Ibc(dest) => dest.receiver.to_string(),
+        }
+    }
+
+    pub fn to_source_addr(&self) -> String {
+        match self {
+            Self::Address(addr) => addr.to_string(),
+            Self::Ibc(dest) => dest.sender.to_string(),
         }
     }
 

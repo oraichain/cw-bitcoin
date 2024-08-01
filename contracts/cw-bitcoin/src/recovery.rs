@@ -1,17 +1,17 @@
 use super::{
-    adapter::Adapter,
     checkpoint::{BitcoinTx, Input},
     signatory::SignatorySet,
     threshold_sig::Signature,
 };
 use crate::{
+    adapter::Adapter,
     error::{ContractError, ContractResult},
     interface::{Dest, Xpub},
     state::RECOVERY_TXS,
 };
 use bitcoin::{OutPoint, Transaction, TxOut};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::Storage;
+use cosmwasm_std::{QuerierWrapper, Storage};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "cosmwasm_schema::serde")]

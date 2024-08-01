@@ -2,7 +2,9 @@ use std::cmp::Ordering;
 
 use crate::app::ConsensusKey;
 use crate::constants::MAX_SIGNATORIES;
+use crate::interface::Xpub;
 use crate::state::get_validators;
+use crate::state::CONFIG;
 use crate::state::SIG_KEYS;
 use crate::state::XPUBS;
 
@@ -18,10 +20,9 @@ use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Order;
+use cosmwasm_std::QuerierWrapper;
 use cosmwasm_std::Storage;
 // use ed::Encode;
-
-use super::interface::Xpub;
 
 /// The maximum number of signatories in a signatory set.
 ///
@@ -80,6 +81,7 @@ pub struct SignatorySet {
 impl SignatorySet {
     /// Creates a signatory set based on the current validator set.
     pub fn from_validator_ctx(
+        querier: QuerierWrapper,
         store: &dyn Storage,
         create_time: u64,
         index: u32,

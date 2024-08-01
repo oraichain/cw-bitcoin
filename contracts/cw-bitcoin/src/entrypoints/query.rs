@@ -1,9 +1,17 @@
 use bitcoin::{BlockHash, Transaction};
-use cosmwasm_std::{Order, Storage};
+use cosmwasm_std::{Order, QuerierWrapper, Storage};
 use std::str::FromStr;
 
 use crate::{
-    adapter::{Adapter, HashBinary}, app::{Bitcoin, ConsensusKey}, checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue}, error::{ContractError, ContractResult}, header::HeaderQueue, interface::Xpub, recovery::{RecoveryTxs, SignedRecoveryTx}, signatory::SignatorySet, state::{header_height, HEADER_CONFIG, OUTPOINTS, SIG_KEYS}
+    adapter::{Adapter, HashBinary},
+    app::{Bitcoin, ConsensusKey},
+    checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue, CheckpointStatus},
+    error::{ContractError, ContractResult},
+    header::HeaderQueue,
+    interface::Xpub,
+    recovery::{RecoveryTxs, SignedRecoveryTx},
+    signatory::SignatorySet,
+    state::{header_height, HEADER_CONFIG, OUTPOINTS, SIG_KEYS},
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
@@ -11,11 +19,10 @@ pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
 }
 
 pub fn query_deposit_fees(store: &dyn Storage, index: Option<u32>) -> ContractResult<u64> {
-    let header_config = HEADER_CONFIG.load(store)?;
-    let btc = Bitcoin::new(header_config);
+    let btc = Bitcoin::default();
     let checkpoint = btc.get_checkpoint(store, index)?;
     let input_vsize = checkpoint.sigset.est_witness_vsize() + 40;
-    let deposit_fees = btc.calc_minimum_deposit_fees(input_vsize, checkpoint.fee_rate);
+    let deposit_fees = btc.calc_minimum_deposit_fees(store, input_vsize, checkpoint.fee_rate)?;
     Ok(deposit_fees)
 }
 
@@ -24,20 +31,19 @@ pub fn query_withdrawal_fees(
     address: String,
     index: Option<u32>,
 ) -> ContractResult<u64> {
-    let header_config = HEADER_CONFIG.load(store)?;
-    let btc = Bitcoin::new(header_config);
+    let btc = Bitcoin::default();
     let checkpoint = btc.get_checkpoint(store, index)?;
     let btc_address = bitcoin::Address::from_str(address.as_str())
         .map_err(|err| ContractError::App(err.to_string()))?;
     let script = btc_address.script_pubkey();
     let withdrawal_fees =
-        btc.calc_minimum_withdrawal_fees(script.len() as u64, checkpoint.fee_rate);
+        btc.calc_minimum_withdrawal_fees(store, script.len() as u64, checkpoint.fee_rate)?;
     Ok(withdrawal_fees)
 }
 
 pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<HashBinary<BlockHash>> {
-    let header_config = HEADER_CONFIG.load(store)?;
-    let headers = HeaderQueue::new(header_config);
+    // let header_config = HEADER_CONFIG.load(store)?;
+    let headers = HeaderQueue::default();
     let hash = HashBinary(headers.hash(store)?);
     Ok(hash)
 }
@@ -87,17 +93,20 @@ pub fn query_signed_recovery_txs(store: &dyn Storage) -> ContractResult<Vec<Sign
     Ok(signed_recovery_txs)
 }
 
-pub fn query_last_complete_index(store: &dyn Storage) -> ContractResult<u32> {
-    let checkpoints = CheckpointQueue::default();
-    let last_complete_index = checkpoints.last_completed_index(store)?;
-    Ok(last_complete_index)
+pub fn query_signing_recovery_txs(
+    querier: QuerierWrapper,
+    store: &dyn Storage,
+    xpub: HashBinary<Xpub>,
+) -> ContractResult<Vec<([u8; 32], u32)>> {
+    let recovery_txs = RecoveryTxs::default();
+    recovery_txs.to_sign(store, &xpub.0)
 }
 
 pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<u32> {
     let checkpoints = CheckpointQueue::default();
     let has_signing = checkpoints.signing(store)?.is_some();
     let signing_offset = has_signing as u32;
-    let confirmed_index = match checkpoints.confirmed_index {
+    let confirmed_index = match checkpoints.confirmed_index(store) {
         None => return Ok(checkpoints.len(store)? - 1 - signing_offset),
         Some(index) => index,
     };
@@ -122,7 +131,10 @@ pub fn query_process_outpoints(store: &dyn Storage) -> ContractResult<Vec<String
     Ok(process_outpoints)
 }
 
-pub fn query_signatory_keys(store: &dyn Storage, cons_key: ConsensusKey) -> ContractResult<Option<Xpub>> {
+pub fn query_signatory_keys(
+    store: &dyn Storage,
+    cons_key: ConsensusKey,
+) -> ContractResult<Option<Xpub>> {
     let signatory_keys = SIG_KEYS.may_load(store, &cons_key)?;
     Ok(signatory_keys)
 }
@@ -131,4 +143,18 @@ pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
     let checkpoints = CheckpointQueue::default();
     let len = checkpoints.len(store)?;
     Ok(len)
+}
+
+pub fn query_signing_txs_at_checkpoint_index(
+    querier: QuerierWrapper,
+    store: &dyn Storage,
+    xpub: HashBinary<Xpub>,
+    cp_index: u32,
+) -> ContractResult<Vec<([u8; 32], u32)>> {
+    let checkpoints = CheckpointQueue::default();
+    let checkpoint = checkpoints.get(store, cp_index)?;
+    if checkpoint.status != CheckpointStatus::Signing {
+        return Err(ContractError::App("checkpoint is not signing".to_string()));
+    }
+    Ok(checkpoint.to_sign(&xpub.0).unwrap())
 }
