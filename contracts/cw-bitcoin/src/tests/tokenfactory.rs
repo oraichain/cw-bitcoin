@@ -77,8 +77,6 @@ fn mint_token() {
     let expected = Coin { denom, amount };
     assert_eq!(end, expected);
 
-    println!("{:?}", end);
-
     // but no minting of unprefixed version
     let empty = app
         .as_querier()
