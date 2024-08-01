@@ -1,10 +1,13 @@
 use crate::{
-    app::Bitcoin,
+    app::{Bitcoin, ConsensusKey},
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, MintTokens},
-    state::{BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG},
+    state::{
+        get_full_btc_denom, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG, SIGNERS,
+        VALIDATORS,
+    },
     threshold_sig::Signature,
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
@@ -12,7 +15,10 @@ use common::{
     adapter::{Adapter, HashBinary},
     interface::Xpub,
 };
-use cosmwasm_std::{wasm_execute, Env, MessageInfo, QuerierWrapper, Response, Storage};
+use cosmwasm_std::{
+    to_binary, wasm_execute, Env, MessageInfo, QuerierWrapper, Response, Storage, WasmMsg,
+};
+use token_bindings::Metadata;
 
 /// TODO: check logic
 pub fn update_checkpoint_config(
@@ -68,7 +74,7 @@ pub fn relay_deposit(
     // dest validation?
     let mut btc = Bitcoin::default();
     let mut response = Response::new().add_attribute("action", "relay_deposit");
-    if let Some(mint_amount) = btc.relay_deposit(
+    btc.relay_deposit(
         env.clone(),
         store,
         btc_tx,
@@ -77,20 +83,44 @@ pub fn relay_deposit(
         btc_vout,
         sigset_index,
         dest,
-    )? {
-        let config = CONFIG.load(store)?;
-        response = response.add_message(wasm_execute(
-            config.token_factory_addr,
-            &MintTokens {
-                denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
-                amount: mint_amount,
-                mint_to_address: env.contract.address.to_string(),
-            },
-            vec![],
-        )?);
-    }
+    )
+    .unwrap();
 
     Ok(response)
+}
+
+pub fn withdraw_to_bitcoin(
+    store: &mut dyn Storage,
+    info: MessageInfo,
+    env: Env,
+    script_pubkey: Adapter<bitcoin::Script>,
+) -> ContractResult<Response> {
+    let mut btc = Bitcoin::default();
+
+    let mut cosmos_msgs = vec![];
+
+    let config = CONFIG.load(store)?;
+    for fund in info.funds {
+        if fund.denom == BTC_NATIVE_TOKEN_DENOM {
+            let amount = fund.amount;
+            btc.add_withdrawal(store, script_pubkey.clone(), amount)
+                .unwrap();
+
+            // burn here
+            cosmos_msgs.push(WasmMsg::Execute {
+                contract_addr: config.token_factory_addr.clone().into_string(),
+                msg: to_binary(&tokenfactory::msg::ExecuteMsg::BurnTokens {
+                    amount,
+                    denom: get_full_btc_denom(store)?,
+                    burn_from_address: env.contract.address.to_string(),
+                })?,
+                funds: vec![],
+            });
+        }
+    }
+
+    let response = Response::new().add_attribute("action", "withdraw_to_bitcoin");
+    Ok(response.add_messages(cosmos_msgs))
 }
 
 pub fn relay_checkpoint(
@@ -153,4 +183,49 @@ pub fn set_recovery_script(
     let _ = btc.set_recovery_script(store, info.sender, script);
     let response = Response::new().add_attribute("action", "set_recovery_script");
     Ok(response)
+}
+
+// TODO: Add check only owners of this contract can call
+pub fn add_validators(
+    store: &mut dyn Storage,
+    _info: MessageInfo,
+    addrs: Vec<String>,
+    infos: Vec<(u64, ConsensusKey)>,
+) -> ContractResult<Response> {
+    for (index, addr) in addrs.iter().enumerate() {
+        let info = infos.get(index).unwrap();
+        let (power, cons_key) = info;
+        SIGNERS.save(store, addr, &cons_key).unwrap();
+        VALIDATORS
+            .save(store, &cons_key, &(power.to_owned(), addr.to_owned()))
+            .unwrap();
+    }
+    let response = Response::new().add_attribute("action", "add_validators");
+    Ok(response)
+}
+
+// TODO: Add check only owners of this contract can call
+pub fn register_denom(
+    store: &mut dyn Storage,
+    info: MessageInfo,
+    subdenom: String,
+    metadata: Option<Metadata>,
+) -> ContractResult<Response> {
+    // OWNER.assert_admin(deps.as_ref(), &info.sender)?;
+
+    let config = CONFIG.load(store)?;
+
+    let mut cosmos_msgs = vec![];
+    cosmos_msgs.push(wasm_execute(
+        config.token_factory_addr,
+        &tokenfactory::msg::ExecuteMsg::CreateDenom {
+            subdenom: subdenom,
+            metadata: metadata,
+        },
+        info.funds,
+    )?);
+
+    Ok(Response::new()
+        .add_messages(cosmos_msgs)
+        .add_attribute("action", "register_denom"))
 }

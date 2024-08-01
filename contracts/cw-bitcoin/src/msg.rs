@@ -2,8 +2,10 @@ use bitcoin::{util::merkleblock::PartialMerkleTree, Script, Transaction};
 use common::{adapter::Adapter, interface::Xpub};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary};
+use token_bindings::Metadata;
 
 use crate::{
+    app::ConsensusKey,
     header::WrappedHeader,
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
     threshold_sig::Signature,
@@ -38,6 +40,9 @@ pub enum ExecuteMsg {
         sigset_index: u32,
         dest: Dest,
     },
+    WithdrawToBitcoin {
+        script_pubkey: Adapter<Script>,
+    },
     SubmitCheckpointSignature {
         xpub: HashBinary<Xpub>,
         sigs: Vec<Signature>,
@@ -50,6 +55,14 @@ pub enum ExecuteMsg {
     },
     SetSignatoryKey {
         xpub: HashBinary<Xpub>,
+    },
+    AddValidators {
+        addrs: Vec<String>,
+        infos: Vec<(u64, ConsensusKey)>,
+    },
+    RegisterDenom {
+        subdenom: String,
+        metadata: Option<Metadata>,
     },
     SetRecoveryScript {
         signatory_script: Adapter<Script>,

@@ -236,7 +236,7 @@ impl Bitcoin {
         btc_vout: u32,
         sigset_index: u32,
         dest: Dest,
-    ) -> ContractResult<Option<Uint128>> {
+    ) -> ContractResult<()> {
         let config = self.config(store)?;
         let now = env.block.time.seconds();
 
@@ -329,7 +329,7 @@ impl Bitcoin {
                 },
             )?;
 
-            return Ok(None);
+            return Ok(());
         }
 
         let prevout = bitcoin::OutPoint {
@@ -344,7 +344,8 @@ impl Bitcoin {
             self.checkpoints.config(store).sigset_threshold,
         )?;
         let input_size = input.est_vsize();
-        // mint token_factory here
+
+        // note: we only mint nbtc when it is send to destination
         let mint_amount = (output.value * config.units_per_sat).into();
         let mut nbtc = Coin {
             denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
@@ -381,7 +382,7 @@ impl Bitcoin {
         let index = self.checkpoints.index(store);
         self.checkpoints.set(store, index, &building_mut)?;
 
-        Ok(Some(mint_amount))
+        Ok(())
     }
 
     /// Records proof that a checkpoint produced by the network has been
@@ -837,7 +838,7 @@ impl Bitcoin {
     ) -> ContractResult<()> {
         let config = self.config(store)?;
         let amount: u64 = amount.u128() as u64;
-        // TODO: burn via token factory
+        // note: we don't need to burn coin here
         // coin.burn();
 
         // self.fee_pool += amount as i64;
@@ -854,53 +855,53 @@ impl Bitcoin {
     }
 
     // TODO: reward pool ...
-    pub fn give_rewards(&mut self, store: &mut dyn Storage, amount: Uint128) -> ContractResult<()> {
-        let config = self.config(store)?;
-        let fee_pool = FEE_POOL.load(store)?;
-        if fee_pool < (config.fee_pool_target_balance * config.units_per_sat) as i64 {
-            let amount: u64 = amount.u128() as u64;
-            // TODO:// tokenfactory coin.burn();
+    // pub fn give_rewards(&mut self, store: &mut dyn Storage, amount: Uint128) -> ContractResult<()> {
+    //     let config = self.config(store)?;
+    //     let fee_pool = FEE_POOL.load(store)?;
+    //     if fee_pool < (config.fee_pool_target_balance * config.units_per_sat) as i64 {
+    //         let amount: u64 = amount.u128() as u64;
+    //         // TODO:// tokenfactory coin.burn();
 
-            let reward_amount = (amount as u128 * config.fee_pool_reward_split.0 as u128
-                / config.fee_pool_reward_split.1 as u128) as u64;
-            let fee_amount = amount - reward_amount;
+    //         let reward_amount = (amount as u128 * config.fee_pool_reward_split.0 as u128
+    //             / config.fee_pool_reward_split.1 as u128) as u64;
+    //         let fee_amount = amount - reward_amount;
 
-            // self.reward_pool.give(Coin::mint(reward_amount))?;
-            self.reward_pool.amount = self.reward_pool.amount.checked_sub(reward_amount.into())?;
-            self.give_miner_fee(store, fee_amount.into())?;
+    //         // self.reward_pool.give(Coin::mint(reward_amount))?;
+    //         self.reward_pool.amount = self.reward_pool.amount.checked_sub(reward_amount.into())?;
+    //         self.give_miner_fee(store, fee_amount.into())?;
 
-            assert_eq!(reward_amount + fee_amount, amount);
-        } else {
-            // self.reward_pool.give(coin)?;
-            self.reward_pool.amount = self.reward_pool.amount.checked_sub(amount)?;
-        }
+    //         assert_eq!(reward_amount + fee_amount, amount);
+    //     } else {
+    //         // self.reward_pool.give(coin)?;
+    //         self.reward_pool.amount = self.reward_pool.amount.checked_sub(amount)?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn give_funding_to_fee_pool(
-        &mut self,
-        store: &mut dyn Storage,
-        amount: Uint128,
-    ) -> ContractResult<()> {
-        // TODO: update total paid?
-        self.give_miner_fee(store, amount)
-    }
+    // pub fn give_funding_to_fee_pool(
+    //     &mut self,
+    //     store: &mut dyn Storage,
+    //     amount: Uint128,
+    // ) -> ContractResult<()> {
+    //     // TODO: update total paid?
+    //     self.give_miner_fee(store, amount)
+    // }
 
-    pub fn transfer_to_fee_pool(
-        &mut self,
-        store: &mut dyn Storage,
-        signer: Addr,
-        amount: Uint128,
-    ) -> ContractResult<()> {
-        let config = self.config(store)?;
-        if amount < (100 * config.units_per_sat).into() {
-            return Err(ContractError::App(
-                "Minimum transfer to fee pool is 100 sat".into(),
-            ));
-        }
+    // pub fn transfer_to_fee_pool(
+    //     &mut self,
+    //     store: &mut dyn Storage,
+    //     signer: Addr,
+    //     amount: Uint128,
+    // ) -> ContractResult<()> {
+    //     let config = self.config(store)?;
+    //     if amount < (100 * config.units_per_sat).into() {
+    //         return Err(ContractError::App(
+    //             "Minimum transfer to fee pool is 100 sat".into(),
+    //         ));
+    //     }
 
-        let coins = self.accounts.withdraw(signer, amount)?;
-        self.give_miner_fee(store, coins.amount)
-    }
+    //     let coins = self.accounts.withdraw(signer, amount)?;
+    //     self.give_miner_fee(store, coins.amount)
+    // }
 }

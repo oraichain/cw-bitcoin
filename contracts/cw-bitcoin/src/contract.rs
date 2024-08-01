@@ -72,6 +72,9 @@ pub fn execute(
             sigset_index,
             dest,
         ),
+        ExecuteMsg::WithdrawToBitcoin { script_pubkey } => {
+            withdraw_to_bitcoin(deps.storage, info, env, script_pubkey)
+        }
         ExecuteMsg::RelayHeaders { headers } => relay_headers(deps.storage, headers),
         ExecuteMsg::UpdateHeaderConfig { config } => update_header_config(deps.storage, config),
         ExecuteMsg::UpdateBitcoinConfig { config } => update_bitcoin_config(deps.storage, config),
@@ -95,6 +98,12 @@ pub fn execute(
             submit_recovery_signature(deps.querier, deps.storage, xpub, sigs)
         }
         ExecuteMsg::SetSignatoryKey { xpub } => set_signatory_key(deps.storage, info, xpub),
+        ExecuteMsg::AddValidators { addrs, infos } => {
+            add_validators(deps.storage, info, addrs, infos)
+        }
+        ExecuteMsg::RegisterDenom { subdenom, metadata } => {
+            register_denom(deps.storage, info, subdenom, metadata)
+        }
         ExecuteMsg::SetRecoveryScript { signatory_script } => {
             set_recovery_script(deps.storage, info, signatory_script)
         }

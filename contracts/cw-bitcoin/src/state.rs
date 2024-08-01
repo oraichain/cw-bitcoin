@@ -5,6 +5,7 @@ use cw_storage_plus::{Item, Map};
 use crate::{
     app::ConsensusKey,
     checkpoint::Checkpoint,
+    constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::WorkHeader,
     interface::{BitcoinConfig, CheckpointConfig, Config, DequeExtension, HeaderConfig, Validator},
@@ -96,4 +97,10 @@ pub fn header_height(store: &dyn Storage) -> ContractResult<u32> {
         Some(inner) => Ok(inner.height()),
         None => Ok(0),
     }
+}
+
+pub fn get_full_btc_denom(store: &dyn Storage) -> ContractResult<String> {
+    let config = CONFIG.load(store)?;
+    let token_factory_addr = config.token_factory_addr;
+    Ok(format!("factory/{}/{}", token_factory_addr, BTC_NATIVE_TOKEN_DENOM).to_string())
 }
