@@ -81,7 +81,6 @@ pub struct SignatorySet {
 impl SignatorySet {
     /// Creates a signatory set based on the current validator set.
     pub fn from_validator_ctx(
-        querier: QuerierWrapper,
         store: &dyn Storage,
         create_time: u64,
         index: u32,

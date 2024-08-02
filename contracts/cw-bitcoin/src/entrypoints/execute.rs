@@ -134,7 +134,6 @@ pub fn relay_checkpoint(
 }
 
 pub fn submit_checkpoint_signature(
-    querier: QuerierWrapper,
     store: &mut dyn Storage,
     xpub: HashBinary<Xpub>,
     sigs: Vec<Signature>,
@@ -143,7 +142,7 @@ pub fn submit_checkpoint_signature(
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut checkpoints = btc.checkpoints;
-    let _ = checkpoints.sign(querier, store, &xpub.0, sigs, cp_index, btc_height);
+    let _ = checkpoints.sign(store, &xpub.0, sigs, cp_index, btc_height);
     let response = Response::new().add_attribute("action", "submit_checkpoint_signature");
     Ok(response)
 }

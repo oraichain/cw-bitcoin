@@ -183,11 +183,10 @@ impl Bitcoin {
     pub fn should_push_checkpoint(
         &mut self,
         env: Env,
-        querier: QuerierWrapper,
         store: &dyn Storage,
     ) -> ContractResult<bool> {
         self.checkpoints
-            .should_push(env, querier, store, &[0; 32], self.headers.height(store)?)
+            .should_push(env, store, &[0; 32], self.headers.height(store)?)
         // TODO: we shouldn't need this slice, commitment should be fixed-length
     }
 
@@ -552,7 +551,6 @@ impl Bitcoin {
     /// `Signing` checkpoint.    
     pub fn sign(
         &mut self,
-        querier: QuerierWrapper,
         store: &mut dyn Storage,
         xpub: &Xpub,
         sigs: Vec<Signature>,
@@ -560,7 +558,7 @@ impl Bitcoin {
     ) -> ContractResult<()> {
         let btc_height = self.headers.height(store)?;
         self.checkpoints
-            .sign(querier, store, xpub, sigs, cp_index, btc_height)
+            .sign(store, xpub, sigs, cp_index, btc_height)
     }
 
     /// The amount of BTC in the reserve output of the most recent fully-signed
@@ -664,7 +662,6 @@ impl Bitcoin {
     pub fn begin_block_step(
         &mut self,
         env: Env,
-        querier: QuerierWrapper,
         store: &mut dyn Storage,
         external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         timestamping_commitment: Vec<u8>,
@@ -689,24 +686,21 @@ impl Bitcoin {
 
         let btc_height = self.headers.height(store)?;
 
-        // let fee_pool = self.fee_pool(store)?;
         let pushed = self.checkpoints.maybe_step(
             env,
-            querier,
             store,
             &self.accounts, // ?
             external_outputs,
             btc_height,
             !reached_capacity_limit,
             timestamping_commitment,
-            // fee_pool,
             &config,
         )?;
 
         // TODO: remove expired outpoints from processed_outpoints
 
         if pushed {
-            self.offline_signers(querier, store)
+            self.offline_signers(store)
         } else {
             Ok(vec![])
         }
@@ -717,11 +711,7 @@ impl Bitcoin {
     ///
     /// This should be used to punish offline signers, by e.g. removing them
     /// from the validator set and slashing their stake.    
-    fn offline_signers(
-        &mut self,
-        querier: QuerierWrapper,
-        store: &mut dyn Storage,
-    ) -> ContractResult<Vec<ConsensusKey>> {
+    fn offline_signers(&mut self, store: &mut dyn Storage) -> ContractResult<Vec<ConsensusKey>> {
         let config = self.config(store)?;
         let mut validators = get_validators(store)?;
         validators.sort_by(|a, b| b.power.cmp(&a.power));

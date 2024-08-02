@@ -87,14 +87,7 @@ pub fn execute(
             sigs,
             checkpoint_index,
             btc_height,
-        } => submit_checkpoint_signature(
-            deps.querier,
-            deps.storage,
-            xpub,
-            sigs,
-            checkpoint_index,
-            btc_height,
-        ),
+        } => submit_checkpoint_signature(deps.storage, xpub, sigs, checkpoint_index, btc_height),
         ExecuteMsg::SubmitRecoverySignature { xpub, sigs } => {
             submit_recovery_signature(deps.querier, deps.storage, xpub, sigs)
         }
@@ -141,7 +134,7 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
             }
 
             let external_outputs: Vec<bitcoin::TxOut> =
-                if btc.should_push_checkpoint(env.clone(), querier, storage)? {
+                if btc.should_push_checkpoint(env.clone(), storage)? {
                     // TODO: build output
                     vec![]
                     // self.cosmos
@@ -152,7 +145,6 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
 
             let offline_signers = btc.begin_block_step(
                 env,
-                querier,
                 storage,
                 external_outputs.into_iter().map(Ok),
                 hash.to_vec(),
