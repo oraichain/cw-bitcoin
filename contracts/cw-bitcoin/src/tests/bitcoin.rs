@@ -557,7 +557,7 @@ fn test_take_pending() -> ContractResult<()> {
             ..dest.clone()
         })
     );
-    assert_eq!(cp_dests[0][0].1.amount.u128(), 1u128);
+    assert_eq!(cp_dests[0][0].1.amount.u128(), 95_000_000u128);
 
     assert_eq!(
         cp_dests[0][1].0,
@@ -566,7 +566,7 @@ fn test_take_pending() -> ContractResult<()> {
             ..dest.clone()
         })
     );
-    assert_eq!(cp_dests[0][1].1.amount.u128(), 1u128);
+    assert_eq!(cp_dests[0][1].1.amount.u128(), 95_000_000u128);
 
     assert_eq!(
         cp_dests[1][0].0,
@@ -575,7 +575,7 @@ fn test_take_pending() -> ContractResult<()> {
             ..dest.clone()
         })
     );
-    assert_eq!(cp_dests[1][0].1.amount.u128(), 5u128);
+    assert_eq!(cp_dests[1][0].1.amount.u128(), 98_000_000u128);
 
     // // assert confirmed checkpoints pending. Should not have anything because we have removed them already in take_pending()
     let checkpoints = &btc.borrow().checkpoints;
