@@ -8,8 +8,8 @@ use crate::{
     interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
-        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL, HEADER_CONFIG,
-        VALIDATORS,
+        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
+        FIRST_UNHANDLED_CONFIRMED_INDEX, HEADER_CONFIG, VALIDATORS,
     },
 };
 
@@ -44,6 +44,7 @@ pub fn instantiate(
     BITCOIN_CONFIG.save(deps.storage, &&BitcoinConfig::default())?;
     FEE_POOL.save(deps.storage, &0)?;
     BUILDING_INDEX.save(deps.storage, &0)?;
+    FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.storage, &0)?;
 
     Ok(Response::default())
 }

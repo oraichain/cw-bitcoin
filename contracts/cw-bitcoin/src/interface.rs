@@ -121,9 +121,7 @@ impl Accounts {
 pub struct IbcDest {
     pub source_port: String,
     pub source_channel: String,
-    #[serde(skip)]
     pub receiver: String,
-    #[serde(skip)]
     pub sender: String,
     pub timeout_timestamp: u64,
     pub memo: String,

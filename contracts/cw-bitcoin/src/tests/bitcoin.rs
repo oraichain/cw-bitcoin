@@ -17,7 +17,7 @@ use cosmwasm_std::{Addr, Coin, Env, Storage, Uint128};
 use error::ContractResult;
 use interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub};
 use state::{
-    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
     FIRST_UNHANDLED_CONFIRMED_INDEX, HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS,
 };
 use std::cell::RefCell;
@@ -317,7 +317,7 @@ fn check_change_rates() -> ContractResult<()> {
     Ok(())
 }
 
-// #[serial_test::serial]
+#[serial_test::serial]
 #[test]
 fn test_take_pending() -> ContractResult<()> {
     let mut deps = mock_dependencies();
@@ -329,6 +329,7 @@ fn test_take_pending() -> ContractResult<()> {
     BITCOIN_CONFIG.save(deps.as_mut().storage, &bitcoin_config)?;
     FEE_POOL.save(deps.as_mut().storage, &0)?;
     CHECKPOINT_CONFIG.save(deps.as_mut().storage, &CheckpointConfig::default())?;
+    FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.as_mut().storage, &0)?;
 
     BUILDING_INDEX.save(deps.as_mut().storage, &0)?;
 
@@ -513,9 +514,10 @@ fn test_take_pending() -> ContractResult<()> {
     sign_cp(deps.as_mut().storage, 10)?;
     confirm_cp(deps.as_mut().storage, 1);
 
-    // let first_unhandled_confirmed_cp_index =
-    //     FIRST_UNHANDLED_CONFIRMED_INDEX.load(deps.as_ref().storage).unwrap;
-    // assert_eq!(first_unhandled_confirmed_cp_index, 0);
+    let first_unhandled_confirmed_cp_index = FIRST_UNHANDLED_CONFIRMED_INDEX
+        .load(deps.as_ref().storage)
+        .unwrap();
+    assert_eq!(first_unhandled_confirmed_cp_index, 0);
 
     let confirmed_index = CONFIRMED_INDEX.load(deps.as_ref().storage)?;
     assert_eq!(confirmed_index, 1);
@@ -540,47 +542,46 @@ fn test_take_pending() -> ContractResult<()> {
     );
 
     // action. After take pending, the unhandled confirmed index should increase to 2 since we handled 2 confirmed checkpoints
-    // let cp_dests = take_pending(deps.as_mut().storage)?;
-    // let checkpoints = &btc.borrow().checkpoints;
+    let cp_dests = take_pending(deps.as_mut().storage)?;
 
-    // let first_unhandled_confirmed_cp_index =
-    //     FIRST_UNHANDLED_CONFIRMED_INDEX.load(deps.as_ref().storage)?;
-    // assert_eq!(first_unhandled_confirmed_cp_index, 2);
-    // assert_eq!(cp_dests.len(), 2);
-    // assert_eq!(cp_dests[0].len(), 2);
-    // assert_eq!(cp_dests[1].len(), 1);
-    // assert_eq!(
-    //     cp_dests[0][0].0,
-    //     Dest::Ibc(IbcDest {
-    //         sender: "sender1".to_string(),
-    //         ..dest.clone()
-    //     })
-    // );
-    // assert_eq!(cp_dests[0][0].1.amount.u128(), 1u128);
+    let first_unhandled_confirmed_cp_index =
+        FIRST_UNHANDLED_CONFIRMED_INDEX.load(deps.as_ref().storage)?;
+    assert_eq!(first_unhandled_confirmed_cp_index, 2);
+    assert_eq!(cp_dests.len(), 2);
+    assert_eq!(cp_dests[0].len(), 2);
+    assert_eq!(cp_dests[1].len(), 1);
+    assert_eq!(
+        cp_dests[0][0].0,
+        Dest::Ibc(IbcDest {
+            sender: "sender1".to_string(),
+            ..dest.clone()
+        })
+    );
+    assert_eq!(cp_dests[0][0].1.amount.u128(), 1u128);
 
-    // assert_eq!(
-    //     cp_dests[0][1].0,
-    //     Dest::Ibc(IbcDest {
-    //         sender: "sender2".to_string(),
-    //         ..dest.clone()
-    //     })
-    // );
-    // assert_eq!(cp_dests[0][1].1.amount.u128(), 1u128);
+    assert_eq!(
+        cp_dests[0][1].0,
+        Dest::Ibc(IbcDest {
+            sender: "sender2".to_string(),
+            ..dest.clone()
+        })
+    );
+    assert_eq!(cp_dests[0][1].1.amount.u128(), 1u128);
 
-    // assert_eq!(
-    //     cp_dests[1][0].0,
-    //     Dest::Ibc(IbcDest {
-    //         sender: "sender2".to_string(),
-    //         ..dest.clone()
-    //     })
-    // );
-    // assert_eq!(cp_dests[1][0].1.amount.u128(), 5u128);
+    assert_eq!(
+        cp_dests[1][0].0,
+        Dest::Ibc(IbcDest {
+            sender: "sender2".to_string(),
+            ..dest.clone()
+        })
+    );
+    assert_eq!(cp_dests[1][0].1.amount.u128(), 5u128);
 
     // // assert confirmed checkpoints pending. Should not have anything because we have removed them already in take_pending()
-    // let checkpoints = &btc.borrow().checkpoints;
-    // let first_cp = checkpoints.get(deps.as_ref().storage, 0).unwrap();
-    // assert_eq!(first_cp.pending.iter().count(), 0);
-    // let second_cp = checkpoints.get(deps.as_ref().storage, 1).unwrap();
-    // assert_eq!(second_cp.pending.iter().count(), 0);
+    let checkpoints = &btc.borrow().checkpoints;
+    let first_cp = checkpoints.get(deps.as_ref().storage, 0).unwrap();
+    assert_eq!(first_cp.pending.iter().count(), 0);
+    let second_cp = checkpoints.get(deps.as_ref().storage, 1).unwrap();
+    assert_eq!(second_cp.pending.iter().count(), 0);
     Ok(())
 }
