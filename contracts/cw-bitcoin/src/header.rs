@@ -321,8 +321,6 @@ impl HeaderQueue {
 
         let mut work = Uint256::default();
 
-        // println!("headers: {:?}", headers);
-
         for (prev_header, header) in headers {
             if header.height() != prev_header.height() + 1 {
                 return Err(ContractError::Header(

@@ -436,6 +436,7 @@ impl Bitcoin {
         }
 
         CONFIRMED_INDEX.save(store, &cp_index)?;
+        #[cfg(debug_assertions)]
         println!(
             "Checkpoint {} confirmed at Bitcoin height {}",
             cp_index, btc_height
