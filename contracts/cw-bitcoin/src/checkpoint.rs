@@ -1187,16 +1187,14 @@ impl CheckpointQueue {
     ) -> ContractResult<bool> {
         let is_should_push =
             self.should_push(env.clone(), store, &timestamping_commitment, btc_height)?;
-        println!("is_should_push: {}", is_should_push);
         if !is_should_push {
             return Ok(false);
         }
 
-        let is_maybe_push = self
+        let is_not_maybe_push = self
             .maybe_push(env.clone(), store, should_allow_deposits)?
             .is_none();
-        println!("is_maybe_push: {}", is_maybe_push);
-        if is_maybe_push {
+        if is_not_maybe_push {
             return Ok(false);
         }
 

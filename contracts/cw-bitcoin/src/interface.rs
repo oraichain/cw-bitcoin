@@ -75,35 +75,6 @@ impl<'a, T: Serialize + de::DeserializeOwned> DequeExtension<'a, T> {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(crate = "cosmwasm_schema::serde")]
-pub struct Accounts {
-    transfers_allowed: bool,
-    transfer_exceptions: Vec<String>,
-    accounts: Vec<(String, Coin)>,
-}
-
-impl Accounts {
-    pub fn balance(&self, address: String) -> Option<Coin> {
-        self.accounts
-            .iter()
-            .find(|item| item.0 == address)
-            .map(|item| item.1.clone())
-    }
-
-    pub fn withdraw(&mut self, address: Addr, amount: Uint128) -> ContractResult<Coin> {
-        if let Some((_, coin)) = self
-            .accounts
-            .iter_mut()
-            .find(|acc| acc.0.eq(address.as_str()))
-        {
-            coin.amount.checked_sub(amount)?;
-            return Ok(coin.clone());
-        }
-        Err(ContractError::Coins("Insufficient funds".into()))
-    }
-}
-
 #[cw_serde]
 pub struct IbcDest {
     pub source_port: String,

@@ -5,13 +5,12 @@ use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
     get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX,
-    SIGNERS, SIG_KEYS,
+    SIGNERS, SIG_KEYS, VALIDATORS, XPUBS,
 };
 use crate::threshold_sig;
 
 use super::checkpoint::Input;
 use super::recovery::{RecoveryTxInput, RecoveryTxs};
-use super::threshold_sig::Signature;
 
 use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
@@ -20,7 +19,7 @@ use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Api, Coin, Env, Order, Storage, Uint128};
+use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -149,19 +148,6 @@ impl Bitcoin {
             .insert(store, consensus_key, signatory_key)?;
 
         Ok(())
-    }
-
-    /// Returns `true` if the next call to `self.checkpoints.maybe_step()` will
-    /// push a new checkpoint (along with advancing the current `Building`
-    /// checkpoint to `Signing`). Returns `false` otherwise.    
-    pub fn should_push_checkpoint(
-        &mut self,
-        env: Env,
-        store: &dyn Storage,
-    ) -> ContractResult<bool> {
-        self.checkpoints
-            .should_push(env, store, &[0; 32], self.headers.height(store)?)
-        // TODO: we shouldn't need this slice, commitment should be fixed-length
     }
 
     pub fn calc_minimum_deposit_fees(
@@ -419,18 +405,6 @@ impl Bitcoin {
         Ok(())
     }
 
-    /// Initiates a withdrawal, adding an output to the current `Building`
-    /// checkpoint to be paid out once the checkpoint is fully signed.
-    pub fn withdraw(
-        &mut self,
-        store: &mut dyn Storage,
-        signer: Addr,
-        script_pubkey: Adapter<Script>,
-        amount: Uint128,
-    ) -> ContractResult<()> {
-        self.add_withdrawal(store, script_pubkey, amount)
-    }
-
     /// Adds an output to the current `Building` checkpoint to be paid out once
     /// the checkpoint is fully signed.
     pub fn add_withdrawal(
@@ -493,21 +467,6 @@ impl Bitcoin {
         // TODO: push to excess if full
 
         Ok(())
-    }
-
-    /// Called by signatories to submit their signatures for the current
-    /// `Signing` checkpoint.    
-    pub fn sign(
-        &mut self,
-        api: &dyn Api,
-        store: &mut dyn Storage,
-        xpub: &Xpub,
-        sigs: Vec<Signature>,
-        cp_index: u32,
-    ) -> ContractResult<()> {
-        let btc_height = self.headers.height(store)?;
-        self.checkpoints
-            .sign(api, store, xpub, sigs, cp_index, btc_height)
     }
 
     /// The amount of BTC in the reserve output of the most recent fully-signed
@@ -701,6 +660,24 @@ impl Bitcoin {
         Ok(offline_signers)
     }
 
+    pub fn punish_validator(
+        &mut self,
+        store: &mut dyn Storage,
+        cons_key: &ConsensusKey,
+        addr: String,
+    ) -> ContractResult<()> {
+        VALIDATORS.remove(store, cons_key);
+        SIGNERS.remove(store, &addr);
+        let xpub = SIG_KEYS.may_load(store, cons_key)?;
+        match xpub {
+            Some(xpub) => {
+                XPUBS.remove(store, &xpub.key.encode());
+                SIG_KEYS.remove(store, cons_key);
+            }
+            None => {}
+        }
+        Ok(())
+    }
     /// Takes the pending nBTC transfers from the most recent fully-signed
     /// checkpoint, leaving the vector empty after calling.
     ///

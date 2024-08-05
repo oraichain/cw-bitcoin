@@ -125,7 +125,6 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
 
             let config = CONFIG.load(storage)?;
             let token_factory = config.token_factory_addr;
-            let bridge_wasm = config.bridge_wasm_addr;
 
             let mut msgs = vec![];
             for pending in pending_nbtc_transfers {
@@ -146,9 +145,7 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
 
             for cons_key in &offline_signers {
                 let (_, address) = VALIDATORS.load(storage, cons_key)?;
-                // punish_downtime(address)?;
-                #[cfg(debug_assertions)]
-                println!("need punish downtime for {}", address);
+                btc.punish_validator(storage, cons_key, address)?;
             }
 
             Ok(Response::new())
