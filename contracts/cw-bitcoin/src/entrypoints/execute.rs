@@ -14,7 +14,7 @@ use crate::{
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 
 use cosmwasm_std::{
-    to_json_binary, wasm_execute, Env, MessageInfo, QuerierWrapper, Response, Storage, WasmMsg,
+    to_json_binary, wasm_execute, Api, Env, MessageInfo, Response, Storage, WasmMsg,
 };
 use token_bindings::Metadata;
 
@@ -134,6 +134,7 @@ pub fn relay_checkpoint(
 }
 
 pub fn submit_checkpoint_signature(
+    api: &dyn Api,
     store: &mut dyn Storage,
     xpub: HashBinary<Xpub>,
     sigs: Vec<Signature>,
@@ -142,20 +143,20 @@ pub fn submit_checkpoint_signature(
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut checkpoints = btc.checkpoints;
-    let _ = checkpoints.sign(store, &xpub.0, sigs, cp_index, btc_height);
+    let _ = checkpoints.sign(api, store, &xpub.0, sigs, cp_index, btc_height);
     let response = Response::new().add_attribute("action", "submit_checkpoint_signature");
     Ok(response)
 }
 
 pub fn submit_recovery_signature(
-    _querier: QuerierWrapper,
+    api: &dyn Api,
     store: &mut dyn Storage,
     xpub: HashBinary<Xpub>,
     sigs: Vec<Signature>,
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut recovery_txs = btc.recovery_txs;
-    let _ = recovery_txs.sign(store, &xpub.0, sigs);
+    let _ = recovery_txs.sign(api, store, &xpub.0, sigs);
     let response = Response::new().add_attribute("action", "submit_recovery_signature");
     Ok(response)
 }

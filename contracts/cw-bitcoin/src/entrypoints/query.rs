@@ -11,7 +11,7 @@ use crate::{
     interface::Xpub,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
-    state::{header_height, HEADER_CONFIG, OUTPOINTS, SIG_KEYS},
+    state::{header_height, OUTPOINTS, SIG_KEYS},
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
@@ -20,6 +20,7 @@ pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
 
 pub fn query_deposit_fees(store: &dyn Storage, index: Option<u32>) -> ContractResult<u64> {
     let btc = Bitcoin::default();
+
     let checkpoint = btc.get_checkpoint(store, index)?;
     let input_vsize = checkpoint.sigset.est_witness_vsize() + 40;
     let deposit_fees = btc.calc_minimum_deposit_fees(store, input_vsize, checkpoint.fee_rate)?;
@@ -94,7 +95,7 @@ pub fn query_signed_recovery_txs(store: &dyn Storage) -> ContractResult<Vec<Sign
 }
 
 pub fn query_signing_recovery_txs(
-    querier: QuerierWrapper,
+    _querier: QuerierWrapper,
     store: &dyn Storage,
     xpub: HashBinary<Xpub>,
 ) -> ContractResult<Vec<([u8; 32], u32)>> {
@@ -146,7 +147,7 @@ pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
 }
 
 pub fn query_signing_txs_at_checkpoint_index(
-    querier: QuerierWrapper,
+    _querier: QuerierWrapper,
     store: &dyn Storage,
     xpub: HashBinary<Xpub>,
     cp_index: u32,

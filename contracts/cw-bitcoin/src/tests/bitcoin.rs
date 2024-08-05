@@ -10,18 +10,18 @@ use bitcoin::{
     TxMerkleNode, Txid,
 };
 use bitcoin::{Script, Transaction};
-use checkpoint::{BatchType, Checkpoint, Input};
+use checkpoint::{BatchType, Input};
 use constants::BTC_NATIVE_TOKEN_DENOM;
 use cosmwasm_std::testing::{mock_dependencies, mock_env};
-use cosmwasm_std::{Addr, Coin, Env, Storage, Uint128};
+use cosmwasm_std::{Addr, Api, Coin, DepsMut, Env, Storage, Uint128};
 use error::ContractResult;
 use interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub};
 use state::{
-    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
     FIRST_UNHANDLED_CONFIRMED_INDEX, HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS,
 };
 use std::cell::RefCell;
-use tests::helper::{set_time, MockApp};
+use tests::helper::set_time;
 
 use crate::interface::IbcDest;
 
@@ -105,6 +105,7 @@ fn relay_height_validity() -> ContractResult<()> {
 #[test]
 fn check_change_rates() -> ContractResult<()> {
     let mut deps = mock_dependencies();
+
     let header_config = HeaderConfig::mainnet()?;
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
     HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
@@ -186,7 +187,7 @@ fn check_change_rates() -> ContractResult<()> {
         Ok(())
     };
 
-    let sign_batch = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
+    let sign_batch = |api: &dyn Api, store: &mut dyn Storage, btc_height| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
         let cp = btc.checkpoints.signing(store)?.unwrap();
         let sigset_index = cp.sigset.index;
@@ -197,16 +198,28 @@ fn check_change_rates() -> ContractResult<()> {
             let to_sign = cp.to_sign(&Xpub::new(xpub[i]))?;
             let secp2 = Secp256k1::signing_only();
             let sigs = sign(&secp2, &xpriv[i], &to_sign)?;
-            btc.checkpoints
-                .sign(store, &Xpub::new(xpub[i]), sigs, sigset_index, btc_height)?;
+            btc.checkpoints.sign(
+                api,
+                store,
+                &Xpub::new(xpub[i]),
+                sigs,
+                sigset_index,
+                btc_height,
+            )?;
         }
         Ok(())
     };
-    let sign_cp = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
-        sign_batch(store, btc_height)?;
-        sign_batch(store, btc_height)?;
-        if btc.borrow().checkpoints.signing(store).unwrap().is_some() {
-            sign_batch(store, btc_height)?;
+    let sign_cp = |deps: DepsMut, btc_height| -> ContractResult<()> {
+        sign_batch(deps.api, deps.storage, btc_height)?;
+        sign_batch(deps.api, deps.storage, btc_height)?;
+        if btc
+            .borrow()
+            .checkpoints
+            .signing(deps.storage)
+            .unwrap()
+            .is_some()
+        {
+            sign_batch(deps.api, deps.storage, btc_height)?;
         }
         Ok(())
     };
@@ -232,7 +245,7 @@ fn check_change_rates() -> ContractResult<()> {
     let env = set_time(1000);
     push_deposit(deps.as_mut().storage)?;
     maybe_step(env, deps.as_mut().storage)?;
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 2);
 
@@ -244,7 +257,7 @@ fn check_change_rates() -> ContractResult<()> {
         .change_rates(deps.as_mut().storage, 2000, 2100, 0)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 0);
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 3);
 
@@ -263,7 +276,7 @@ fn check_change_rates() -> ContractResult<()> {
         .change_rates(deps.as_mut().storage, 3000, 3100, 0)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 0);
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 4);
 
@@ -277,7 +290,7 @@ fn check_change_rates() -> ContractResult<()> {
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 5);
 
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     let env = set_time(5000);
     push_deposit(deps.as_mut().storage)?;
@@ -288,7 +301,7 @@ fn check_change_rates() -> ContractResult<()> {
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 6);
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     let env = set_time(6000);
     push_withdrawal(deps.as_mut().storage)?;
@@ -387,7 +400,7 @@ fn test_take_pending() -> ContractResult<()> {
         Ok(())
     };
 
-    let sign_batch = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
+    let sign_batch = |api: &dyn Api, store: &mut dyn Storage, btc_height| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
         let queue = &mut btc.checkpoints;
         let cp = queue.signing(store)?.unwrap();
@@ -400,16 +413,23 @@ fn test_take_pending() -> ContractResult<()> {
             let to_sign = cp.to_sign(&Xpub::new(xpub[i]))?;
             let secp2 = Secp256k1::signing_only();
             let sigs = sign(&secp2, &xpriv[i], &to_sign)?;
-            queue.sign(store, &Xpub::new(xpub[i]), sigs, sigset_index, btc_height)?;
+            queue.sign(
+                api,
+                store,
+                &Xpub::new(xpub[i]),
+                sigs,
+                sigset_index,
+                btc_height,
+            )?;
         }
 
         Ok(())
     };
-    let sign_cp = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
-        sign_batch(store, btc_height)?;
-        sign_batch(store, btc_height)?;
-        if btc.borrow().checkpoints.signing(store)?.is_some() {
-            sign_batch(store, btc_height)?;
+    let sign_cp = |deps: DepsMut, btc_height| -> ContractResult<()> {
+        sign_batch(deps.api, deps.storage, btc_height)?;
+        sign_batch(deps.api, deps.storage, btc_height)?;
+        if btc.borrow().checkpoints.signing(deps.storage)?.is_some() {
+            sign_batch(deps.api, deps.storage, btc_height)?;
         }
 
         Ok(())
@@ -496,7 +516,7 @@ fn test_take_pending() -> ContractResult<()> {
             panic!("Checkpoint not found");
         }
     }
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
     confirm_cp(deps.as_mut().storage, 0);
 
     let env = set_time(2000);
@@ -509,7 +529,7 @@ fn test_take_pending() -> ContractResult<()> {
         },
     )?;
     maybe_step(env, deps.as_mut().storage)?;
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
     confirm_cp(deps.as_mut().storage, 1);
 
     let first_unhandled_confirmed_cp_index = FIRST_UNHANDLED_CONFIRMED_INDEX

@@ -20,7 +20,7 @@ use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
+use cosmwasm_std::{Addr, Api, Coin, Env, Order, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -551,6 +551,7 @@ impl Bitcoin {
     /// `Signing` checkpoint.    
     pub fn sign(
         &mut self,
+        api: &dyn Api,
         store: &mut dyn Storage,
         xpub: &Xpub,
         sigs: Vec<Signature>,
@@ -558,7 +559,7 @@ impl Bitcoin {
     ) -> ContractResult<()> {
         let btc_height = self.headers.height(store)?;
         self.checkpoints
-            .sign(store, xpub, sigs, cp_index, btc_height)
+            .sign(api, store, xpub, sigs, cp_index, btc_height)
     }
 
     /// The amount of BTC in the reserve output of the most recent fully-signed

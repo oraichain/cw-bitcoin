@@ -88,9 +88,16 @@ pub fn execute(
             sigs,
             checkpoint_index,
             btc_height,
-        } => submit_checkpoint_signature(deps.storage, xpub, sigs, checkpoint_index, btc_height),
+        } => submit_checkpoint_signature(
+            deps.api,
+            deps.storage,
+            xpub,
+            sigs,
+            checkpoint_index,
+            btc_height,
+        ),
         ExecuteMsg::SubmitRecoverySignature { xpub, sigs } => {
-            submit_recovery_signature(deps.querier, deps.storage, xpub, sigs)
+            submit_recovery_signature(deps.api, deps.storage, xpub, sigs)
         }
         ExecuteMsg::SetSignatoryKey { xpub } => set_signatory_key(deps.storage, info, xpub),
         ExecuteMsg::AddValidators { addrs, infos } => {

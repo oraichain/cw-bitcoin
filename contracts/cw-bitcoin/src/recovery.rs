@@ -11,7 +11,7 @@ use crate::{
 };
 use bitcoin::{OutPoint, Transaction, TxOut};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{QuerierWrapper, Storage};
+use cosmwasm_std::{Api, Storage};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "cosmwasm_schema::serde")]
@@ -114,6 +114,7 @@ impl RecoveryTxs {
 
     pub fn sign(
         &mut self,
+        api: &dyn Api,
         store: &mut dyn Storage,
         xpub: &Xpub,
         sigs: Vec<Signature>,
@@ -148,7 +149,7 @@ impl RecoveryTxs {
                 sig_index += 1;
 
                 let input_was_signed = input.signatures.signed();
-                input.signatures.sign(pubkey.into(), sig)?;
+                input.signatures.sign(api, pubkey.into(), sig)?;
 
                 if !input_was_signed && input.signatures.signed() {
                     tx.tx.signed_inputs += 1;

@@ -16,7 +16,7 @@ use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, T
 use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Coin, Env, Order, QuerierWrapper, Storage};
+use cosmwasm_std::{Api, Coin, Env, Order, QuerierWrapper, Storage};
 use derive_more::{Deref, DerefMut};
 
 /// The status of a checkpoint. Checkpoints start as `Building`, and eventually
@@ -488,7 +488,13 @@ impl Checkpoint {
     /// present in the signatory set, for all transactions of all batches ready
     /// to be signed. If the signatory provides more or less signatures than
     /// expected, `sign()` will return an error.
-    fn sign(&mut self, xpub: &Xpub, sigs: Vec<Signature>, btc_height: u32) -> ContractResult<()> {
+    fn sign(
+        &mut self,
+        api: &dyn Api,
+        xpub: &Xpub,
+        sigs: Vec<Signature>,
+        btc_height: u32,
+    ) -> ContractResult<()> {
         let cp_was_signed = self.signed();
         let mut sig_index = 0;
 
@@ -526,7 +532,7 @@ impl Checkpoint {
 
                     // Apply the signature.
                     let input_was_signed = input.signatures.signed();
-                    input.signatures.sign(pubkey.into(), sig)?;
+                    input.signatures.sign(api, pubkey.into(), sig)?;
 
                     // If this signature made the input fully signed, increase
                     // the counter of fully-signed inputs in the containing
@@ -830,13 +836,14 @@ impl SigningCheckpoint {
     /// signatory is present in the signatory set.
     pub fn sign(
         &mut self,
+        api: &dyn Api,
         querier: QuerierWrapper,
         store: &mut dyn Storage,
         xpub: Xpub,
         sigs: Vec<Signature>,
         btc_height: u32,
     ) -> ContractResult<()> {
-        self.0.sign(&xpub, sigs, btc_height)?;
+        self.0.sign(api, &xpub, sigs, btc_height)?;
         Ok(())
     }
 }
@@ -1879,6 +1886,7 @@ impl CheckpointQueue {
     /// cannot be used to DoS the network.
     pub fn sign(
         &mut self,
+        api: &dyn Api,
         store: &mut dyn Storage,
         xpub: &Xpub,
         sigs: Vec<Signature>,
@@ -1893,7 +1901,7 @@ impl CheckpointQueue {
             ));
         }
 
-        checkpoint.sign(xpub, sigs, btc_height)?;
+        checkpoint.sign(api, xpub, sigs, btc_height)?;
 
         if matches!(status, CheckpointStatus::Signing) && checkpoint.signed() {
             let checkpoint_tx = checkpoint.checkpoint_tx()?;

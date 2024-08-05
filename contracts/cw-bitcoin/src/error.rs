@@ -1,13 +1,13 @@
 use bitcoin::blockdata::transaction::ParseOutPointError;
-use cosmwasm_std::{OverflowError, StdError};
+use cosmwasm_std::{OverflowError, StdError, VerificationError};
 use std::env::VarError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
-    // #[error(transparent)]
-    // Ed(#[from] ed::Error),
+    #[error(transparent)]
+    Verify(#[from] VerificationError),
     #[error("Account Error: {0}")]
     Account(String),
     #[error("Coins Error: {0}")]
