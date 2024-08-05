@@ -147,7 +147,6 @@ pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
 }
 
 pub fn query_signing_txs_at_checkpoint_index(
-    _querier: QuerierWrapper,
     store: &dyn Storage,
     xpub: HashBinary<Xpub>,
     cp_index: u32,

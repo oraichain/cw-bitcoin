@@ -181,7 +181,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             xpub,
             checkpoint_index,
         } => to_json_binary(&query_signing_txs_at_checkpoint_index(
-            deps.querier,
             deps.storage,
             xpub,
             checkpoint_index,
