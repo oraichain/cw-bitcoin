@@ -223,6 +223,7 @@ fn check_change_rates() -> ContractResult<()> {
         }
         Ok(())
     };
+
     let maybe_step = |env: Env, store: &mut dyn Storage| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
         btc.begin_block_step(env, store, vec![1, 2, 3])?;
