@@ -10,18 +10,18 @@ use bitcoin::{
     TxMerkleNode, Txid,
 };
 use bitcoin::{Script, Transaction};
-use checkpoint::{BatchType, Checkpoint, Input};
+use checkpoint::{BatchType, Input};
 use constants::BTC_NATIVE_TOKEN_DENOM;
 use cosmwasm_std::testing::{mock_dependencies, mock_env};
 use cosmwasm_std::{Addr, Coin, Env, Storage, Uint128};
 use error::ContractResult;
 use interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub};
 use state::{
-    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
     FIRST_UNHANDLED_CONFIRMED_INDEX, HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS,
 };
 use std::cell::RefCell;
-use tests::helper::{set_time, MockApp};
+use tests::helper::set_time;
 
 use crate::interface::IbcDest;
 
@@ -213,7 +213,7 @@ fn check_change_rates() -> ContractResult<()> {
     };
     let maybe_step = |env: Env, store: &mut dyn Storage| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
-        btc.begin_block_step(env, store, vec![].into_iter(), vec![1, 2, 3])?;
+        btc.begin_block_step(env, store, vec![1, 2, 3])?;
         Ok(())
     };
 
@@ -435,7 +435,7 @@ fn test_take_pending() -> ContractResult<()> {
     let maybe_step = |env: Env, store: &mut dyn Storage| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
 
-        btc.begin_block_step(env, store, vec![].into_iter(), vec![1, 2, 3])?;
+        btc.begin_block_step(env, store, vec![1, 2, 3])?;
 
         Ok(())
     };

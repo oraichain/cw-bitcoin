@@ -20,7 +20,7 @@ use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
+use cosmwasm_std::{Addr, Coin, Env, MessageInfo, Order, QuerierWrapper, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -58,10 +58,6 @@ pub struct Bitcoin {
     /// and pay out requested withdrawals.    
     pub checkpoints: CheckpointQueue, // CHECKPOINTS
 
-    /// TODO: remove this, for flow withdrawing money we don't need to use this when using factory module
-    /// The map of nBTC accounts, which hold the nBTC balances of users.
-    pub accounts: Accounts, // ?
-
     /// The public keys declared by signatories, which are used to sign Bitcoin
     /// transactions.
     // TODO: store recovery script data in account struct
@@ -87,7 +83,6 @@ impl Bitcoin {
             headers: HeaderQueue::default(),
             checkpoints: CheckpointQueue::default(),
             processed_outpoints: OutpointSet::default(),
-            accounts: Accounts::default(),
             signatory_keys: SignatoryKeys::default(),
             reward_pool: Coin::default(),
             // fee_pool: 0,
@@ -453,9 +448,7 @@ impl Bitcoin {
         script_pubkey: Adapter<Script>,
         amount: Uint128,
     ) -> ContractResult<()> {
-        let coin = self.accounts.withdraw(signer, amount)?; // ?
-
-        self.add_withdrawal(store, script_pubkey, coin.amount)
+        self.add_withdrawal(store, script_pubkey, amount)
     }
 
     /// Adds an output to the current `Building` checkpoint to be paid out once
@@ -518,31 +511,6 @@ impl Bitcoin {
         let index = self.checkpoints.index(store);
         self.checkpoints.set(store, index, &checkpoint)?;
         // TODO: push to excess if full
-
-        Ok(())
-    }
-
-    /// Transfers nBTC to another account.    
-    pub fn transfer(
-        &mut self,
-        store: &mut dyn Storage,
-        signer: Addr,
-        to: Addr,
-        amount: Uint128,
-    ) -> ContractResult<()> {
-        // let transfer_fee = self
-        //     .accounts
-        //     .withdraw(signer, self.config.transfer_fee.into())?;
-        // self.give_rewards(transfer_fee)?;
-
-        let dest = Dest::Address(to);
-        let coins = self.accounts.withdraw(signer, amount)?; // ?
-        let mut checkpoint = self.checkpoints.building(store)?;
-
-        checkpoint.insert_pending(dest, coins)?;
-
-        let index = self.checkpoints.index(store);
-        self.checkpoints.set(store, index, &checkpoint)?;
 
         Ok(())
     }
@@ -663,7 +631,6 @@ impl Bitcoin {
         &mut self,
         env: Env,
         store: &mut dyn Storage,
-        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         timestamping_commitment: Vec<u8>,
     ) -> ContractResult<Vec<ConsensusKey>> {
         let config = self.config(store)?;
@@ -689,8 +656,6 @@ impl Bitcoin {
         let pushed = self.checkpoints.maybe_step(
             env,
             store,
-            &self.accounts, // ?
-            external_outputs,
             btc_height,
             !reached_capacity_limit,
             timestamping_commitment,

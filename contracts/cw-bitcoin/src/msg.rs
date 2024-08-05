@@ -14,6 +14,7 @@ use crate::{
 #[cw_serde]
 pub struct InstantiateMsg {
     pub token_factory_addr: Addr,
+    pub bridge_wasm_addr: Option<Addr>,
 }
 
 #[cw_serde]
