@@ -301,21 +301,6 @@ impl BitcoinTx {
 /// checkpoint.
 #[derive(Debug)]
 pub enum BatchType {
-    /// The batch containing the "final emergency disbursal transactions".
-    ///
-    /// This batch will contain at least one and potentially many transactions,
-    /// paying out to the recipients of the emergency disbursal (e.g. recovery
-    /// wallets of nBTC holders).
-    Disbursal,
-
-    /// The batch containing the intermediate transaction.
-    ///
-    /// This batch will always contain exactly one transaction, the
-    /// "intermediate emergency disbursal transaction", which spends the reserve
-    /// output of a stuck checkpoint transaction, and pays out to inputs which
-    /// will be spent by the final emergency disbursal transactions.
-    IntermediateTx,
-
     /// The batch containing the checkpoint transaction. This batch will always
     /// contain exactly one transaction, the "checkpoint transaction".
     ///
@@ -450,13 +435,6 @@ impl Checkpoint {
             pending: vec![],
             batches: vec![],
         };
-
-        let disbursal_batch = Batch::default();
-        checkpoint.batches.push(disbursal_batch);
-
-        let mut intermediate_tx_batch = Batch::default();
-        intermediate_tx_batch.push(BitcoinTx::default());
-        checkpoint.batches.push(intermediate_tx_batch);
 
         let checkpoint_tx = BitcoinTx::default();
         let mut checkpoint_batch = Batch::default();
@@ -658,27 +636,6 @@ impl Checkpoint {
     /// otherwise returns `false`.
     pub fn signed(&self) -> bool {
         self.signed_batches() == self.batches.len()
-    }
-
-    /// The emergency disbursal transactions for checkpoint.
-    ///
-    /// The first element of the returned vector is the intermediate
-    /// transaction, and the remaining elements are the final transactions.
-    pub fn emergency_disbursal_txs(&self) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
-        let mut txs = vec![];
-
-        let intermediate_tx_batch = &self.batches[BatchType::IntermediateTx];
-        let Some(intermediate_tx) = intermediate_tx_batch.first() else {
-            return Ok(txs);
-        };
-        txs.push(Adapter::new(intermediate_tx.to_bitcoin_tx()?));
-
-        let disbursal_batch = &self.batches[BatchType::Disbursal];
-        for tx in disbursal_batch.iter() {
-            txs.push(Adapter::new(tx.to_bitcoin_tx()?));
-        }
-
-        Ok(txs)
     }
 
     pub fn checkpoint_tx_miner_fees(&self) -> ContractResult<u64> {
@@ -1143,21 +1100,6 @@ impl CheckpointQueue {
             .collect()
     }
 
-    /// The emergency disbursal transactions for the last completed checkpoint.
-    ///
-    /// The first element of the returned vector is the intermediate
-    /// transaction, and the remaining elements are the final transactions.
-    pub fn emergency_disbursal_txs(
-        &self,
-        store: &dyn Storage,
-    ) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
-        if let Some(completed) = self.completed(store, 1)?.last() {
-            completed.emergency_disbursal_txs()
-        } else {
-            Ok(vec![])
-        }
-    }
-
     /// The last complete builiding checkpoint transaction, which have the type BatchType::Checkpoint
     /// Here we have only one element in the vector, and I use vector because I don't want to throw
     /// any error if vec! is empty
@@ -1243,14 +1185,18 @@ impl CheckpointQueue {
         // fee_pool: &mut i64,
         parent_config: &BitcoinConfig,
     ) -> ContractResult<bool> {
-        if !self.should_push(env.clone(), store, &timestamping_commitment, btc_height)? {
+        let is_should_push =
+            self.should_push(env.clone(), store, &timestamping_commitment, btc_height)?;
+        println!("is_should_push: {}", is_should_push);
+        if !is_should_push {
             return Ok(false);
         }
 
-        if self
+        let is_maybe_push = self
             .maybe_push(env.clone(), store, should_allow_deposits)?
-            .is_none()
-        {
+            .is_none();
+        println!("is_maybe_push: {}", is_maybe_push);
+        if is_maybe_push {
             return Ok(false);
         }
 

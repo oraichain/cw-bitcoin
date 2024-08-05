@@ -209,17 +209,10 @@ fn check_change_rates() -> ContractResult<()> {
         }
         Ok(())
     };
-    let sign_cp = |deps: DepsMut, btc_height| -> ContractResult<()> {
-        sign_batch(deps.api, deps.storage, btc_height)?;
-        sign_batch(deps.api, deps.storage, btc_height)?;
-        if btc
-            .borrow()
-            .checkpoints
-            .signing(deps.storage)
-            .unwrap()
-            .is_some()
-        {
-            sign_batch(deps.api, deps.storage, btc_height)?;
+
+    let sign_cp = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
+        if btc.borrow().checkpoints.signing(store).unwrap().is_some() {
+            sign_batch(store, btc_height)?;
         }
         Ok(())
     };
@@ -426,13 +419,10 @@ fn test_take_pending() -> ContractResult<()> {
 
         Ok(())
     };
-    let sign_cp = |deps: DepsMut, btc_height| -> ContractResult<()> {
-        sign_batch(deps.api, deps.storage, btc_height)?;
-        sign_batch(deps.api, deps.storage, btc_height)?;
-        if btc.borrow().checkpoints.signing(deps.storage)?.is_some() {
-            sign_batch(deps.api, deps.storage, btc_height)?;
+    let sign_cp = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
+        if btc.borrow().checkpoints.signing(store)?.is_some() {
+            sign_batch(store, btc_height)?;
         }
-
         Ok(())
     };
 
