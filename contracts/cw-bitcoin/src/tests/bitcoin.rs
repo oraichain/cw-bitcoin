@@ -102,7 +102,6 @@ fn relay_height_validity() -> ContractResult<()> {
     Ok(())
 }
 
-#[serial_test::serial]
 #[test]
 fn check_change_rates() -> ContractResult<()> {
     let mut deps = mock_dependencies();
@@ -317,7 +316,6 @@ fn check_change_rates() -> ContractResult<()> {
     Ok(())
 }
 
-#[serial_test::serial]
 #[test]
 fn test_take_pending() -> ContractResult<()> {
     let mut deps = mock_dependencies();

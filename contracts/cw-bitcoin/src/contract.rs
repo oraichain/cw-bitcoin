@@ -110,7 +110,6 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
     match msg {
         SudoMsg::ClockEndBlock { hash } => {
             let mut btc = Bitcoin::default();
-            let querier = deps.querier;
             let storage = deps.storage;
 
             let pending_nbtc_transfers = btc.take_pending_completed(storage)?;

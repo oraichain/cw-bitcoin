@@ -1,15 +1,12 @@
 use bitcoin::secp256k1;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::BlockHeader;
-use cosmwasm_schema::cw_serde;
-use cosmwasm_schema::schemars::JsonSchema;
-use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
-use cosmwasm_std::Addr;
-use cosmwasm_std::Coin;
-use cosmwasm_std::Storage;
-use cosmwasm_std::Uint128;
-use cosmwasm_std::{from_json, StdError};
-use cosmwasm_std::{to_json_vec, Binary};
+use cosmwasm_schema::{
+    cw_serde,
+    schemars::JsonSchema,
+    serde::{de, ser, Deserialize, Serialize},
+};
+use cosmwasm_std::{from_json, to_json_vec, Addr, Binary, Coin, StdError, Storage, Uint128};
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use sha2::{Digest, Sha256};
@@ -17,22 +14,12 @@ use sha2::{Digest, Sha256};
 use crate::adapter::Adapter;
 use crate::app::ConsensusKey;
 use crate::app::NETWORK;
-use crate::constants::MAX_CHECKPOINT_AGE;
-use crate::constants::MAX_CHECKPOINT_INTERVAL;
-use crate::constants::MAX_DEPOSIT_AGE;
-use crate::constants::MAX_FEE_RATE;
-use crate::constants::MAX_LENGTH;
-use crate::constants::MAX_TARGET;
-use crate::constants::MAX_TIME_INCREASE;
-use crate::constants::MIN_DEPOSIT_AMOUNT;
-use crate::constants::MIN_FEE_RATE;
-use crate::constants::MIN_WITHDRAWAL_AMOUNT;
-use crate::constants::RETARGET_INTERVAL;
-use crate::constants::SIGSET_THRESHOLD;
-use crate::constants::TARGET_SPACING;
-use crate::constants::TARGET_TIMESPAN;
-use crate::constants::TRANSFER_FEE;
-use crate::constants::USER_FEE_FACTOR;
+use crate::constants::{
+    MAX_CHECKPOINT_AGE, MAX_CHECKPOINT_INTERVAL, MAX_DEPOSIT_AGE, MAX_FEE_RATE, MAX_LENGTH,
+    MAX_TARGET, MAX_TIME_INCREASE, MIN_DEPOSIT_AMOUNT, MIN_FEE_RATE, MIN_WITHDRAWAL_AMOUNT,
+    RETARGET_INTERVAL, SIGSET_THRESHOLD, TARGET_SPACING, TARGET_TIMESPAN, TRANSFER_FEE,
+    USER_FEE_FACTOR,
+};
 use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::header::WorkHeader;

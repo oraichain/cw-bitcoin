@@ -4,7 +4,7 @@ use crate::{
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, MintTokens, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
     state::{
         get_full_btc_denom, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG, SIGNERS,
         VALIDATORS,
@@ -14,7 +14,7 @@ use crate::{
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 
 use cosmwasm_std::{
-    to_binary, wasm_execute, Env, MessageInfo, QuerierWrapper, Response, Storage, WasmMsg,
+    to_json_binary, wasm_execute, Env, MessageInfo, QuerierWrapper, Response, Storage, WasmMsg,
 };
 use token_bindings::Metadata;
 
@@ -71,7 +71,7 @@ pub fn relay_deposit(
 ) -> ContractResult<Response> {
     // dest validation?
     let mut btc = Bitcoin::default();
-    let mut response = Response::new().add_attribute("action", "relay_deposit");
+    let response = Response::new().add_attribute("action", "relay_deposit");
     btc.relay_deposit(
         env.clone(),
         store,
@@ -107,7 +107,7 @@ pub fn withdraw_to_bitcoin(
             // burn here
             cosmos_msgs.push(WasmMsg::Execute {
                 contract_addr: config.token_factory_addr.clone().into_string(),
-                msg: to_binary(&tokenfactory::msg::ExecuteMsg::BurnTokens {
+                msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::BurnTokens {
                     amount,
                     denom: get_full_btc_denom(store)?,
                     burn_from_address: env.contract.address.to_string(),
@@ -148,7 +148,7 @@ pub fn submit_checkpoint_signature(
 }
 
 pub fn submit_recovery_signature(
-    querier: QuerierWrapper,
+    _querier: QuerierWrapper,
     store: &mut dyn Storage,
     xpub: HashBinary<Xpub>,
     sigs: Vec<Signature>,
