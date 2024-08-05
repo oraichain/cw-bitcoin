@@ -112,9 +112,6 @@ pub fn execute(
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }
-        ExecuteMsg::SetRecoveryScript { signatory_script } => {
-            set_recovery_script(deps.storage, info, signatory_script)
-        }
     }
 }
 

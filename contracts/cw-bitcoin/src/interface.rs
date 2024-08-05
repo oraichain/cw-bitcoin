@@ -177,13 +177,6 @@ pub struct BitcoinConfig {
     /// subdivisions of satoshis which nBTC accounting uses.
     pub units_per_sat: u64,
 
-    // (These fields were moved to `checkpoint::Config`)
-    pub emergency_disbursal_min_tx_amt: u64,
-
-    pub emergency_disbursal_lock_time_interval: u32,
-
-    pub emergency_disbursal_max_tx_size: u64,
-
     /// If a signer does not submit signatures for this many consecutive
     /// checkpoints, they are considered offline and are removed from the
     /// signatory set (jailed) and slashed.    
@@ -220,9 +213,6 @@ impl BitcoinConfig {
             max_deposit_age: MAX_DEPOSIT_AGE, // 2 weeks. Initially there may not be many deposits & withdraws
             fee_pool_target_balance: 100_000_000, // 1 BTC
             fee_pool_reward_split: (1, 10),
-            emergency_disbursal_min_tx_amt: 1000,
-            emergency_disbursal_lock_time_interval: 60 * 60 * 24 * 7 * 8, // 8 weeks
-            emergency_disbursal_max_tx_size: 50_000,
         }
     }
 }
@@ -319,21 +309,6 @@ pub struct CheckpointConfig {
     /// For example, `(9, 10)` means the threshold is 90% of the signatory set.    
     pub sigset_threshold: (u64, u64),
 
-    /// The minimum amount of nBTC an account must hold to be eligible for an
-    /// output in the emergency disbursal.    
-    pub emergency_disbursal_min_tx_amt: u64,
-
-    /// The amount of time between the creation of a checkpoint and when the
-    /// associated emergency disbursal transactions can be spent, in seconds.    
-    pub emergency_disbursal_lock_time_interval: u32,
-
-    /// The maximum size of a final emergency disbursal transaction, in virtual
-    /// bytes.
-    ///
-    /// The outputs to be included in final emergency disbursal transactions
-    /// will be distributed across multiple transactions around this size.    
-    pub emergency_disbursal_max_tx_size: u64,
-
     /// The maximum number of unconfirmed checkpoints before the network will
     /// stop creating new checkpoints.
     ///
@@ -363,9 +338,6 @@ impl Default for CheckpointConfig {
             max_fee_rate: MAX_FEE_RATE,
             user_fee_factor: USER_FEE_FACTOR, // 2.7x
             sigset_threshold: SIGSET_THRESHOLD,
-            emergency_disbursal_min_tx_amt: 1000,
-            emergency_disbursal_lock_time_interval: 60 * 60 * 24 * 7 * 8, // 8 weeks
-            emergency_disbursal_max_tx_size: 50_000,
             max_unconfirmed_checkpoints: 15,
             fee_rate: 0,
         }

@@ -419,6 +419,7 @@ fn test_take_pending() -> ContractResult<()> {
 
         Ok(())
     };
+
     let sign_cp = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
         if btc.borrow().checkpoints.signing(store)?.is_some() {
             sign_batch(store, btc_height)?;

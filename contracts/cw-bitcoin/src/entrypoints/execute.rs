@@ -178,17 +178,6 @@ pub fn set_signatory_key(
     Ok(response)
 }
 
-pub fn set_recovery_script(
-    store: &mut dyn Storage,
-    info: MessageInfo,
-    script: Adapter<bitcoin::Script>,
-) -> ContractResult<Response> {
-    let mut btc = Bitcoin::default();
-    let _ = btc.set_recovery_script(store, info.sender, script);
-    let response = Response::new().add_attribute("action", "set_recovery_script");
-    Ok(response)
-}
-
 // TODO: Add check only owners of this contract can call
 pub fn add_validators(
     store: &mut dyn Storage,

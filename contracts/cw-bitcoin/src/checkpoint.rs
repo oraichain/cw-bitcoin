@@ -9,11 +9,11 @@ use crate::{
     state::{CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX},
 };
 use crate::{
-    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
-    state::{to_output_script, CHECKPOINTS, RECOVERY_SCRIPTS},
+    interface::{BitcoinConfig, CheckpointConfig, Dest},
+    state::CHECKPOINTS,
 };
+use bitcoin::hashes::Hash;
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
-use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Api, Coin, Env, Order, QuerierWrapper, Storage};
@@ -1658,35 +1658,6 @@ impl CheckpointQueue {
         let unconf_fees_paid = self.unconfirmed_fees_paid(store)?;
         let unconf_vbytes = self.unconfirmed_vbytes(store, config)?;
         Ok((unconf_vbytes * fee_rate).saturating_sub(unconf_fees_paid))
-    }
-
-    pub fn backfill(
-        &mut self,
-        store: &mut dyn Storage,
-        first_index: u32,
-        redeem_scripts: impl Iterator<Item = Script>,
-        threshold_ratio: (u64, u64),
-    ) -> ContractResult<()> {
-        let mut index = first_index + 1;
-        let create_time = CHECKPOINTS.get(store, 0)?.unwrap().create_time();
-
-        for script in redeem_scripts {
-            index -= 1;
-
-            if index >= self.first_index(store)? {
-                continue;
-            }
-
-            let (mut sigset, _) = SignatorySet::from_script(&script, threshold_ratio)?;
-            sigset.index = index;
-            sigset.create_time = create_time;
-            let mut cp = Checkpoint::new(sigset)?;
-            cp.status = CheckpointStatus::Complete;
-
-            CHECKPOINTS.push_front(store, &cp)?;
-        }
-
-        Ok(())
     }
 }
 

@@ -63,9 +63,6 @@ pub enum ExecuteMsg {
         subdenom: String,
         metadata: Option<Metadata>,
     },
-    SetRecoveryScript {
-        signatory_script: Adapter<Script>,
-    },
 }
 
 #[cw_serde]

@@ -5,7 +5,7 @@ use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator, Xp
 use crate::signatory::SignatoryKeys;
 use crate::state::{
     get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX,
-    RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS,
+    SIGNERS, SIG_KEYS,
 };
 use crate::threshold_sig;
 
@@ -147,27 +147,6 @@ impl Bitcoin {
 
         self.signatory_keys
             .insert(store, consensus_key, signatory_key)?;
-
-        Ok(())
-    }
-
-    /// Called by users to set their recovery script, which is their desired
-    /// destination paid out to in the emergency disbursal process if the the
-    /// account has sufficient balance.    
-    pub fn set_recovery_script(
-        &mut self,
-        store: &mut dyn Storage,
-        signer: Addr,
-        signatory_script: Adapter<Script>,
-    ) -> ContractResult<()> {
-        let config = self.config(store)?;
-        if signatory_script.len() as u64 > config.max_withdrawal_script_length {
-            return Err(ContractError::App(
-                "Script exceeds maximum length".to_string(),
-            ));
-        }
-
-        RECOVERY_SCRIPTS.save(store, signer.as_str(), &signatory_script)?;
 
         Ok(())
     }
