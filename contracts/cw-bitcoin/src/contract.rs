@@ -1,6 +1,5 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cw_ics20_latest::ibc;
 
 use crate::{
     app::Bitcoin,
@@ -131,30 +130,6 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
             let mut msgs = vec![];
             for pending in pending_nbtc_transfers {
                 for (dest, coin) in pending {
-                    // let is_ibc = matches!(dest, Dest::Ibc(_));
-                    // if is_ibc && bridge_wasm.clone().is_some() {
-                    //     if let Some(bridge_wasm_addr) = bridge_wasm.clone() {
-                    //         msgs.push(WasmMsg::Execute {
-                    //             contract_addr: token_factory.to_string(),
-                    //             msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                    //                 denom: coin.denom.to_owned(),
-                    //                 amount: coin.amount,
-                    //                 mint_to_address: env.contract.address.to_string(),
-                    //             })?,
-                    //             funds: vec![],
-                    //         });
-
-                    //         if let Dest::Ibc(ibc_packet) = dest {
-                    //             // msgs.push(WasmMsg::Execute {
-                    //             //     contract_addr: bridge_wasm_addr.to_string(),
-                    //             //     msg: to_json_binary(&cw_ics20_latest::msg::ExecuteMsg::TransferToRemote((
-                    //             //         TransferBackMsg { local_channel_id: ibc_packet.source_channel, remote_address: ibc_packet.receiver, remote_denom: ibc_packet., timeout: (), memo: () }
-                    //             //     )),
-                    //             //     funds: (),
-                    //             // })
-                    //         }
-                    //     }
-                    // } else {
                     msgs.push(WasmMsg::Execute {
                         contract_addr: token_factory.to_string(),
                         msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
@@ -164,7 +139,6 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
                         })?,
                         funds: vec![],
                     });
-                    // }
                 }
             }
 

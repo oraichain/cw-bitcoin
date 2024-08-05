@@ -34,9 +34,8 @@ thiserror = "1.0.26"
 sha2 = "0.10.6"
 
 cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "ed58567"}
-cw-ics20-latest = {git = "https://github.com/oraichain/ibc-bridge-wasm.git", rev = "b9cbeaf"}
 token-bindings = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576"}
-tokenfactory = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576"}
+tokenfactory = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576", features = ["library"]}
 
 [profile.release]
 codegen-units = 1
