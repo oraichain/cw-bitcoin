@@ -549,6 +549,7 @@ pub struct ChangeRates {
 pub struct Config {
     pub token_factory_addr: Addr,
     pub owner: Addr,
+    pub bridge_wasm_addr: Option<Addr>,
 }
 
 #[derive(Serialize, Deserialize)]

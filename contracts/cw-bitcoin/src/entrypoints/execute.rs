@@ -21,8 +21,10 @@ use token_bindings::Metadata;
 /// TODO: check logic
 pub fn update_checkpoint_config(
     store: &mut dyn Storage,
+    info: MessageInfo,
     config: CheckpointConfig,
 ) -> ContractResult<Response> {
+    assert_eq!(info.sender, CONFIG.load(store)?.owner);
     CHECKPOINT_CONFIG.save(store, &config)?;
     Ok(Response::new().add_attribute("action", "update_checkpoint_config"))
 }
@@ -30,8 +32,10 @@ pub fn update_checkpoint_config(
 /// TODO: check logic
 pub fn update_bitcoin_config(
     store: &mut dyn Storage,
+    info: MessageInfo,
     config: BitcoinConfig,
 ) -> ContractResult<Response> {
+    assert_eq!(info.sender, CONFIG.load(store)?.owner);
     BITCOIN_CONFIG.save(store, &config)?;
     Ok(Response::new().add_attribute("action", "update_bitcoin_config"))
 }
@@ -40,10 +44,11 @@ pub fn update_bitcoin_config(
 /// ONLY USE ONE
 pub fn update_header_config(
     store: &mut dyn Storage,
+    info: MessageInfo,
     config: HeaderConfig,
 ) -> ContractResult<Response> {
+    assert_eq!(info.sender, CONFIG.load(store)?.owner);
     HEADER_CONFIG.save(store, &config)?;
-    // let header_config = HEADER_CONFIG.load(store)?;
     let mut header_queue = HeaderQueue::default();
     let _ = header_queue.configure(store, config.clone())?;
     Ok(Response::new().add_attribute("action", "update_header_config"))
@@ -166,6 +171,7 @@ pub fn set_signatory_key(
     info: MessageInfo,
     xpub: HashBinary<Xpub>,
 ) -> ContractResult<Response> {
+    assert_eq!(info.sender, CONFIG.load(store)?.owner);
     let mut btc = Bitcoin::default();
     let _ = btc.set_signatory_key(store, info.sender, xpub.0);
     let response = Response::new().add_attribute("action", "set_signatory_key");
@@ -186,10 +192,11 @@ pub fn set_recovery_script(
 // TODO: Add check only owners of this contract can call
 pub fn add_validators(
     store: &mut dyn Storage,
-    _info: MessageInfo,
+    info: MessageInfo,
     addrs: Vec<String>,
     infos: Vec<(u64, ConsensusKey)>,
 ) -> ContractResult<Response> {
+    assert_eq!(info.sender, CONFIG.load(store)?.owner);
     for (index, addr) in addrs.iter().enumerate() {
         let info = infos.get(index).unwrap();
         let (power, cons_key) = info;
@@ -209,10 +216,9 @@ pub fn register_denom(
     subdenom: String,
     metadata: Option<Metadata>,
 ) -> ContractResult<Response> {
-    // OWNER.assert_admin(deps.as_ref(), &info.sender)?;
+    assert_eq!(info.sender, CONFIG.load(store)?.owner);
 
     let config = CONFIG.load(store)?;
-
     let mut cosmos_msgs = vec![];
     cosmos_msgs.push(wasm_execute(
         config.token_factory_addr,

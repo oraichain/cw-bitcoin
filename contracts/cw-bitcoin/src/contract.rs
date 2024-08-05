@@ -1,11 +1,12 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
+use cw_ics20_latest::ibc;
 
 use crate::{
     app::Bitcoin,
     entrypoints::*,
     error::ContractError,
-    interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig, Config, Dest, HeaderConfig},
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
@@ -36,6 +37,7 @@ pub fn instantiate(
         &Config {
             owner: info.sender,
             token_factory_addr: msg.token_factory_addr,
+            bridge_wasm_addr: msg.bridge_wasm_addr,
         },
     )?;
 
@@ -78,10 +80,14 @@ pub fn execute(
             withdraw_to_bitcoin(deps.storage, info, env, script_pubkey)
         }
         ExecuteMsg::RelayHeaders { headers } => relay_headers(deps.storage, headers),
-        ExecuteMsg::UpdateHeaderConfig { config } => update_header_config(deps.storage, config),
-        ExecuteMsg::UpdateBitcoinConfig { config } => update_bitcoin_config(deps.storage, config),
+        ExecuteMsg::UpdateHeaderConfig { config } => {
+            update_header_config(deps.storage, info, config)
+        }
+        ExecuteMsg::UpdateBitcoinConfig { config } => {
+            update_bitcoin_config(deps.storage, info, config)
+        }
         ExecuteMsg::UpdateCheckpointConfig { config } => {
-            update_checkpoint_config(deps.storage, config)
+            update_checkpoint_config(deps.storage, info, config)
         }
         ExecuteMsg::SubmitCheckpointSignature {
             xpub,
@@ -119,43 +125,53 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
             let mut btc = Bitcoin::default();
             let storage = deps.storage;
 
-            let pending_nbtc_transfers = btc.take_pending_completed(storage)?;
+            let pending_nbtc_transfers = btc.take_pending(storage)?;
 
             let config = CONFIG.load(storage)?;
             let token_factory = config.token_factory_addr;
+            let bridge_wasm = config.bridge_wasm_addr;
 
             let mut msgs = vec![];
             for pending in pending_nbtc_transfers {
                 for (dest, coin) in pending {
-                    // TODO: if dest is IBC packet, then forward to ibc bridge wasm
-                    msgs.push(WasmMsg::Execute {
-                        contract_addr: token_factory.to_string(),
-                        msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                            denom: coin.denom.to_owned(),
-                            amount: coin.amount,
-                            mint_to_address: dest.to_source_addr(),
-                        })?,
-                        funds: vec![],
-                    });
+                    let is_ibc = matches!(dest, Dest::Ibc(_));
+                    if is_ibc && bridge_wasm.clone().is_some() {
+                        if let Some(bridge_wasm_addr) = bridge_wasm.clone() {
+                            msgs.push(WasmMsg::Execute {
+                                contract_addr: token_factory.to_string(),
+                                msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
+                                    denom: coin.denom.to_owned(),
+                                    amount: coin.amount,
+                                    mint_to_address: env.contract.address.to_string(),
+                                })?,
+                                funds: vec![],
+                            });
+
+                            if let Dest::Ibc(ibc_packet) = dest {
+                                // msgs.push(WasmMsg::Execute {
+                                //     contract_addr: bridge_wasm_addr.to_string(),
+                                //     msg: to_json_binary(&cw_ics20_latest::msg::ExecuteMsg::TransferToRemote((
+                                //         TransferBackMsg { local_channel_id: ibc_packet.source_channel, remote_address: ibc_packet.receiver, remote_denom: ibc_packet., timeout: (), memo: () }
+                                //     )),
+                                //     funds: (),
+                                // })
+                            }
+                        }
+                    } else {
+                        msgs.push(WasmMsg::Execute {
+                            contract_addr: token_factory.to_string(),
+                            msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
+                                denom: coin.denom.to_owned(),
+                                amount: coin.amount,
+                                mint_to_address: dest.to_source_addr(),
+                            })?,
+                            funds: vec![],
+                        });
+                    }
                 }
             }
 
-            let external_outputs: Vec<bitcoin::TxOut> =
-                if btc.should_push_checkpoint(env.clone(), storage)? {
-                    // TODO: build output
-                    vec![]
-                    // self.cosmos
-                    //     .build_outputs(&self.ibc, btc.checkpoints.index)?
-                } else {
-                    vec![]
-                };
-
-            let offline_signers = btc.begin_block_step(
-                env,
-                storage,
-                external_outputs.into_iter().map(Ok),
-                hash.to_vec(),
-            )?;
+            let offline_signers = btc.begin_block_step(env, storage, hash.to_vec())?;
 
             for cons_key in &offline_signers {
                 let (_, address) = VALIDATORS.load(storage, cons_key)?;
