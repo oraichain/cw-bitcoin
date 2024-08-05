@@ -1,5 +1,3 @@
-use std::borrow::BorrowMut;
-
 use cosmwasm_std::{testing::mock_dependencies, Storage};
 
 use crate::{

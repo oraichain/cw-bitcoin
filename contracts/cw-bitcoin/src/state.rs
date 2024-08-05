@@ -1,4 +1,4 @@
-use bitcoin::{util::uint::Uint256, Script};
+use bitcoin::util::uint::Uint256;
 use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
 

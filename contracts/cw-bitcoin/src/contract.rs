@@ -5,7 +5,7 @@ use crate::{
     app::Bitcoin,
     entrypoints::*,
     error::ContractError,
-    interface::{BitcoinConfig, CheckpointConfig, Config, Dest, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,

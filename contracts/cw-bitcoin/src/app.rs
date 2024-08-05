@@ -1,7 +1,7 @@
 use crate::adapter::Adapter;
 use crate::checkpoint::Checkpoint;
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
-use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
+use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
     get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX,
