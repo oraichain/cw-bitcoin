@@ -1,17 +1,17 @@
 use super::{
-    adapter::Adapter,
     checkpoint::{BitcoinTx, Input},
-    signatory::{derive_pubkey, SignatorySet},
+    signatory::SignatorySet,
     threshold_sig::Signature,
 };
 use crate::{
+    adapter::Adapter,
     error::{ContractError, ContractResult},
     interface::{Dest, Xpub},
     state::RECOVERY_TXS,
 };
 use bitcoin::{OutPoint, Transaction, TxOut};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::Storage;
+use cosmwasm_std::{Api, Storage};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "cosmwasm_schema::serde")]
@@ -97,14 +97,12 @@ impl RecoveryTxs {
         store: &dyn Storage,
         xpub: &Xpub,
     ) -> ContractResult<Vec<([u8; 32], u32)>> {
-        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
-
         let mut msgs = vec![];
 
         for tx in RECOVERY_TXS.iter(store)? {
             let tx = tx?;
             for input in &tx.tx.input {
-                let pubkey = derive_pubkey(&secp, xpub, input.sigset_index)?;
+                let pubkey = xpub.derive_pubkey(input.sigset_index)?;
                 if input.signatures.needs_sig(pubkey.into()) {
                     msgs.push((input.signatures.message(), input.sigset_index));
                 }
@@ -116,12 +114,11 @@ impl RecoveryTxs {
 
     pub fn sign(
         &mut self,
+        api: &dyn Api,
         store: &mut dyn Storage,
         xpub: &Xpub,
         sigs: Vec<Signature>,
     ) -> ContractResult<()> {
-        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
-
         let mut sig_index = 0;
 
         if sigs.is_empty() {
@@ -137,7 +134,7 @@ impl RecoveryTxs {
 
             for k in 0..tx.tx.input.len() {
                 let input = tx.tx.input.get_mut(k).unwrap();
-                let pubkey = derive_pubkey(&secp, xpub, input.sigset_index)?;
+                let pubkey = xpub.derive_pubkey(input.sigset_index)?;
 
                 if !input.signatures.needs_sig(pubkey.into()) {
                     continue;
@@ -152,7 +149,7 @@ impl RecoveryTxs {
                 sig_index += 1;
 
                 let input_was_signed = input.signatures.signed();
-                input.signatures.sign(pubkey.into(), sig)?;
+                input.signatures.sign(api, pubkey.into(), sig)?;
 
                 if !input_was_signed && input.signatures.signed() {
                     tx.tx.signed_inputs += 1;

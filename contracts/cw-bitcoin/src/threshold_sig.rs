@@ -5,10 +5,11 @@ use bitcoin::blockdata::transaction::EcdsaSighashType;
 use bitcoin::secp256k1::{
     self,
     constants::{MESSAGE_SIZE, PUBLIC_KEY_SIZE},
-    ecdsa, PublicKey, Secp256k1,
+    ecdsa, PublicKey,
 };
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
+use cosmwasm_std::Api;
 
 // TODO: update for taproot-based design (musig rounds, fallback path)
 
@@ -235,7 +236,7 @@ impl ThresholdSig {
     /// Returns an error if the pubkey is not part of the set of signers, if the
     /// signature is invalid, or if the signer has already signed.
     // TODO: exempt from fee
-    pub fn sign(&mut self, pubkey: Pubkey, sig: &Signature) -> ContractResult<()> {
+    pub fn sign(&mut self, api: &dyn Api, pubkey: Pubkey, sig: &Signature) -> ContractResult<()> {
         let share = &mut self
             .sigs
             .iter_mut()
@@ -247,8 +248,7 @@ impl ThresholdSig {
             return Err(ContractError::App("Pubkey already signed".into()))?;
         }
 
-        let msg = secp256k1::Message::from_slice(self.message.as_slice())?;
-        Self::secp_verify(&msg, &pubkey, sig)?;
+        Self::secp_verify(api, self.message.as_slice(), &pubkey, sig)?;
 
         share.sig = Some(sig.clone());
         self.signed += share.power;
@@ -261,24 +261,28 @@ impl ThresholdSig {
     /// Verifies the given signature for the message, using the given signer's
     /// pubkey.
     pub fn secp_verify(
-        msg: &secp256k1::Message,
+        api: &dyn Api,
+        msg: &[u8],
         pubkey: &Pubkey,
         sig: &Signature,
     ) -> ContractResult<()> {
         // TODO: re-use secp context
-        let secp = Secp256k1::verification_only();
-        let pubkey = PublicKey::from_slice(&pubkey.bytes)?;
+        // let secp = Secp256k1::verification_only();
+        // let pubkey = PublicKey::from_slice(&pubkey.bytes)?;
+        // let sig = ecdsa::Signature::from_compact(&sig.0)?;
+        // secp.verify_ecdsa(msg, &sig, &pubkey)?;
 
-        let sig = ecdsa::Signature::from_compact(&sig.0)?;
+        let verified = api.secp256k1_verify(msg, &sig.0, pubkey.as_slice())?;
 
-        secp.verify_ecdsa(msg, &sig, &pubkey)?;
+        if !verified {
+            return Err(ContractError::App("Can not verify signature".to_string()));
+        }
 
         Ok(())
     }
 
-    pub fn verify(&self, pubkey: &Pubkey, sig: &Signature) -> ContractResult<()> {
-        let msg = secp256k1::Message::from_slice(self.message.as_slice())?;
-        Self::secp_verify(&msg, pubkey, sig)
+    pub fn verify(&self, api: &dyn Api, pubkey: &Pubkey, sig: &Signature) -> ContractResult<()> {
+        Self::secp_verify(api, self.message.as_slice(), pubkey, sig)
     }
 
     /// Returns a vector of signatures (or empty bytes for unsigned entries) in

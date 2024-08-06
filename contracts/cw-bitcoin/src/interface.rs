@@ -1,15 +1,12 @@
+use bitcoin::secp256k1;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::BlockHeader;
-use cosmwasm_schema::cw_serde;
-use cosmwasm_schema::schemars::JsonSchema;
-use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
-use cosmwasm_std::from_slice;
-use cosmwasm_std::to_vec;
-use cosmwasm_std::Addr;
-use cosmwasm_std::Binary;
-use cosmwasm_std::Coin;
-use cosmwasm_std::Storage;
-use cosmwasm_std::Uint128;
+use cosmwasm_schema::{
+    cw_serde,
+    schemars::JsonSchema,
+    serde::{de, ser, Deserialize, Serialize},
+};
+use cosmwasm_std::{from_json, to_json_vec, Addr, Binary, Coin, StdError, Storage, Uint128};
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use sha2::{Digest, Sha256};
@@ -17,26 +14,18 @@ use sha2::{Digest, Sha256};
 use crate::adapter::Adapter;
 use crate::app::ConsensusKey;
 use crate::app::NETWORK;
-use crate::constants::MAX_CHECKPOINT_AGE;
-use crate::constants::MAX_CHECKPOINT_INTERVAL;
-use crate::constants::MAX_DEPOSIT_AGE;
-use crate::constants::MAX_FEE_RATE;
-use crate::constants::MAX_LENGTH;
-use crate::constants::MAX_TARGET;
-use crate::constants::MAX_TIME_INCREASE;
-use crate::constants::MIN_DEPOSIT_AMOUNT;
-use crate::constants::MIN_FEE_RATE;
-use crate::constants::MIN_WITHDRAWAL_AMOUNT;
-use crate::constants::RETARGET_INTERVAL;
-use crate::constants::SIGSET_THRESHOLD;
-use crate::constants::TARGET_SPACING;
-use crate::constants::TARGET_TIMESPAN;
-use crate::constants::TRANSFER_FEE;
-use crate::constants::USER_FEE_FACTOR;
+use crate::constants::{
+    MAX_CHECKPOINT_AGE, MAX_CHECKPOINT_INTERVAL, MAX_DEPOSIT_AGE, MAX_FEE_RATE, MAX_LENGTH,
+    MAX_TARGET, MAX_TIME_INCREASE, MIN_DEPOSIT_AMOUNT, MIN_FEE_RATE, MIN_WITHDRAWAL_AMOUNT,
+    RETARGET_INTERVAL, SIGSET_THRESHOLD, TARGET_SPACING, TARGET_TIMESPAN, TRANSFER_FEE,
+    USER_FEE_FACTOR,
+};
 use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::header::WorkHeader;
 use crate::header::WrappedHeader;
+use libsecp256k1_core::curve::{Affine, ECMultContext, Field, Scalar};
+use libsecp256k1_core::util::{TAG_PUBKEY_EVEN, TAG_PUBKEY_ODD};
 
 #[derive(Deref, DerefMut)]
 pub struct DequeExtension<'a, T> {
@@ -81,7 +70,7 @@ impl<'a, T: Serialize + de::DeserializeOwned> DequeExtension<'a, T> {
     /// Sets the value at the given position in the queue. Returns [`StdError::NotFound`] if index is out of bounds
     pub fn set(&self, storage: &mut dyn Storage, pos: u32, value: &T) -> ContractResult<()> {
         let prefixed_key = self.get_key(pos);
-        storage.set(&prefixed_key, &to_vec(value)?);
+        storage.set(&prefixed_key, &to_json_vec(value)?);
         Ok(())
     }
 }
@@ -119,9 +108,7 @@ impl Accounts {
 pub struct IbcDest {
     pub source_port: String,
     pub source_channel: String,
-    #[serde(skip)]
     pub receiver: String,
-    #[serde(skip)]
     pub sender: String,
     pub timeout_timestamp: u64,
     pub memo: String,
@@ -138,6 +125,13 @@ impl Dest {
         match self {
             Self::Address(addr) => addr.to_string(),
             Self::Ibc(dest) => dest.receiver.to_string(),
+        }
+    }
+
+    pub fn to_source_addr(&self) -> String {
+        match self {
+            Self::Address(addr) => addr.to_string(),
+            Self::Ibc(dest) => dest.sender.to_string(),
         }
     }
 
@@ -391,9 +385,53 @@ impl Xpub {
         Xpub { key }
     }
 
-    /// Gets the `ExtendedPubKey` from the `Xpub`.
-    pub fn inner(&self) -> &ExtendedPubKey {
-        &self.key
+    fn parse_pubkey(&self) -> ContractResult<Affine> {
+        let bytes = self.public_key.serialize();
+        let mut x = Field::default();
+        if !x.set_b32(arrayref::array_ref!(&bytes, 1, 32)) {
+            return Err(StdError::generic_err("invalid pubkey").into());
+        }
+        let mut elem = libsecp256k1_core::curve::Affine::default();
+        elem.set_xo_var(&x, bytes[0] == TAG_PUBKEY_ODD);
+        Ok(elem)
+    }
+
+    fn add_exp_tweak(&self, secret: &secp256k1::SecretKey) -> ContractResult<secp256k1::PublicKey> {
+        let tweak = secret.secret_bytes();
+        let mut elem = self.parse_pubkey()?;
+        let mut scala = Scalar::default();
+        if bool::from(scala.set_b32(&tweak)) {
+            return Err(StdError::generic_err("invalid secret").into());
+        }
+
+        let ctx = ECMultContext::new_boxed();
+        let mut r = libsecp256k1_core::curve::Jacobian::default();
+        let a = libsecp256k1_core::curve::Jacobian::from_ge(&elem);
+        let one = libsecp256k1_core::curve::Scalar::from_int(1);
+        ctx.ecmult(&mut r, &a, &one, &scala);
+
+        elem.set_gej(&r);
+
+        let mut ret = [0u8; 33];
+
+        elem.x.normalize_var();
+        elem.y.normalize_var();
+        elem.x.fill_b32(arrayref::array_mut_ref!(ret, 1, 32));
+        ret[0] = if elem.y.is_odd() {
+            TAG_PUBKEY_ODD
+        } else {
+            TAG_PUBKEY_EVEN
+        };
+        let pubkey = secp256k1::PublicKey::from_slice(&ret)?;
+        Ok(pubkey)
+    }
+
+    /// Deterministically derive the public key for a signatory in a signatory set,
+    /// based on the current signatory set index.
+    pub fn derive_pubkey(&self, sigset_index: u32) -> ContractResult<secp256k1::PublicKey> {
+        let child_number = bitcoin::util::bip32::ChildNumber::from_normal_idx(sigset_index)?;
+        let (sk, _) = self.ckd_pub_tweak(child_number)?;
+        self.add_exp_tweak(&sk)
     }
 }
 
@@ -475,7 +513,7 @@ impl HeaderConfig {
     }
 
     pub fn from_bytes(checkpoint_json: &[u8]) -> ContractResult<Self> {
-        let checkpoint: (u32, BlockHeader) = from_slice(checkpoint_json)?;
+        let checkpoint: (u32, BlockHeader) = from_json(checkpoint_json)?;
         let (height, header) = checkpoint;
 
         Ok(Self {
@@ -511,4 +549,12 @@ pub struct ChangeRates {
 pub struct Config {
     pub token_factory_addr: Addr,
     pub owner: Addr,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "cosmwasm_schema::serde")]
+pub struct MintTokens {
+    pub denom: String,
+    pub amount: Uint128,
+    pub mint_to_address: String,
 }

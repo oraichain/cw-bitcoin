@@ -4,7 +4,7 @@ use app::Bitcoin;
 use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::util::uint;
+use bitcoin::util::uint::{self};
 use bitcoin::{
     secp256k1::Secp256k1, util::bip32::ExtendedPrivKey, BlockHash, BlockHeader, OutPoint,
     TxMerkleNode, Txid,
@@ -13,10 +13,13 @@ use bitcoin::{Script, Transaction};
 use checkpoint::{BatchType, Input};
 use constants::BTC_NATIVE_TOKEN_DENOM;
 use cosmwasm_std::testing::{mock_dependencies, mock_env};
-use cosmwasm_std::{Addr, Coin, Env, Storage};
+use cosmwasm_std::{Addr, Api, Coin, DepsMut, Env, Storage, Uint128};
 use error::ContractResult;
-use interface::{Dest, HeaderConfig, Xpub};
-use state::{HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS};
+use interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub};
+use state::{
+    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    FIRST_UNHANDLED_CONFIRMED_INDEX, HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS,
+};
 use std::cell::RefCell;
 use tests::helper::set_time;
 
@@ -27,18 +30,17 @@ use crate::{
     *,
 };
 
-#[serial_test::serial]
 #[test]
 fn relay_height_validity() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::mainnet()?;
-    println!("hello world: {:?}", header_config);
     let header = header_config.work_header();
 
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
     HEADERS.push_back(deps.as_mut().storage, &header)?;
 
-    let mut btc = Bitcoin::new(header_config);
+    let mut btc = Bitcoin::default();
+    BITCOIN_CONFIG.save(deps.as_mut().storage, &btc.config)?;
 
     for _ in 0..10 {
         let btc_height = btc.headers.height(deps.as_ref().storage)?;
@@ -100,26 +102,41 @@ fn relay_height_validity() -> ContractResult<()> {
     Ok(())
 }
 
-#[serial_test::serial]
 #[test]
 fn check_change_rates() -> ContractResult<()> {
     let mut deps = mock_dependencies();
+
     let header_config = HeaderConfig::mainnet()?;
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
     HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
 
+    let bitcoin_config = BitcoinConfig::default();
+    BITCOIN_CONFIG.save(deps.as_mut().storage, &bitcoin_config)?;
+    FEE_POOL.save(deps.as_mut().storage, &0)?;
+    CHECKPOINT_CONFIG.save(deps.as_mut().storage, &CheckpointConfig::default())?;
+
+    BUILDING_INDEX.save(deps.as_mut().storage, &0)?;
+
     let consensus_key1 = [0; 32];
     let consensus_key2 = [1; 32];
 
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key1, &100)?;
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key2, &10)?;
-
     let addr = ["validator1", "validator2"];
+
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key1,
+        &(100, addr[0].to_string()),
+    )?;
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key2,
+        &(10, addr[1].to_string()),
+    )?;
 
     SIGNERS.save(deps.as_mut().storage, addr[0], &consensus_key1)?;
     SIGNERS.save(deps.as_mut().storage, addr[1], &consensus_key2)?;
 
-    let btc = RefCell::new(Bitcoin::new(header_config));
+    let btc = RefCell::new(Bitcoin::default());
     let secp = Secp256k1::new();
     let network = btc.borrow().network();
     let xpriv = vec![
@@ -133,12 +150,13 @@ fn check_change_rates() -> ContractResult<()> {
 
     let push_deposit = |store: &mut dyn Storage| -> ContractResult<()> {
         let btc = btc.borrow();
+        let sigset = &btc.checkpoints.building(store)?.sigset;
         let input = Input::new(
             OutPoint {
                 txid: Txid::from_slice(&[0; 32])?,
                 vout: 0,
             },
-            &btc.checkpoints.building(store)?.sigset,
+            sigset,
             &[0u8],
             100_000_000,
             (9, 10),
@@ -149,8 +167,8 @@ fn check_change_rates() -> ContractResult<()> {
         let building_checkpoint_batch = &mut building_mut.batches[BatchType::Checkpoint];
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.input.push(input);
-        btc.checkpoints
-            .set(store, btc.checkpoints.index, &building_mut)?;
+        let index = btc.checkpoints.index(store);
+        btc.checkpoints.set(store, index, &building_mut)?;
         Ok(())
     };
 
@@ -164,12 +182,12 @@ fn check_change_rates() -> ContractResult<()> {
 
         let mut building_mut = btc.checkpoints.building(store)?;
         building_mut.fees_collected = 100_000_000;
-        btc.checkpoints
-            .set(store, btc.checkpoints.index, &building_mut)?;
+        let index = btc.checkpoints.index(store);
+        btc.checkpoints.set(store, index, &building_mut)?;
         Ok(())
     };
 
-    let sign_batch = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
+    let sign_batch = |api: &dyn Api, store: &mut dyn Storage, btc_height| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
         let cp = btc.checkpoints.signing(store)?.unwrap();
         let sigset_index = cp.sigset.index;
@@ -180,16 +198,28 @@ fn check_change_rates() -> ContractResult<()> {
             let to_sign = cp.to_sign(&Xpub::new(xpub[i]))?;
             let secp2 = Secp256k1::signing_only();
             let sigs = sign(&secp2, &xpriv[i], &to_sign)?;
-            btc.checkpoints
-                .sign(store, &Xpub::new(xpub[i]), sigs, sigset_index, btc_height)?;
+            btc.checkpoints.sign(
+                api,
+                store,
+                &Xpub::new(xpub[i]),
+                sigs,
+                sigset_index,
+                btc_height,
+            )?;
         }
         Ok(())
     };
-    let sign_cp = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
-        sign_batch(store, btc_height)?;
-        sign_batch(store, btc_height)?;
-        if btc.borrow().checkpoints.signing(store).unwrap().is_some() {
-            sign_batch(store, btc_height)?;
+    let sign_cp = |deps: DepsMut, btc_height| -> ContractResult<()> {
+        sign_batch(deps.api, deps.storage, btc_height)?;
+        sign_batch(deps.api, deps.storage, btc_height)?;
+        if btc
+            .borrow()
+            .checkpoints
+            .signing(deps.storage)
+            .unwrap()
+            .is_some()
+        {
+            sign_batch(deps.api, deps.storage, btc_height)?;
         }
         Ok(())
     };
@@ -215,7 +245,7 @@ fn check_change_rates() -> ContractResult<()> {
     let env = set_time(1000);
     push_deposit(deps.as_mut().storage)?;
     maybe_step(env, deps.as_mut().storage)?;
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 2);
 
@@ -227,12 +257,16 @@ fn check_change_rates() -> ContractResult<()> {
         .change_rates(deps.as_mut().storage, 2000, 2100, 0)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 0);
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 3);
 
     // Change the sigset
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key2, &100)?;
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key2,
+        &(100, addr[1].to_string()),
+    )?;
 
     let env = set_time(3000);
     push_deposit(deps.as_mut().storage)?;
@@ -242,7 +276,7 @@ fn check_change_rates() -> ContractResult<()> {
         .change_rates(deps.as_mut().storage, 3000, 3100, 0)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 0);
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 4);
 
@@ -256,7 +290,7 @@ fn check_change_rates() -> ContractResult<()> {
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 5);
 
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     let env = set_time(5000);
     push_deposit(deps.as_mut().storage)?;
@@ -267,7 +301,7 @@ fn check_change_rates() -> ContractResult<()> {
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 6);
-    sign_cp(deps.as_mut().storage, 10)?;
+    sign_cp(deps.as_mut(), 10)?;
 
     let env = set_time(6000);
     push_withdrawal(deps.as_mut().storage)?;
@@ -296,25 +330,40 @@ fn check_change_rates() -> ContractResult<()> {
 }
 
 #[test]
-#[serial_test::serial]
 fn test_take_pending() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     let header_config = HeaderConfig::mainnet()?;
     HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
     HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
 
+    let bitcoin_config = BitcoinConfig::default();
+    BITCOIN_CONFIG.save(deps.as_mut().storage, &bitcoin_config)?;
+    FEE_POOL.save(deps.as_mut().storage, &0)?;
+    CHECKPOINT_CONFIG.save(deps.as_mut().storage, &CheckpointConfig::default())?;
+    FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.as_mut().storage, &0)?;
+
+    BUILDING_INDEX.save(deps.as_mut().storage, &0)?;
+
     let consensus_key1 = [0; 32];
     let consensus_key2 = [1; 32];
 
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key1, &100)?;
-    VALIDATORS.save(deps.as_mut().storage, &consensus_key2, &10)?;
-
     let addr = ["validator1", "validator2"];
+
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key1,
+        &(100, addr[0].to_string()),
+    )?;
+    VALIDATORS.save(
+        deps.as_mut().storage,
+        &consensus_key2,
+        &(10, addr[1].to_string()),
+    )?;
 
     SIGNERS.save(deps.as_mut().storage, addr[0], &consensus_key1)?;
     SIGNERS.save(deps.as_mut().storage, addr[1], &consensus_key2)?;
 
-    let btc = RefCell::new(Bitcoin::new(header_config));
+    let btc = RefCell::new(Bitcoin::default());
     let secp = Secp256k1::new();
     let network = btc.borrow().network();
     let xpriv = vec![
@@ -327,6 +376,8 @@ fn test_take_pending() -> ContractResult<()> {
     ];
 
     let push_deposit = |store: &mut dyn Storage, dest: Dest, coin: Coin| -> ContractResult<()> {
+        let fixed_amount: u64 = 100_000_000;
+        assert_eq!(coin.amount.le(&Uint128::new(fixed_amount.into())), true);
         let input = Input::new(
             OutPoint {
                 txid: Txid::from_slice(&[0; 32])?,
@@ -334,22 +385,22 @@ fn test_take_pending() -> ContractResult<()> {
             },
             &btc.borrow().checkpoints.building(store)?.sigset,
             &[0u8],
-            100_000_000,
+            fixed_amount,
             (9, 10),
         )?;
         let btc = btc.borrow_mut();
         let mut building_mut = btc.checkpoints.building(store)?;
-        building_mut.fees_collected = 100_000_000;
-        building_mut.pending.push((dest.to_receiver_addr(), coin));
+        building_mut.fees_collected += 100_000_000u64 - (coin.amount.u128() as u64);
+        building_mut.pending.push((dest, coin));
         let building_checkpoint_batch = &mut building_mut.batches[BatchType::Checkpoint];
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.input.push(input);
-        btc.checkpoints
-            .set(store, btc.checkpoints.index, &building_mut)?;
+        let index = btc.checkpoints.index(store);
+        btc.checkpoints.set(store, index, &building_mut)?;
         Ok(())
     };
 
-    let sign_batch = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
+    let sign_batch = |api: &dyn Api, store: &mut dyn Storage, btc_height| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
         let queue = &mut btc.checkpoints;
         let cp = queue.signing(store)?.unwrap();
@@ -362,24 +413,35 @@ fn test_take_pending() -> ContractResult<()> {
             let to_sign = cp.to_sign(&Xpub::new(xpub[i]))?;
             let secp2 = Secp256k1::signing_only();
             let sigs = sign(&secp2, &xpriv[i], &to_sign)?;
-            queue.sign(store, &Xpub::new(xpub[i]), sigs, sigset_index, btc_height)?;
+            queue.sign(
+                api,
+                store,
+                &Xpub::new(xpub[i]),
+                sigs,
+                sigset_index,
+                btc_height,
+            )?;
         }
 
         Ok(())
     };
-    let sign_cp = |store: &mut dyn Storage, btc_height| -> ContractResult<()> {
-        sign_batch(store, btc_height)?;
-        sign_batch(store, btc_height)?;
-        if btc.borrow().checkpoints.signing(store)?.is_some() {
-            sign_batch(store, btc_height)?;
+    let sign_cp = |deps: DepsMut, btc_height| -> ContractResult<()> {
+        sign_batch(deps.api, deps.storage, btc_height)?;
+        sign_batch(deps.api, deps.storage, btc_height)?;
+        if btc.borrow().checkpoints.signing(deps.storage)?.is_some() {
+            sign_batch(deps.api, deps.storage, btc_height)?;
         }
 
         Ok(())
     };
 
-    let confirm_cp = |confirmed_index| {
-        let mut btc = btc.borrow_mut();
-        btc.checkpoints.confirmed_index = Some(confirmed_index);
+    let confirm_cp = |store: &mut dyn Storage, confirmed_index: u32| {
+        let btc = btc.borrow_mut();
+        let current_checkpoint_index = btc.checkpoints.index(store);
+        assert_eq!(current_checkpoint_index, confirmed_index + 1);
+        let confirmed_checkpoint_index = btc.checkpoints.last_completed_index(store).unwrap();
+        assert_eq!(confirmed_checkpoint_index, confirmed_index);
+        CONFIRMED_INDEX.save(store, &confirmed_index).unwrap();
     };
 
     let take_pending = |store: &mut dyn Storage| -> ContractResult<_> {
@@ -427,7 +489,7 @@ fn test_take_pending() -> ContractResult<()> {
         Dest::Ibc(dest.clone()),
         Coin {
             denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
-            amount: 1u128.into(),
+            amount: 95_000_000u128.into(),
         },
     )?;
     dest.sender = "sender2".to_string();
@@ -436,29 +498,47 @@ fn test_take_pending() -> ContractResult<()> {
         Dest::Ibc(dest.clone()),
         Coin {
             denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
-            amount: 1u128.into(),
+            amount: 95_000_000u128.into(),
         },
     )?;
     maybe_step(env, deps.as_mut().storage)?;
-    sign_cp(deps.as_mut().storage, 10)?;
-    confirm_cp(0);
+
+    // validate current checkpoint is on signing state
+    let checkpoint_signing = btc.borrow().checkpoints.signing(deps.as_ref().storage)?;
+
+    match checkpoint_signing {
+        Some(checkpoint_data) => {
+            println!("Checkpoint Data: {:?}", checkpoint_data.fees_collected);
+            println!("{:?}", checkpoint_data.pending);
+            assert_eq!(checkpoint_data.fees_collected > 0, true);
+        }
+        None => {
+            panic!("Checkpoint not found");
+        }
+    }
+    sign_cp(deps.as_mut(), 10)?;
+    confirm_cp(deps.as_mut().storage, 0);
+
     let env = set_time(2000);
     push_deposit(
         deps.as_mut().storage,
         Dest::Ibc(dest.clone()),
         Coin {
             denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
-            amount: 5u128.into(),
+            amount: 98_000_000u128.into(),
         },
     )?;
     maybe_step(env, deps.as_mut().storage)?;
-    sign_cp(deps.as_mut().storage, 10)?;
-    confirm_cp(1);
-    assert_eq!(
-        btc.borrow().checkpoints.first_unhandled_confirmed_cp_index,
-        0
-    );
-    assert_eq!(btc.borrow().checkpoints.confirmed_index, Some(1));
+    sign_cp(deps.as_mut(), 10)?;
+    confirm_cp(deps.as_mut().storage, 1);
+
+    let first_unhandled_confirmed_cp_index = FIRST_UNHANDLED_CONFIRMED_INDEX
+        .load(deps.as_ref().storage)
+        .unwrap();
+    assert_eq!(first_unhandled_confirmed_cp_index, 0);
+
+    let confirmed_index = CONFIRMED_INDEX.load(deps.as_ref().storage)?;
+    assert_eq!(confirmed_index, 1);
     // before take pending, the confirmed checkpoints should have some pending deposits
     assert_eq!(
         btc.borrow()
@@ -481,8 +561,10 @@ fn test_take_pending() -> ContractResult<()> {
 
     // action. After take pending, the unhandled confirmed index should increase to 2 since we handled 2 confirmed checkpoints
     let cp_dests = take_pending(deps.as_mut().storage)?;
-    let checkpoints = &btc.borrow().checkpoints;
-    assert_eq!(checkpoints.first_unhandled_confirmed_cp_index, 2);
+
+    let first_unhandled_confirmed_cp_index =
+        FIRST_UNHANDLED_CONFIRMED_INDEX.load(deps.as_ref().storage)?;
+    assert_eq!(first_unhandled_confirmed_cp_index, 2);
     assert_eq!(cp_dests.len(), 2);
     assert_eq!(cp_dests[0].len(), 2);
     assert_eq!(cp_dests[1].len(), 1);
@@ -492,9 +574,8 @@ fn test_take_pending() -> ContractResult<()> {
             sender: "sender1".to_string(),
             ..dest.clone()
         })
-        .to_receiver_addr()
     );
-    assert_eq!(cp_dests[0][0].1.amount.u128(), 1u128);
+    assert_eq!(cp_dests[0][0].1.amount.u128(), 95_000_000u128);
 
     assert_eq!(
         cp_dests[0][1].0,
@@ -502,9 +583,8 @@ fn test_take_pending() -> ContractResult<()> {
             sender: "sender2".to_string(),
             ..dest.clone()
         })
-        .to_receiver_addr(),
     );
-    assert_eq!(cp_dests[0][1].1.amount.u128(), 1u128);
+    assert_eq!(cp_dests[0][1].1.amount.u128(), 95_000_000u128);
 
     assert_eq!(
         cp_dests[1][0].0,
@@ -512,11 +592,10 @@ fn test_take_pending() -> ContractResult<()> {
             sender: "sender2".to_string(),
             ..dest.clone()
         })
-        .to_receiver_addr(),
     );
-    assert_eq!(cp_dests[1][0].1.amount.u128(), 5u128);
+    assert_eq!(cp_dests[1][0].1.amount.u128(), 98_000_000u128);
 
-    // assert confirmed checkpoints pending. Should not have anything because we have removed them already in take_pending()
+    // // assert confirmed checkpoints pending. Should not have anything because we have removed them already in take_pending()
     let checkpoints = &btc.borrow().checkpoints;
     let first_cp = checkpoints.get(deps.as_ref().storage, 0).unwrap();
     assert_eq!(first_cp.pending.iter().count(), 0);

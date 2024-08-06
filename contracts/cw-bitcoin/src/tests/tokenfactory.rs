@@ -1,7 +1,7 @@
 use cosmwasm_std::{Addr, Coin, Uint128};
 use token_bindings::{
-    FullDenomResponse, Metadata, TokenFactoryMsg, TokenFactoryMsgOptions, TokenFactoryQuery,
-    TokenFactoryQueryEnum,
+    DenomsByCreatorResponse, FullDenomResponse, Metadata, TokenFactoryMsg, TokenFactoryMsgOptions,
+    TokenFactoryQuery, TokenFactoryQueryEnum,
 };
 
 use crate::tests::helper::MockApp;
@@ -42,8 +42,13 @@ fn mint_token() {
     });
 
     // fails to mint token before creating it
-    app.execute(Addr::unchecked("alice"), contract.clone(), &msg, &[])
+    let error = app
+        .execute(Addr::unchecked("alice"), contract.clone(), &msg, &[])
         .unwrap_err();
+    assert!(error
+        .root_cause()
+        .to_string()
+        .contains("Token denom was never created"));
 
     // create the token now
     let create = TokenFactoryMsg::Token(TokenFactoryMsgOptions::CreateDenom {
@@ -61,7 +66,7 @@ fn mint_token() {
         .unwrap();
 
     // now we can mint
-    app.execute(Addr::unchecked("alice"), contract, &msg, &[])
+    app.execute(Addr::unchecked("alice"), contract.clone(), &msg, &[])
         .unwrap();
 
     // we got tokens!
@@ -72,12 +77,22 @@ fn mint_token() {
     let expected = Coin { denom, amount };
     assert_eq!(end, expected);
 
-    println!("{:?}", end);
-
     // but no minting of unprefixed version
     let empty = app
         .as_querier()
         .query_balance(rcpt.as_str(), subdenom)
         .unwrap();
     assert_eq!(empty.amount, Uint128::zero());
+
+    let DenomsByCreatorResponse { denoms } = app
+        .as_querier()
+        .query(
+            &TokenFactoryQuery::Token(TokenFactoryQueryEnum::DenomsByCreator {
+                creator: contract.to_string(),
+            })
+            .into(),
+        )
+        .unwrap();
+
+    println!("{:?} {}", denoms, contract);
 }
