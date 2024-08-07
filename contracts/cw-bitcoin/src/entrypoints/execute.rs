@@ -104,7 +104,8 @@ pub fn withdraw_to_bitcoin(
 
     let config = CONFIG.load(store)?;
     for fund in info.funds {
-        if fund.denom == BTC_NATIVE_TOKEN_DENOM {
+        let denom = get_full_btc_denom(store)?;
+        if fund.denom == denom {
             let amount = fund.amount;
             btc.add_withdrawal(store, script_pubkey.clone(), amount)
                 .unwrap();
@@ -114,7 +115,7 @@ pub fn withdraw_to_bitcoin(
                 contract_addr: config.token_factory_addr.clone().into_string(),
                 msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::BurnTokens {
                     amount,
-                    denom: get_full_btc_denom(store)?,
+                    denom,
                     burn_from_address: env.contract.address.to_string(),
                 })?,
                 funds: vec![],
@@ -134,7 +135,8 @@ pub fn relay_checkpoint(
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
     let response = Response::new().add_attribute("action", "relay_checkpoint");
-    btc.relay_checkpoint(store, btc_height, btc_proof, cp_index)?;
+    btc.relay_checkpoint(store, btc_height, btc_proof, cp_index)
+        .unwrap();
     Ok(response)
 }
 
@@ -148,7 +150,9 @@ pub fn submit_checkpoint_signature(
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut checkpoints = btc.checkpoints;
-    let _ = checkpoints.sign(api, store, &xpub.0, sigs, cp_index, btc_height);
+    checkpoints
+        .sign(api, store, &xpub.0, sigs, cp_index, btc_height)
+        .unwrap();
     let response = Response::new().add_attribute("action", "submit_checkpoint_signature");
     Ok(response)
 }
@@ -161,7 +165,7 @@ pub fn submit_recovery_signature(
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut recovery_txs = btc.recovery_txs;
-    let _ = recovery_txs.sign(api, store, &xpub.0, sigs);
+    recovery_txs.sign(api, store, &xpub.0, sigs).unwrap();
     let response = Response::new().add_attribute("action", "submit_recovery_signature");
     Ok(response)
 }
@@ -171,9 +175,8 @@ pub fn set_signatory_key(
     info: MessageInfo,
     xpub: HashBinary<Xpub>,
 ) -> ContractResult<Response> {
-    assert_eq!(info.sender, CONFIG.load(store)?.owner);
     let mut btc = Bitcoin::default();
-    let _ = btc.set_signatory_key(store, info.sender, xpub.0);
+    btc.set_signatory_key(store, info.sender, xpub.0).unwrap();
     let response = Response::new().add_attribute("action", "set_signatory_key");
     Ok(response)
 }

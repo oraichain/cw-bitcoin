@@ -39,6 +39,11 @@ pub enum ExecuteMsg {
         sigset_index: u32,
         dest: Dest,
     },
+    RelayCheckpoint {
+        btc_height: u32,
+        btc_proof: Adapter<PartialMerkleTree>,
+        cp_index: u32,
+    },
     WithdrawToBitcoin {
         script_pubkey: Adapter<Script>,
     },
@@ -63,6 +68,10 @@ pub enum ExecuteMsg {
         subdenom: String,
         metadata: Option<Metadata>,
     },
+    #[cfg(test)]
+    TriggerBeginBlock {
+        hash: Binary,
+    },
 }
 
 #[cw_serde]
@@ -77,6 +86,8 @@ pub enum QueryMsg {
     HeaderHeight {},
     #[returns(u64)]
     DepositFees { index: Option<u32> },
+    #[returns(Vec<Adapter<Transaction>>)]
+    CompletedTxs { limit: u32 },
     #[returns(u64)]
     WithdrawalFees { address: String, index: Option<u32> },
     #[returns(HashBinary<bitcoin::BlockHash>)]
@@ -90,6 +101,16 @@ pub enum QueryMsg {
         xpub: HashBinary<Xpub>,
         checkpoint_index: u32,
     },
+    // Query index
+    #[returns(u32)]
+    ConfirmedIndex {},
+    #[returns(u32)]
+    BuildingIndex {},
+    #[returns(u32)]
+    CompletedIndex {},
+    #[returns(u32)]
+    UnhandledConfirmedIndex {},
+    // End query index
 }
 
 #[cw_serde]

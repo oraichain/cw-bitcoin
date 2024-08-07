@@ -442,7 +442,7 @@ fn test_take_pending() -> ContractResult<()> {
 
     let take_pending = |store: &mut dyn Storage| -> ContractResult<_> {
         let mut btc = btc.borrow_mut();
-        let pending = btc.take_pending(store)?;
+        let pending = btc.take_pending_completed(store)?;
         Ok(pending)
     };
 
@@ -561,9 +561,10 @@ fn test_take_pending() -> ContractResult<()> {
     let first_unhandled_confirmed_cp_index =
         FIRST_UNHANDLED_CONFIRMED_INDEX.load(deps.as_ref().storage)?;
     assert_eq!(first_unhandled_confirmed_cp_index, 2);
-    assert_eq!(cp_dests.len(), 2);
-    assert_eq!(cp_dests[0].len(), 2);
-    assert_eq!(cp_dests[1].len(), 1);
+    assert_eq!(cp_dests.len(), 3);
+    assert_eq!(cp_dests[0].len(), 2); // cp_dest confirmed
+    assert_eq!(cp_dests[1].len(), 1); // cp_dest confirmed
+    assert_eq!(cp_dests[2].len(), 0); // cp_dest completed
     assert_eq!(
         cp_dests[0][0].0,
         Dest::Ibc(IbcDest {

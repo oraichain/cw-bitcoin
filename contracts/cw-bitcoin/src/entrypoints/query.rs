@@ -11,7 +11,10 @@ use crate::{
     interface::Xpub,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
-    state::{header_height, OUTPOINTS, SIG_KEYS},
+    state::{
+        header_height, BUILDING_INDEX, CONFIRMED_INDEX, FIRST_UNHANDLED_CONFIRMED_INDEX, OUTPOINTS,
+        SIG_KEYS,
+    },
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
@@ -118,6 +121,18 @@ pub fn query_first_unconfirmed_index(store: &dyn Storage) -> ContractResult<Opti
     let checkpoints = CheckpointQueue::default();
     let first_unconfirmed_index = checkpoints.first_unconfirmed_index(store)?;
     Ok(first_unconfirmed_index)
+}
+
+pub fn query_building_index(store: &dyn Storage) -> ContractResult<u32> {
+    let checkpoints = CheckpointQueue::default();
+    let building_index = checkpoints.index(store);
+    Ok(building_index)
+}
+
+pub fn query_completed_index(store: &dyn Storage) -> ContractResult<u32> {
+    let checkpoints = CheckpointQueue::default();
+    let completed_index = checkpoints.last_completed_index(store)?;
+    Ok(completed_index)
 }
 
 pub fn query_process_outpoints(store: &dyn Storage) -> ContractResult<Vec<String>> {

@@ -2,7 +2,6 @@
 use cosmwasm_std::entry_point;
 
 use crate::{
-    app::Bitcoin,
     entrypoints::*,
     error::ContractError,
     interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
@@ -75,6 +74,11 @@ pub fn execute(
             sigset_index,
             dest,
         ),
+        ExecuteMsg::RelayCheckpoint {
+            btc_height,
+            btc_proof,
+            cp_index,
+        } => relay_checkpoint(deps.storage, btc_height, btc_proof, cp_index),
         ExecuteMsg::WithdrawToBitcoin { script_pubkey } => {
             withdraw_to_bitcoin(deps.storage, info, env, script_pubkey)
         }
@@ -111,45 +115,15 @@ pub fn execute(
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }
+        #[cfg(test)]
+        ExecuteMsg::TriggerBeginBlock { hash } => clock_end_block(&env, deps.storage, hash),
     }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
-        SudoMsg::ClockEndBlock { hash } => {
-            let mut btc = Bitcoin::default();
-            let storage = deps.storage;
-
-            let pending_nbtc_transfers = btc.take_pending(storage)?;
-
-            let config = CONFIG.load(storage)?;
-            let token_factory = config.token_factory_addr;
-
-            let mut msgs = vec![];
-            for pending in pending_nbtc_transfers {
-                for (dest, coin) in pending {
-                    msgs.push(WasmMsg::Execute {
-                        contract_addr: token_factory.to_string(),
-                        msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                            denom: coin.denom.to_owned(),
-                            amount: coin.amount,
-                            mint_to_address: dest.to_source_addr(),
-                        })?,
-                        funds: vec![],
-                    });
-                }
-            }
-
-            let offline_signers = btc.begin_block_step(env, storage, hash.to_vec())?;
-
-            for cons_key in &offline_signers {
-                let (_, address) = VALIDATORS.load(storage, cons_key)?;
-                btc.punish_validator(storage, cons_key, address)?;
-            }
-
-            Ok(Response::new())
-        }
+        SudoMsg::ClockEndBlock { hash } => clock_end_block(&env, deps.storage, hash),
     }
 }
 
@@ -161,6 +135,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         }
         QueryMsg::WithdrawalFees { address, index } => {
             to_json_binary(&query_withdrawal_fees(deps.storage, address, index)?)
+        }
+        QueryMsg::CompletedTxs { limit } => {
+            to_json_binary(&query_complete_txs(deps.storage, limit)?)
         }
         QueryMsg::HeaderHeight {} => to_json_binary(&query_header_height(deps.storage)?),
         QueryMsg::SidechainBlockHash {} => {
@@ -182,6 +159,12 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             xpub,
             checkpoint_index,
         )?),
+        QueryMsg::CompletedIndex {} => to_json_binary(&query_completed_index(deps.storage)?),
+        QueryMsg::BuildingIndex {} => to_json_binary(&query_building_index(deps.storage)?),
+        QueryMsg::ConfirmedIndex {} => to_json_binary(&query_comfirmed_index(deps.storage)?),
+        QueryMsg::UnhandledConfirmedIndex {} => {
+            to_json_binary(&query_first_unconfirmed_index(deps.storage)?)
+        }
     }
 }
 

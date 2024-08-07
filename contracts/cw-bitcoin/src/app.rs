@@ -4,8 +4,8 @@ use crate::constants::BTC_NATIVE_TOKEN_DENOM;
 use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
-    get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX,
-    SIGNERS, SIG_KEYS, VALIDATORS, XPUBS,
+    get_full_btc_denom, get_validators, BITCOIN_CONFIG, CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, SIG_KEYS, VALIDATORS, XPUBS,
 };
 use crate::threshold_sig;
 
@@ -247,8 +247,9 @@ impl Bitcoin {
         let sigset = checkpoint.sigset.clone();
 
         let dest_bytes = dest.commitment_bytes()?;
-        let expected_script =
-            sigset.output_script(&dest_bytes, self.checkpoints.config(store).sigset_threshold)?;
+        let threshold = self.checkpoints.config(store).sigset_threshold;
+
+        let expected_script = sigset.output_script(&dest_bytes, threshold)?;
         if output.script_pubkey != expected_script {
             return Err(ContractError::App(
                 "Output script does not match signature set".to_string(),
@@ -305,8 +306,9 @@ impl Bitcoin {
 
         // note: we only mint nbtc when it is send to destination
         let mint_amount = (output.value * config.units_per_sat).into();
+        let denom = get_full_btc_denom(store)?;
         let mut nbtc = Coin {
-            denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
+            denom,
             amount: mint_amount,
         };
         let fee_amount = self.calc_minimum_deposit_fees(store, input_size, checkpoint.fee_rate)?;
@@ -333,9 +335,7 @@ impl Bitcoin {
         // let deposit_fee = nbtc.take(calc_deposit_fee(nbtc.amount.into()))?;
         // self.give_rewards(deposit_fee)?;
 
-        self.checkpoints
-            .building(store)?
-            .insert_pending(dest, nbtc)?;
+        building_mut.insert_pending(dest, nbtc)?;
 
         let index = self.checkpoints.index(store);
         self.checkpoints.set(store, index, &building_mut)?;
@@ -413,6 +413,7 @@ impl Bitcoin {
         script_pubkey: Adapter<Script>,
         mut amount: Uint128,
     ) -> ContractResult<()> {
+        println!("Xin chao minh dang");
         let config = self.config(store)?;
         if script_pubkey.len() as u64 > config.max_withdrawal_script_length {
             return Err(ContractError::App(
@@ -461,6 +462,7 @@ impl Bitcoin {
         let building_checkpoint_batch = &mut checkpoint.batches[BatchType::Checkpoint];
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.output.push(Adapter::new(output));
+        println!("Checkpoint tx output: {:?}", checkpoint_tx.output);
 
         let index = self.checkpoints.index(store);
         self.checkpoints.set(store, index, &checkpoint)?;
@@ -684,7 +686,7 @@ impl Bitcoin {
     /// This should be used to process the pending transfers, crediting each of
     /// them now that the checkpoint has been fully signed.
     #[allow(clippy::type_complexity)]
-    pub fn take_pending(
+    pub fn take_pending_confirmed(
         &mut self,
         store: &mut dyn Storage,
     ) -> ContractResult<Vec<Vec<(Dest, Coin)>>> {
@@ -720,6 +722,8 @@ impl Bitcoin {
         &mut self,
         store: &mut dyn Storage,
     ) -> ContractResult<Vec<Vec<(Dest, Coin)>>> {
+        let confirmed_dests = self.take_pending_confirmed(store)?;
+
         let last_completed_index = match self.checkpoints.last_completed_index(store) {
             Err(err) => {
                 if let ContractError::App(err_str) = &err {
@@ -733,6 +737,7 @@ impl Bitcoin {
         };
 
         let confirmed_index = self.checkpoints.confirmed_index(store).unwrap_or_default();
+
         let mut completed_dests = vec![];
         for checkpoint_index in confirmed_index..=last_completed_index {
             let mut checkpoint = self.checkpoints.get(store, checkpoint_index)?;
@@ -740,7 +745,11 @@ impl Bitcoin {
             checkpoint.pending = vec![]; // clear pointer
             self.checkpoints.set(store, checkpoint_index, &checkpoint)?;
         }
-        Ok(completed_dests)
+
+        Ok(confirmed_dests
+            .into_iter()
+            .chain(completed_dests.into_iter())
+            .collect())
     }
 
     pub fn give_miner_fee(
