@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 use std::str::FromStr;
+use std::time::Duration;
 
 use super::utils::{
     get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
@@ -10,6 +11,7 @@ use crate::checkpoint::{self, BatchType, Checkpoint, CheckpointStatus};
 use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
 use crate::header::WrappedHeader;
 use crate::interface::{BitcoinConfig, CheckpointConfig, Dest, Xpub};
+use crate::recovery::SignedRecoveryTx;
 use crate::tests::helper::{sign, MockApp};
 use crate::{interface::HeaderConfig, msg};
 use bitcoin::consensus::Decodable;
@@ -23,6 +25,7 @@ use bitcoind::{BitcoinD, Conf};
 use cosmwasm_std::{Addr, Binary, Coin};
 use cosmwasm_testing_util::AppResponse;
 use token_bindings::Metadata;
+use tokio::time::sleep;
 
 async fn mine_and_relay_headers(
     btc_client: &Client,
@@ -67,7 +70,7 @@ async fn relay_checkpoint(
         .as_querier()
         .query_wasm_smart(
             bitcoin_bridge_addr.clone(),
-            &msg::QueryMsg::CompletedTxs { limit: 10 },
+            &msg::QueryMsg::CompletedCheckpointTxs { limit: 10 },
         )
         .unwrap();
 
@@ -113,6 +116,61 @@ async fn relay_checkpoint(
             }
             Err(_e) => {}
         }
+    }
+}
+
+async fn relay_recovery(
+    btc_client: &Client,
+    app: &mut MockApp,
+    wallet: &Address,
+    sender: Addr,
+    bitcoin_bridge_addr: Addr,
+) -> () {
+    let recovery_txs: Vec<SignedRecoveryTx> = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::SignedRecoveryTxs {},
+        )
+        .unwrap();
+
+    for recovery_tx in recovery_txs {
+        let transaction = recovery_tx.tx.clone();
+        let txid = btc_client
+            .send_raw_transaction(&transaction.into_inner())
+            .await;
+        let headers = mine_and_relay_headers(
+            btc_client,
+            app,
+            wallet,
+            2,
+            sender.clone(),
+            bitcoin_bridge_addr.clone(),
+        )
+        .await;
+        let header = &headers[0];
+        let tx_proof = btc_client
+            .get_tx_out_proof(&[txid.unwrap()], Some(&header.block_hash()))
+            .await
+            .unwrap();
+        let proof =
+            bitcoin::util::merkleblock::MerkleBlock::consensus_decode(&mut tx_proof.as_slice())
+                .unwrap()
+                .txn;
+        app.execute(
+            sender.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::RelayDeposit {
+                btc_tx: recovery_tx.tx.clone(),
+                btc_height: header.height(),
+                btc_proof: Adapter::from(proof),
+                btc_vout: 0, // always is zero for sure
+                sigset_index: recovery_tx.sigset_index,
+                dest: recovery_tx.dest,
+            },
+            &[],
+        )
+        .unwrap();
     }
 }
 
@@ -169,9 +227,10 @@ async fn test_full_flow_happy_case_bitcoin() {
         )
     };
 
-    let init_bitcoin_config = |app: &mut MockApp| -> () {
+    let init_bitcoin_config = |app: &mut MockApp, max_deposit_age: u32| -> () {
         let mut bitcoin_config = BitcoinConfig::default();
         bitcoin_config.min_withdrawal_checkpoints = 1;
+        bitcoin_config.max_deposit_age = max_deposit_age as u64;
         let _ = app
             .execute(
                 owner.clone(),
@@ -329,8 +388,35 @@ async fn test_full_flow_happy_case_bitcoin() {
         )
     };
 
+    let sign_recovery = |app: &mut MockApp,
+                         sender: Addr,
+                         xpriv: &ExtendedPrivKey,
+                         xpub: ExtendedPubKey|
+     -> Result<AppResponse, _> {
+        let secp = Secp256k1::signing_only();
+        let to_signs: Vec<([u8; 32], u32)> = app
+            .as_querier()
+            .query_wasm_smart(
+                bitcoin_bridge_addr.clone(),
+                &msg::QueryMsg::SigningRecoveryTxs {
+                    xpub: HashBinary(Xpub::new(xpub)),
+                },
+            )
+            .unwrap();
+        let sigs = sign(&secp, &xpriv, &to_signs).unwrap();
+        app.execute(
+            sender,
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::SubmitRecoverySignature {
+                xpub: HashBinary(Xpub::new(xpub)),
+                sigs,
+            },
+            &[],
+        )
+    };
+
     // Start testing
-    init_bitcoin_config(&mut app);
+    init_bitcoin_config(&mut app, 45);
     init_checkpoint_config(&mut app);
     init_headers(&mut app, 1000, trusted_header);
     register_denom(&mut app, BTC_NATIVE_TOKEN_DENOM.to_string(), None).unwrap();
@@ -407,7 +493,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     assert_eq!(checkpoint.status, CheckpointStatus::Building);
     let sigset = checkpoint.sigset;
 
-    // Bridge one transaction and try to submit tx with proof when not enough confirmations
+    // [TESTCASE] Bridge one transaction and try to submit tx with proof when not enough confirmations
     let receiver = Addr::unchecked("receiver");
     let dest = Dest::Address(receiver.clone());
     let script = sigset
@@ -438,6 +524,28 @@ async fn test_full_flow_happy_case_bitcoin() {
         .position(|o| o.value == deposit_amount.to_sat())
         .unwrap();
 
+    let expired_btc_txid = wallet
+        .send_to_address(
+            &deposit_addr,
+            deposit_amount,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    let expired_btc_tx = btc_client
+        .get_raw_transaction(&expired_btc_txid, None)
+        .await
+        .unwrap();
+    let expired_vout = expired_btc_tx
+        .output
+        .iter()
+        .position(|o| o.value == deposit_amount.to_sat())
+        .unwrap();
+
     // mine one block to get proof
     let headers = mine_and_relay_headers(
         &btc_client,
@@ -454,6 +562,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         .unwrap();
     assert_eq!(header_height, 1022);
 
+    // this proof is for current depositing
     let tx_proof = btc_client
         .get_tx_out_proof(&[btc_tx.txid()], Some(&headers[0].block_hash()))
         .await
@@ -461,6 +570,17 @@ async fn test_full_flow_happy_case_bitcoin() {
     let proof = bitcoin::util::merkleblock::MerkleBlock::consensus_decode(&mut tx_proof.as_slice())
         .unwrap()
         .txn;
+
+    // this proof is for expired tx
+    let expired_tx_proof = btc_client
+        .get_tx_out_proof(&[expired_btc_tx.txid()], Some(&headers[0].block_hash()))
+        .await
+        .unwrap();
+    let expired_proof =
+        bitcoin::util::merkleblock::MerkleBlock::consensus_decode(&mut expired_tx_proof.as_slice())
+            .unwrap()
+            .txn;
+
     relay_deposit(
         &mut app,
         Adapter::from(btc_tx),
@@ -558,7 +678,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         .unwrap();
     assert_eq!(checkpoint.sigset.signatories.len(), 3);
 
-    // Test deposit + withdraw, for covering more cases here I will add an another validator
+    // [TESTCASE] Test deposit + withdraw, for covering more cases here I will add an another validator
     let withdraw_address = wallet.get_new_address(None, None).unwrap();
     let script = checkpoint
         .sigset
@@ -639,7 +759,6 @@ async fn test_full_flow_happy_case_bitcoin() {
         )
         .unwrap();
     assert_eq!(checkpoint.status, CheckpointStatus::Signing);
-    println!("Checkpoint: {:?}", checkpoint.sigset);
 
     sign_cp(&mut app, validator_1.clone(), &xprivs[0], xpubs[0], 1, 1025).unwrap();
     sign_cp(&mut app, validator_2.clone(), &xprivs[1], xpubs[1], 1, 1025).unwrap();
@@ -698,4 +817,107 @@ async fn test_full_flow_happy_case_bitcoin() {
         )
         .unwrap();
     assert_eq!(confirmed_cp_index, 1);
+
+    // [TESTCASE] test recovery
+    println!("Waiting 10 seconds to make the deposit expired!");
+    sleep(Duration::from_secs(10)).await;
+    relay_deposit(
+        &mut app,
+        Adapter::from(expired_btc_tx),
+        1021,
+        Adapter::from(expired_proof),
+        expired_vout as u32, // vout
+        0,                   // sigset_index
+        dest.clone(),
+    )
+    .unwrap();
+    sign_recovery(&mut app, validator_1.clone(), &xprivs[0], xpubs[0]).unwrap();
+    sign_recovery(&mut app, validator_2.clone(), &xprivs[1], xpubs[1]).unwrap();
+
+    init_bitcoin_config(&mut app, 300); // update to max age of current tx
+    relay_recovery(
+        &btc_client,
+        &mut app,
+        &async_wallet_address,
+        owner.clone(),
+        bitcoin_bridge_addr.clone(),
+    )
+    .await;
+    increase_block(&mut app, Binary::from([6; 32])).unwrap(); // should increase number of hash to be unique
+    let current_header: u32 = app
+        .as_querier()
+        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .unwrap();
+    let checkpoint: Checkpoint = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 2 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.status, CheckpointStatus::Signing);
+    sign_cp(
+        &mut app,
+        validator_1.clone(),
+        &xprivs[0],
+        xpubs[0],
+        2,
+        current_header,
+    )
+    .unwrap();
+    sign_cp(
+        &mut app,
+        validator_2.clone(),
+        &xprivs[1],
+        xpubs[1],
+        2,
+        current_header,
+    )
+    .unwrap();
+    sign_cp(
+        &mut app,
+        validator_3.clone(),
+        &xprivs[2],
+        xpubs[2],
+        2,
+        current_header,
+    )
+    .unwrap();
+    // Increase block and current Signing checkpoint changed to Complete
+    increase_block(&mut app, Binary::from([7; 32])).unwrap(); // should increase number of hash to be unique
+    let checkpoint: Checkpoint = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 2 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.status, CheckpointStatus::Complete);
+    assert_eq!(checkpoint.pending.len(), 0);
+
+    // Check balance
+    let balance = app
+        .as_querier()
+        .query_balance(&receiver, btc_bridge_denom.clone())
+        .unwrap();
+    assert_eq!(balance.amount.u128(), 309879045000000 as u128);
+
+    relay_checkpoint(
+        &btc_client,
+        &mut app,
+        &async_wallet_address,
+        owner.clone(),
+        bitcoin_bridge_addr.clone(),
+        2,
+    )
+    .await;
+
+    let confirmed_cp_index: u32 = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::ConfirmedIndex {},
+        )
+        .unwrap();
+    assert_eq!(confirmed_cp_index, 2);
 }

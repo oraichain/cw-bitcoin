@@ -87,7 +87,9 @@ pub enum QueryMsg {
     #[returns(u64)]
     DepositFees { index: Option<u32> },
     #[returns(Vec<Adapter<Transaction>>)]
-    CompletedTxs { limit: u32 },
+    CompletedCheckpointTxs { limit: u32 },
+    #[returns(Vec<Adapter<Transaction>>)]
+    SignedRecoveryTxs {},
     #[returns(u64)]
     WithdrawalFees { address: String, index: Option<u32> },
     #[returns(HashBinary<bitcoin::BlockHash>)]

@@ -82,7 +82,7 @@ pub fn query_last_complete_tx(store: &dyn Storage) -> ContractResult<Adapter<Tra
     Ok(last_complete_tx)
 }
 
-pub fn query_complete_txs(
+pub fn query_complete_checkpoint_txs(
     store: &dyn Storage,
     limit: u32,
 ) -> ContractResult<Vec<Adapter<Transaction>>> {

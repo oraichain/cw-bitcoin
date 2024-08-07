@@ -136,9 +136,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawalFees { address, index } => {
             to_json_binary(&query_withdrawal_fees(deps.storage, address, index)?)
         }
-        QueryMsg::CompletedTxs { limit } => {
-            to_json_binary(&query_complete_txs(deps.storage, limit)?)
+        QueryMsg::CompletedCheckpointTxs { limit } => {
+            to_json_binary(&query_complete_checkpoint_txs(deps.storage, limit)?)
         }
+        QueryMsg::SignedRecoveryTxs {} => to_json_binary(&query_signed_recovery_txs(deps.storage)?),
         QueryMsg::HeaderHeight {} => to_json_binary(&query_header_height(deps.storage)?),
         QueryMsg::SidechainBlockHash {} => {
             to_json_binary(&query_sidechain_block_hash(deps.storage)?)

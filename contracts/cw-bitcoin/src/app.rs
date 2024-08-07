@@ -413,7 +413,6 @@ impl Bitcoin {
         script_pubkey: Adapter<Script>,
         mut amount: Uint128,
     ) -> ContractResult<()> {
-        println!("Xin chao minh dang");
         let config = self.config(store)?;
         if script_pubkey.len() as u64 > config.max_withdrawal_script_length {
             return Err(ContractError::App(
