@@ -777,6 +777,8 @@ dependencies = [
  "derive_more",
  "futures",
  "libsecp256k1-core",
+ "serde",
+ "serde_json",
  "sha2 0.10.8",
  "thiserror",
  "token-bindings",

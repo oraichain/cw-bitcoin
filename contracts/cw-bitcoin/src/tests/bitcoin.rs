@@ -89,7 +89,7 @@ fn relay_height_validity() -> ContractResult<()> {
             Dest::Address(Addr::unchecked("")),
         )
     };
-
+    
     assert_eq!(
         try_relay(h + 100).unwrap_err().to_string(),
         "App Error: Invalid bitcoin block height",
