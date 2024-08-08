@@ -89,7 +89,7 @@ fn relay_height_validity() -> ContractResult<()> {
             Dest::Address(Addr::unchecked("")),
         )
     };
-
+    
     assert_eq!(
         try_relay(h + 100).unwrap_err().to_string(),
         "App Error: Invalid bitcoin block height",
@@ -210,8 +210,6 @@ fn check_change_rates() -> ContractResult<()> {
         Ok(())
     };
     let sign_cp = |deps: DepsMut, btc_height| -> ContractResult<()> {
-        sign_batch(deps.api, deps.storage, btc_height)?;
-        sign_batch(deps.api, deps.storage, btc_height)?;
         if btc
             .borrow()
             .checkpoints
@@ -225,7 +223,7 @@ fn check_change_rates() -> ContractResult<()> {
     };
     let maybe_step = |env: Env, store: &mut dyn Storage| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
-        btc.begin_block_step(env, store, vec![].into_iter(), vec![1, 2, 3])?;
+        btc.begin_block_step(env, store, vec![1, 2, 3])?;
         Ok(())
     };
 
@@ -426,8 +424,6 @@ fn test_take_pending() -> ContractResult<()> {
         Ok(())
     };
     let sign_cp = |deps: DepsMut, btc_height| -> ContractResult<()> {
-        sign_batch(deps.api, deps.storage, btc_height)?;
-        sign_batch(deps.api, deps.storage, btc_height)?;
         if btc.borrow().checkpoints.signing(deps.storage)?.is_some() {
             sign_batch(deps.api, deps.storage, btc_height)?;
         }
@@ -446,14 +442,14 @@ fn test_take_pending() -> ContractResult<()> {
 
     let take_pending = |store: &mut dyn Storage| -> ContractResult<_> {
         let mut btc = btc.borrow_mut();
-        let pending = btc.take_pending(store)?;
+        let pending = btc.take_pending_completed(store)?;
         Ok(pending)
     };
 
     let maybe_step = |env: Env, store: &mut dyn Storage| -> ContractResult<()> {
         let mut btc = btc.borrow_mut();
 
-        btc.begin_block_step(env, store, vec![].into_iter(), vec![1, 2, 3])?;
+        btc.begin_block_step(env, store, vec![1, 2, 3])?;
 
         Ok(())
     };
@@ -565,9 +561,10 @@ fn test_take_pending() -> ContractResult<()> {
     let first_unhandled_confirmed_cp_index =
         FIRST_UNHANDLED_CONFIRMED_INDEX.load(deps.as_ref().storage)?;
     assert_eq!(first_unhandled_confirmed_cp_index, 2);
-    assert_eq!(cp_dests.len(), 2);
-    assert_eq!(cp_dests[0].len(), 2);
-    assert_eq!(cp_dests[1].len(), 1);
+    assert_eq!(cp_dests.len(), 3);
+    assert_eq!(cp_dests[0].len(), 2); // cp_dest confirmed
+    assert_eq!(cp_dests[1].len(), 1); // cp_dest confirmed
+    assert_eq!(cp_dests[2].len(), 0); // cp_dest completed
     assert_eq!(
         cp_dests[0][0].0,
         Dest::Ibc(IbcDest {

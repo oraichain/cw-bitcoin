@@ -1,17 +1,16 @@
 use crate::adapter::Adapter;
 use crate::checkpoint::Checkpoint;
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
-use crate::interface::{Accounts, BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
+use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
-    get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX,
-    RECOVERY_SCRIPTS, SIGNERS, SIG_KEYS,
+    get_full_btc_denom, get_validators, BITCOIN_CONFIG, CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, SIG_KEYS, VALIDATORS, XPUBS,
 };
 use crate::threshold_sig;
 
 use super::checkpoint::Input;
 use super::recovery::{RecoveryTxInput, RecoveryTxs};
-use super::threshold_sig::Signature;
 
 use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
@@ -20,7 +19,7 @@ use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Api, Coin, Env, Order, Storage, Uint128};
+use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -58,10 +57,6 @@ pub struct Bitcoin {
     /// and pay out requested withdrawals.    
     pub checkpoints: CheckpointQueue, // CHECKPOINTS
 
-    /// TODO: remove this, for flow withdrawing money we don't need to use this when using factory module
-    /// The map of nBTC accounts, which hold the nBTC balances of users.
-    pub accounts: Accounts, // ?
-
     /// The public keys declared by signatories, which are used to sign Bitcoin
     /// transactions.
     // TODO: store recovery script data in account struct
@@ -87,7 +82,6 @@ impl Bitcoin {
             headers: HeaderQueue::default(),
             checkpoints: CheckpointQueue::default(),
             processed_outpoints: OutpointSet::default(),
-            accounts: Accounts::default(),
             signatory_keys: SignatoryKeys::default(),
             reward_pool: Coin::default(),
             // fee_pool: 0,
@@ -154,40 +148,6 @@ impl Bitcoin {
             .insert(store, consensus_key, signatory_key)?;
 
         Ok(())
-    }
-
-    /// Called by users to set their recovery script, which is their desired
-    /// destination paid out to in the emergency disbursal process if the the
-    /// account has sufficient balance.    
-    pub fn set_recovery_script(
-        &mut self,
-        store: &mut dyn Storage,
-        signer: Addr,
-        signatory_script: Adapter<Script>,
-    ) -> ContractResult<()> {
-        let config = self.config(store)?;
-        if signatory_script.len() as u64 > config.max_withdrawal_script_length {
-            return Err(ContractError::App(
-                "Script exceeds maximum length".to_string(),
-            ));
-        }
-
-        RECOVERY_SCRIPTS.save(store, signer.as_str(), &signatory_script)?;
-
-        Ok(())
-    }
-
-    /// Returns `true` if the next call to `self.checkpoints.maybe_step()` will
-    /// push a new checkpoint (along with advancing the current `Building`
-    /// checkpoint to `Signing`). Returns `false` otherwise.    
-    pub fn should_push_checkpoint(
-        &mut self,
-        env: Env,
-        store: &dyn Storage,
-    ) -> ContractResult<bool> {
-        self.checkpoints
-            .should_push(env, store, &[0; 32], self.headers.height(store)?)
-        // TODO: we shouldn't need this slice, commitment should be fixed-length
     }
 
     pub fn calc_minimum_deposit_fees(
@@ -287,8 +247,9 @@ impl Bitcoin {
         let sigset = checkpoint.sigset.clone();
 
         let dest_bytes = dest.commitment_bytes()?;
-        let expected_script =
-            sigset.output_script(&dest_bytes, self.checkpoints.config(store).sigset_threshold)?;
+        let threshold = self.checkpoints.config(store).sigset_threshold;
+
+        let expected_script = sigset.output_script(&dest_bytes, threshold)?;
         if output.script_pubkey != expected_script {
             return Err(ContractError::App(
                 "Output script does not match signature set".to_string(),
@@ -345,8 +306,9 @@ impl Bitcoin {
 
         // note: we only mint nbtc when it is send to destination
         let mint_amount = (output.value * config.units_per_sat).into();
+        let denom = get_full_btc_denom(store)?;
         let mut nbtc = Coin {
-            denom: BTC_NATIVE_TOKEN_DENOM.to_string(),
+            denom,
             amount: mint_amount,
         };
         let fee_amount = self.calc_minimum_deposit_fees(store, input_size, checkpoint.fee_rate)?;
@@ -373,9 +335,7 @@ impl Bitcoin {
         // let deposit_fee = nbtc.take(calc_deposit_fee(nbtc.amount.into()))?;
         // self.give_rewards(deposit_fee)?;
 
-        self.checkpoints
-            .building(store)?
-            .insert_pending(dest, nbtc)?;
+        building_mut.insert_pending(dest, nbtc)?;
 
         let index = self.checkpoints.index(store);
         self.checkpoints.set(store, index, &building_mut)?;
@@ -445,20 +405,6 @@ impl Bitcoin {
         Ok(())
     }
 
-    /// Initiates a withdrawal, adding an output to the current `Building`
-    /// checkpoint to be paid out once the checkpoint is fully signed.
-    pub fn withdraw(
-        &mut self,
-        store: &mut dyn Storage,
-        signer: Addr,
-        script_pubkey: Adapter<Script>,
-        amount: Uint128,
-    ) -> ContractResult<()> {
-        let coin = self.accounts.withdraw(signer, amount)?; // ?
-
-        self.add_withdrawal(store, script_pubkey, coin.amount)
-    }
-
     /// Adds an output to the current `Building` checkpoint to be paid out once
     /// the checkpoint is fully signed.
     pub fn add_withdrawal(
@@ -515,52 +461,13 @@ impl Bitcoin {
         let building_checkpoint_batch = &mut checkpoint.batches[BatchType::Checkpoint];
         let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
         checkpoint_tx.output.push(Adapter::new(output));
+        println!("Checkpoint tx output: {:?}", checkpoint_tx.output);
 
         let index = self.checkpoints.index(store);
         self.checkpoints.set(store, index, &checkpoint)?;
         // TODO: push to excess if full
 
         Ok(())
-    }
-
-    /// Transfers nBTC to another account.    
-    pub fn transfer(
-        &mut self,
-        store: &mut dyn Storage,
-        signer: Addr,
-        to: Addr,
-        amount: Uint128,
-    ) -> ContractResult<()> {
-        // let transfer_fee = self
-        //     .accounts
-        //     .withdraw(signer, self.config.transfer_fee.into())?;
-        // self.give_rewards(transfer_fee)?;
-
-        let dest = Dest::Address(to);
-        let coins = self.accounts.withdraw(signer, amount)?; // ?
-        let mut checkpoint = self.checkpoints.building(store)?;
-
-        checkpoint.insert_pending(dest, coins)?;
-
-        let index = self.checkpoints.index(store);
-        self.checkpoints.set(store, index, &checkpoint)?;
-
-        Ok(())
-    }
-
-    /// Called by signatories to submit their signatures for the current
-    /// `Signing` checkpoint.    
-    pub fn sign(
-        &mut self,
-        api: &dyn Api,
-        store: &mut dyn Storage,
-        xpub: &Xpub,
-        sigs: Vec<Signature>,
-        cp_index: u32,
-    ) -> ContractResult<()> {
-        let btc_height = self.headers.height(store)?;
-        self.checkpoints
-            .sign(api, store, xpub, sigs, cp_index, btc_height)
     }
 
     /// The amount of BTC in the reserve output of the most recent fully-signed
@@ -665,7 +572,6 @@ impl Bitcoin {
         &mut self,
         env: Env,
         store: &mut dyn Storage,
-        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         timestamping_commitment: Vec<u8>,
     ) -> ContractResult<Vec<ConsensusKey>> {
         let config = self.config(store)?;
@@ -691,8 +597,6 @@ impl Bitcoin {
         let pushed = self.checkpoints.maybe_step(
             env,
             store,
-            &self.accounts, // ?
-            external_outputs,
             btc_height,
             !reached_capacity_limit,
             timestamping_commitment,
@@ -757,13 +661,31 @@ impl Bitcoin {
         Ok(offline_signers)
     }
 
+    pub fn punish_validator(
+        &mut self,
+        store: &mut dyn Storage,
+        cons_key: &ConsensusKey,
+        addr: String,
+    ) -> ContractResult<()> {
+        VALIDATORS.remove(store, cons_key);
+        SIGNERS.remove(store, &addr);
+        let xpub = SIG_KEYS.may_load(store, cons_key)?;
+        match xpub {
+            Some(xpub) => {
+                XPUBS.remove(store, &xpub.key.encode());
+                SIG_KEYS.remove(store, cons_key);
+            }
+            None => {}
+        }
+        Ok(())
+    }
     /// Takes the pending nBTC transfers from the most recent fully-signed
     /// checkpoint, leaving the vector empty after calling.
     ///
     /// This should be used to process the pending transfers, crediting each of
     /// them now that the checkpoint has been fully signed.
     #[allow(clippy::type_complexity)]
-    pub fn take_pending(
+    pub fn take_pending_confirmed(
         &mut self,
         store: &mut dyn Storage,
     ) -> ContractResult<Vec<Vec<(Dest, Coin)>>> {
@@ -799,6 +721,8 @@ impl Bitcoin {
         &mut self,
         store: &mut dyn Storage,
     ) -> ContractResult<Vec<Vec<(Dest, Coin)>>> {
+        let confirmed_dests = self.take_pending_confirmed(store)?;
+
         let last_completed_index = match self.checkpoints.last_completed_index(store) {
             Err(err) => {
                 if let ContractError::App(err_str) = &err {
@@ -812,6 +736,7 @@ impl Bitcoin {
         };
 
         let confirmed_index = self.checkpoints.confirmed_index(store).unwrap_or_default();
+
         let mut completed_dests = vec![];
         for checkpoint_index in confirmed_index..=last_completed_index {
             let mut checkpoint = self.checkpoints.get(store, checkpoint_index)?;
@@ -819,7 +744,11 @@ impl Bitcoin {
             checkpoint.pending = vec![]; // clear pointer
             self.checkpoints.set(store, checkpoint_index, &checkpoint)?;
         }
-        Ok(completed_dests)
+
+        Ok(confirmed_dests
+            .into_iter()
+            .chain(completed_dests.into_iter())
+            .collect())
     }
 
     pub fn give_miner_fee(

@@ -160,7 +160,6 @@ impl ThresholdSig {
             total_vp += signatory.voting_power;
         }
 
-        // TODO: get threshold ratio from somewhere else
         ts.threshold =
             ((total_vp as u128) * SIGSET_THRESHOLD.0 as u128 / SIGSET_THRESHOLD.1 as u128) as u64;
 

@@ -2,7 +2,6 @@
 use cosmwasm_std::entry_point;
 
 use crate::{
-    app::Bitcoin,
     entrypoints::*,
     error::ContractError,
     interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
@@ -36,6 +35,7 @@ pub fn instantiate(
         &Config {
             owner: info.sender,
             token_factory_addr: msg.token_factory_addr,
+            bridge_wasm_addr: msg.bridge_wasm_addr,
         },
     )?;
 
@@ -74,14 +74,23 @@ pub fn execute(
             sigset_index,
             dest,
         ),
+        ExecuteMsg::RelayCheckpoint {
+            btc_height,
+            btc_proof,
+            cp_index,
+        } => relay_checkpoint(deps.storage, btc_height, btc_proof, cp_index),
         ExecuteMsg::WithdrawToBitcoin { script_pubkey } => {
             withdraw_to_bitcoin(deps.storage, info, env, script_pubkey)
         }
         ExecuteMsg::RelayHeaders { headers } => relay_headers(deps.storage, headers),
-        ExecuteMsg::UpdateHeaderConfig { config } => update_header_config(deps.storage, config),
-        ExecuteMsg::UpdateBitcoinConfig { config } => update_bitcoin_config(deps.storage, config),
+        ExecuteMsg::UpdateHeaderConfig { config } => {
+            update_header_config(deps.storage, info, config)
+        }
+        ExecuteMsg::UpdateBitcoinConfig { config } => {
+            update_bitcoin_config(deps.storage, info, config)
+        }
         ExecuteMsg::UpdateCheckpointConfig { config } => {
-            update_checkpoint_config(deps.storage, config)
+            update_checkpoint_config(deps.storage, info, config)
         }
         ExecuteMsg::SubmitCheckpointSignature {
             xpub,
@@ -106,66 +115,15 @@ pub fn execute(
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }
-        ExecuteMsg::SetRecoveryScript { signatory_script } => {
-            set_recovery_script(deps.storage, info, signatory_script)
-        }
+        #[cfg(test)]
+        ExecuteMsg::TriggerBeginBlock { hash } => clock_end_block(&env, deps.storage, hash),
     }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
-        SudoMsg::ClockEndBlock { hash } => {
-            let mut btc = Bitcoin::default();
-            let storage = deps.storage;
-
-            let pending_nbtc_transfers = btc.take_pending_completed(storage)?;
-
-            let config = CONFIG.load(storage)?;
-            let token_factory = config.token_factory_addr;
-
-            let mut msgs = vec![];
-            for pending in pending_nbtc_transfers {
-                for (dest, coin) in pending {
-                    // TODO: if dest is IBC packet, then forward to ibc bridge wasm
-                    msgs.push(WasmMsg::Execute {
-                        contract_addr: token_factory.to_string(),
-                        msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                            denom: coin.denom.to_owned(),
-                            amount: coin.amount,
-                            mint_to_address: dest.to_source_addr(),
-                        })?,
-                        funds: vec![],
-                    });
-                }
-            }
-
-            let external_outputs: Vec<bitcoin::TxOut> =
-                if btc.should_push_checkpoint(env.clone(), storage)? {
-                    // TODO: build output
-                    vec![]
-                    // self.cosmos
-                    //     .build_outputs(&self.ibc, btc.checkpoints.index)?
-                } else {
-                    vec![]
-                };
-
-            let offline_signers = btc.begin_block_step(
-                env,
-                storage,
-                external_outputs.into_iter().map(Ok),
-                hash.to_vec(),
-            )?;
-
-            for cons_key in &offline_signers {
-                let (_, address) = VALIDATORS.load(storage, cons_key)?;
-                // punish_downtime(address)?;
-                #[cfg(debug_assertions)]
-                println!("need punish downtime for {}", address);
-            }
-
-            Ok(Response::new())
-        }
+        SudoMsg::ClockEndBlock { hash } => clock_end_block(&env, deps.storage, hash),
     }
 }
 
@@ -178,6 +136,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawalFees { address, index } => {
             to_json_binary(&query_withdrawal_fees(deps.storage, address, index)?)
         }
+        QueryMsg::CompletedCheckpointTxs { limit } => {
+            to_json_binary(&query_complete_checkpoint_txs(deps.storage, limit)?)
+        }
+        QueryMsg::SignedRecoveryTxs {} => to_json_binary(&query_signed_recovery_txs(deps.storage)?),
         QueryMsg::HeaderHeight {} => to_json_binary(&query_header_height(deps.storage)?),
         QueryMsg::SidechainBlockHash {} => {
             to_json_binary(&query_sidechain_block_hash(deps.storage)?)
@@ -194,11 +156,16 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             xpub,
             checkpoint_index,
         } => to_json_binary(&query_signing_txs_at_checkpoint_index(
-            deps.querier,
             deps.storage,
             xpub,
             checkpoint_index,
         )?),
+        QueryMsg::CompletedIndex {} => to_json_binary(&query_completed_index(deps.storage)?),
+        QueryMsg::BuildingIndex {} => to_json_binary(&query_building_index(deps.storage)?),
+        QueryMsg::ConfirmedIndex {} => to_json_binary(&query_comfirmed_index(deps.storage)?),
+        QueryMsg::UnhandledConfirmedIndex {} => {
+            to_json_binary(&query_first_unconfirmed_index(deps.storage)?)
+        }
     }
 }
 

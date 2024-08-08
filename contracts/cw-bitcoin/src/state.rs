@@ -1,4 +1,4 @@
-use bitcoin::{util::uint::Uint256, Script};
+use bitcoin::util::uint::Uint256;
 use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
 
@@ -21,12 +21,6 @@ pub const CONFIG: Item<Config> = Item::new("config");
 pub const CHECKPOINT_CONFIG: Item<CheckpointConfig> = Item::new("checkpoint_config");
 pub const HEADER_CONFIG: Item<HeaderConfig> = Item::new("header");
 pub const BITCOIN_CONFIG: Item<BitcoinConfig> = Item::new("bitcoin_config");
-
-/// The recovery scripts for nBTC account holders, which are users' desired
-/// destinations for BTC to be paid out to in the emergency disbursal
-/// process if the network is halted.
-/// Mapping validator Address => bitcoin::Script
-pub const RECOVERY_SCRIPTS: Map<&str, Adapter<bitcoin::Script>> = Map::new("recovery_scripts");
 
 /// Mapping validator ConsensusKey => (power, Address)
 pub const VALIDATORS: Map<&ConsensusKey, (u64, String)> = Map::new("validators");
@@ -74,13 +68,6 @@ pub const CONFIRMED_INDEX: Item<u32> = Item::new("confirmed_index");
 pub const FIRST_UNHANDLED_CONFIRMED_INDEX: Item<u32> = Item::new("first_unhandled_confirmed_index");
 /// Header current work
 pub const CURRENT_WORK: Item<Adapter<Uint256>> = Item::new("current_work");
-
-pub fn to_output_script(store: &dyn Storage, dest: &str) -> ContractResult<Option<Script>> {
-    Ok(RECOVERY_SCRIPTS
-        .load(store, dest)
-        .ok()
-        .map(|script| script.into_inner()))
-}
 
 pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
     VALIDATORS

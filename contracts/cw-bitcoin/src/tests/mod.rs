@@ -1,7 +1,7 @@
 mod bitcoin;
 mod checkpoint;
 mod header;
-mod helper;
+pub mod helper;
 mod relay_deposit;
 mod relay_headers;
 mod signatory;
