@@ -21,7 +21,6 @@ use bitcoin::{
 };
 use bitcoin_script::bitcoin_script as script;
 use derive_more::Deref;
-use ed::Encode;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
@@ -68,17 +67,21 @@ impl SignatorySet {
         script: &bitcoin::Script,
         threshold_ratio: (u64, u64),
     ) -> ContractResult<(Self, Vec<u8>)> {
-        trait Iter<'a> = Iterator<
-            Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-        >;
-
-        fn take_instruction<'a>(ins: &mut impl Iter<'a>) -> ContractResult<Instruction<'a>> {
+        fn take_instruction<'a>(
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
+        ) -> ContractResult<Instruction<'a>> {
             ins.next()
                 .ok_or_else(|| ContractError::App("Unexpected end of script".into()))?
                 .map_err(|_| ContractError::App("Failed to read script".into()))
         }
 
-        fn take_bytes<'a>(ins: &mut impl Iter<'a>) -> ContractResult<&'a [u8]> {
+        fn take_bytes<'a>(
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
+        ) -> ContractResult<&'a [u8]> {
             let instruction = take_instruction(ins)?;
 
             let Instruction::PushBytes(bytes) = instruction else {
@@ -88,23 +91,33 @@ impl SignatorySet {
             Ok(bytes)
         }
 
-        fn take_key<'a>(ins: &mut impl Iter<'a>) -> ContractResult<Pubkey> {
+        fn take_key<'a>(
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
+        ) -> ContractResult<Pubkey> {
             let bytes = take_bytes(ins)?;
 
             if bytes.len() != 33 {
                 return Err(ContractError::App("Expected 33 bytes".into()));
             }
 
-            Ok(Pubkey::try_from_slice(bytes)?)
+            Pubkey::try_from_slice(bytes)
         }
 
-        fn take_number<'a>(ins: &mut impl Iter<'a>) -> ContractResult<i64> {
+        fn take_number<'a>(
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
+        ) -> ContractResult<i64> {
             let bytes = take_bytes(ins)?;
             read_scriptint(bytes).map_err(|_| ContractError::App("Failed to read scriptint".into()))
         }
 
         fn take_op<'a>(
-            ins: &mut impl Iter<'a>,
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
             expected_op: opcodes::All,
         ) -> ContractResult<opcodes::All> {
             let instruction = take_instruction(ins)?;
@@ -122,7 +135,11 @@ impl SignatorySet {
             Ok(op)
         }
 
-        fn take_first_signatory<'a>(ins: &mut impl Iter<'a>) -> ContractResult<Signatory> {
+        fn take_first_signatory<'a>(
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
+        ) -> ContractResult<Signatory> {
             let pubkey = take_key(ins)?;
             take_op(ins, OP_CHECKSIG)?;
             take_op(ins, OP_IF)?;
@@ -137,7 +154,11 @@ impl SignatorySet {
             })
         }
 
-        fn take_nth_signatory<'a>(ins: &mut impl Iter<'a>) -> ContractResult<Signatory> {
+        fn take_nth_signatory<'a>(
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
+        ) -> ContractResult<Signatory> {
             take_op(ins, OP_SWAP)?;
             let pubkey = take_key(ins)?;
             take_op(ins, OP_CHECKSIG)?;
@@ -152,13 +173,21 @@ impl SignatorySet {
             })
         }
 
-        fn take_threshold<'a>(ins: &mut impl Iter<'a>) -> ContractResult<u64> {
+        fn take_threshold<'a>(
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
+        ) -> ContractResult<u64> {
             let threshold = take_number(ins)?;
             take_op(ins, OP_GREATERTHAN)?;
             Ok(threshold as u64)
         }
 
-        fn take_commitment<'a>(ins: &mut impl Iter<'a>) -> ContractResult<&'a [u8]> {
+        fn take_commitment<'a>(
+            ins: &mut impl Iterator<
+                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
+            >,
+        ) -> ContractResult<&'a [u8]> {
             let bytes = take_bytes(ins)?;
             take_op(ins, OP_DROP)?;
             Ok(bytes)
@@ -344,11 +373,10 @@ impl SignatorySet {
         bytes.extend(&script.into_bytes());
 
         // Depositor data commitment
-        let data = &dest.encode()?[..];
         // Add a commitment of arbitrary data so that deposits can be tied to a
         // specific destination, then remove it from the stack so that the final
         // value on the stack is the threshold check result.
-        let script = script!(<data> OP_DROP);
+        let script = script!(<dest> OP_DROP);
         bytes.extend(&script.into_bytes());
 
         Ok(bytes.into())

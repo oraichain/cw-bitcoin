@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-#![feature(trait_alias)]
 
 extern crate alloc;
 extern crate paste;

@@ -1,6 +1,5 @@
-#![feature(trait_alias)]
+// #![feature(trait_alias)]
 
-mod adapter;
 mod app;
 mod checkpoint;
 mod constants;
@@ -10,6 +9,7 @@ mod header;
 mod interface;
 pub mod msg;
 
+mod adapter;
 mod outpoint_set;
 mod recovery;
 mod signatory;
@@ -20,3 +20,6 @@ pub mod contract;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub mod integration_tests;

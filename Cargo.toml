@@ -4,46 +4,50 @@ resolver = '2'
 members = ["contracts/*", "wasm"]
 
 [workspace.package]
-version = "0.1.0"
 authors = ["Oraichain Labs"]
+documentation = "https://github.com/oraichain/bitcoin-bridge-cw.git"
 edition = "2021"
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "contract.wasm",
+  "hash.txt",
+]
+homepage = "https://orai.io"
 license = "MIT"
 repository = "https://github.com/oraichain/bitcoin-bridge-cw.git"
-homepage = "https://orai.io"
-documentation = "https://github.com/oraichain/bitcoin-bridge-cw.git"
-exclude = [
-    # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
-    "contract.wasm",
-    "hash.txt",
-]
+version = "0.1.0"
 
 [workspace.dependencies]
-cosmwasm-std = { version = "=1.2" }
-cosmwasm-schema = { version = "=1.2" }
-cosmwasm-storage = { version = "=1.2" }
-cosmwasm-vm = { version = "=1.2" }
-bitcoin-script = "0.1.3"
-bitcoin = { version = "0.29.2" }
-thiserror = "1.0.26"
-
-cw2 = { version = "1.0.1" }
-cw20 = { version = "1.0.1" }
-cw20-base = { version = "1.0.1" }
-cw-storage-plus = { version = "1.0.1" }
-cw-multi-test = "0.16.6"
-cw-utils = "0.16.0"
-ed = { git = "https://github.com/nomic-io/ed", rev = "9c0e206ffdb59dacb90f083e004e8080713e6ad8" }
+bitcoin = {version = "0.29.2"}
+bitcoin-script = {git = "https://github.com/oraichain/rust-bitcoin-script.git"}
+bitcoincore-rpc-async = {package = "bitcoincore-rpc-async2", version = "4.0.2"}
+bitcoind = {version = "0.27.0", features = ["22_0"]}
+cosmwasm-schema = {version = "1.5"}
+cosmwasm-std = {version = "1.5"}
+cosmwasm-storage = {version = "1.5"}
+cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "ed58567"}
+cosmwasm-vm = {version = "1.5"}
+cw-storage-plus = {version = "1.0.1"}
+cw2 = {version = "1.0.1"}
+cw20 = {version = "1.0.1"}
+cw20-base = {version = "1.0.1"}
 derive_more = "0.99.17"
-
+futures = "0.3"
+serde = "1.0.133"
+serde_json = "1.0.74"
 sha2 = "0.10.6"
+thiserror = "1.0.26"
+token-bindings = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576"}
+tokenfactory = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576", features = ["library"]}
+tokio = {version = "1.14.0", features = ["full"]}
 
 [profile.release]
-opt-level = 3
+codegen-units = 1
 debug = false
 debug-assertions = false
-codegen-units = 1
 incremental = false
-rpath = false
 lto = true
+opt-level = 'z'
 overflow-checks = true
 panic = 'abort'
+rpath = false

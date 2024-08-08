@@ -4,9 +4,7 @@ use bitcoin::hashes::sha256d::Hash;
 use bitcoin::BlockHash;
 use bitcoin::{hash_types::TxMerkleNode, BlockHeader};
 use chrono::{TimeZone, Utc};
-use cosmwasm_std::Binary;
-use cosmwasm_std::{from_binary, testing::mock_dependencies, to_binary};
-use serial_test::serial;
+use cosmwasm_std::{from_json, testing::mock_dependencies, to_json_binary, Binary};
 
 use crate::adapter::Adapter;
 use crate::header::{HeaderQueue, WrappedHeader};
@@ -32,8 +30,8 @@ fn primitive_adapter_encode_decode() {
     };
 
     let adapter = Adapter::new(header);
-    let encoded_adapter = to_binary(&adapter).unwrap();
-    let decoded_adapter: Adapter<BlockHeader> = from_binary(&encoded_adapter).unwrap();
+    let encoded_adapter = to_json_binary(&adapter).unwrap();
+    let decoded_adapter: Adapter<BlockHeader> = from_json(&encoded_adapter).unwrap();
 
     assert_eq!(*decoded_adapter, header);
 
@@ -46,7 +44,6 @@ fn primitive_adapter_encode_decode() {
 }
 
 #[test]
-#[serial]
 fn add_multiple() {
     let mut deps = mock_dependencies();
 
@@ -213,7 +210,7 @@ fn add_multiple() {
         .push_back(deps.as_mut().storage, &test_config.work_header())
         .unwrap();
 
-    let mut q = HeaderQueue::new(test_config.clone());
+    let mut q = HeaderQueue::default();
     q.configure(deps.as_mut().storage, test_config).unwrap();
     q.add(deps.as_mut().storage, header_list.into()).unwrap();
 }
@@ -277,7 +274,7 @@ fn add_into_iterator() {
 
     let adapter = Adapter::new(header);
     let header_list = [WrappedHeader::new(adapter, 43)];
-    let mut q = HeaderQueue::new(test_config.clone());
+    let mut q = HeaderQueue::default();
     q.configure(deps.as_mut().storage, test_config).unwrap();
     q.add_into_iter(deps.as_mut().storage, header_list).unwrap();
 }
@@ -341,7 +338,7 @@ fn add_wrong_bits_non_retarget() {
 
     let adapter = Adapter::new(header);
     let header_list = [WrappedHeader::new(adapter, 43)];
-    let mut q = HeaderQueue::new(test_config.clone());
+    let mut q = HeaderQueue::default();
     q.configure(deps.as_mut().storage, test_config).unwrap();
     q.add_into_iter(deps.as_mut().storage, header_list).unwrap();
 }

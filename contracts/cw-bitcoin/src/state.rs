@@ -1,4 +1,4 @@
-use bitcoin::Script;
+use bitcoin::util::uint::Uint256;
 use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
 
@@ -6,6 +6,7 @@ use crate::{
     adapter::Adapter,
     app::ConsensusKey,
     checkpoint::Checkpoint,
+    constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::WorkHeader,
     interface::{
@@ -21,13 +22,8 @@ pub const CHECKPOINT_CONFIG: Item<CheckpointConfig> = Item::new("checkpoint_conf
 pub const HEADER_CONFIG: Item<HeaderConfig> = Item::new("header");
 pub const BITCOIN_CONFIG: Item<BitcoinConfig> = Item::new("bitcoin_config");
 
-/// The recovery scripts for nBTC account holders, which are users' desired
-/// destinations for BTC to be paid out to in the emergency disbursal
-/// process if the network is halted.
-/// Mapping validator Address => bitcoin::Script
-pub const RECOVERY_SCRIPTS: Map<&str, Adapter<bitcoin::Script>> = Map::new("recovery_scripts");
-
-pub const VALIDATORS: Map<&ConsensusKey, u64> = Map::new("validators");
+/// Mapping validator ConsensusKey => (power, Address)
+pub const VALIDATORS: Map<&ConsensusKey, (u64, String)> = Map::new("validators");
 
 /// Mapping validator Address => ConsensusKey
 pub const SIGNERS: Map<&str, ConsensusKey> = Map::new("signers");
@@ -61,24 +57,24 @@ pub const EXPIRATION_QUEUE: Map<(u64, &str), ()> = Map::new("expiration_queue");
 /// A set of outpoints.
 pub const OUTPOINTS: Map<&str, ()> = Map::new("outpoints");
 
-pub const CHECKPOINTS: DequeExtension<Checkpoint> = DequeExtension::new("checkpoints");
+pub const FEE_POOL: Item<i64> = Item::new("fee_pool");
 
-pub fn to_output_script(store: &dyn Storage, dest: &str) -> ContractResult<Option<Script>> {
-    Ok(RECOVERY_SCRIPTS
-        .load(store, dest)
-        .ok()
-        .map(|script| script.into_inner()))
-}
+pub const CHECKPOINTS: DequeExtension<Checkpoint> = DequeExtension::new("checkpoints");
+/// Checkpoint building index
+pub const BUILDING_INDEX: Item<u32> = Item::new("building_index");
+/// Checkpoint confirmed index
+pub const CONFIRMED_INDEX: Item<u32> = Item::new("confirmed_index");
+/// Checkpoint unhandled confirmed index
+pub const FIRST_UNHANDLED_CONFIRMED_INDEX: Item<u32> = Item::new("first_unhandled_confirmed_index");
+/// Header current work
+pub const CURRENT_WORK: Item<Adapter<Uint256>> = Item::new("current_work");
 
 pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
     VALIDATORS
         .range(store, None, None, Order::Ascending)
         .map(|item| {
-            let (k, v) = item?;
-            Ok(Validator {
-                power: v,
-                pubkey: k,
-            })
+            let (k, (power, _)) = item?;
+            Ok(Validator { power, pubkey: k })
         })
         .collect()
 }
@@ -89,4 +85,10 @@ pub fn header_height(store: &dyn Storage) -> ContractResult<u32> {
         Some(inner) => Ok(inner.height()),
         None => Ok(0),
     }
+}
+
+pub fn get_full_btc_denom(store: &dyn Storage) -> ContractResult<String> {
+    let config = CONFIG.load(store)?;
+    let token_factory_addr = config.token_factory_addr;
+    Ok(format!("factory/{}/{}", token_factory_addr, BTC_NATIVE_TOKEN_DENOM).to_string())
 }

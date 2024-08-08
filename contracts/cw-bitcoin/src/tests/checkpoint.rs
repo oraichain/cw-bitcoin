@@ -6,7 +6,7 @@ use crate::{
     error::ContractResult,
     interface::CheckpointConfig,
     signatory::{Signatory, SignatorySet},
-    state::CHECKPOINTS,
+    state::{BUILDING_INDEX, CHECKPOINTS, CONFIRMED_INDEX},
     tests::helper::push_bitcoin_tx_output,
     threshold_sig::Pubkey,
 };
@@ -56,7 +56,7 @@ fn create_queue_with_status(
     let mut checkpoint_queue = CheckpointQueue::default();
     checkpoint_queue.reset(store)?;
 
-    let mut push = |status| {
+    let push = |store: &mut dyn Storage, status| {
         let cp = Checkpoint {
             status,
             fee_rate: DEFAULT_FEE_RATE,
@@ -70,16 +70,17 @@ fn create_queue_with_status(
 
         CHECKPOINTS.push_back(store, &cp).unwrap();
     };
-    checkpoint_queue.index = complete;
+
+    BUILDING_INDEX.save(store, &complete).unwrap();
 
     for _ in 0..complete {
-        push(CheckpointStatus::Complete);
+        push(store, CheckpointStatus::Complete);
     }
     if signing {
-        push(CheckpointStatus::Signing);
-        checkpoint_queue.index += 1;
+        push(store, CheckpointStatus::Signing);
+        BUILDING_INDEX.save(store, &(complete + 1))?;
     }
-    push(CheckpointStatus::Building);
+    push(store, CheckpointStatus::Building);
 
     Ok(checkpoint_queue)
 }
@@ -129,8 +130,12 @@ fn completed_oversized_limit() {
 #[test]
 fn completed_pruned() {
     let mut deps = mock_dependencies();
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
-    queue.index += 10;
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
+    let index = BUILDING_INDEX.load(deps.as_mut().storage).unwrap();
+    let _ = BUILDING_INDEX
+        .save(deps.as_mut().storage, &(index + 10))
+        .unwrap();
+
     let cp = queue.completed(deps.as_mut().storage, 2).unwrap();
     assert_eq!(cp.len(), 2);
     assert_eq!(cp[1].status, CheckpointStatus::Complete);
@@ -139,36 +144,38 @@ fn completed_pruned() {
 #[test]
 fn num_unconfirmed() {
     let mut deps = mock_dependencies();
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
-    queue.confirmed_index = Some(5);
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
+    let _ = CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
-    queue.confirmed_index = Some(5);
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
+    let _ = CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 0, false).unwrap();
-    queue.confirmed_index = None;
+    let queue = create_queue_with_status(deps.as_mut().storage, 0, false).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 0, true).unwrap();
-    queue.confirmed_index = None;
+    let queue = create_queue_with_status(deps.as_mut().storage, 0, true).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
+
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
-    queue.confirmed_index = None;
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
+
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 10);
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
-    queue.confirmed_index = None;
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 10);
 }
 
 #[test]
 fn first_unconfirmed_index() {
     let mut deps = mock_dependencies();
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
-    queue.confirmed_index = Some(5);
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
+    let _ = CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
     assert_eq!(
         queue
             .first_unconfirmed_index(deps.as_ref().storage)
@@ -176,8 +183,8 @@ fn first_unconfirmed_index() {
         Some(6)
     );
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
-    queue.confirmed_index = Some(5);
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
+    let _ = CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
     assert_eq!(
         queue
             .first_unconfirmed_index(deps.as_ref().storage)
@@ -185,8 +192,8 @@ fn first_unconfirmed_index() {
         Some(6)
     );
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 0, false).unwrap();
-    queue.confirmed_index = None;
+    let queue = create_queue_with_status(deps.as_mut().storage, 0, false).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
     assert_eq!(
         queue
             .first_unconfirmed_index(deps.as_ref().storage)
@@ -194,8 +201,8 @@ fn first_unconfirmed_index() {
         None
     );
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 0, true).unwrap();
-    queue.confirmed_index = None;
+    let queue = create_queue_with_status(deps.as_mut().storage, 0, true).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
     assert_eq!(
         queue
             .first_unconfirmed_index(deps.as_ref().storage)
@@ -203,8 +210,8 @@ fn first_unconfirmed_index() {
         None
     );
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
-    queue.confirmed_index = None;
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
     assert_eq!(
         queue
             .first_unconfirmed_index(deps.as_ref().storage)
@@ -212,8 +219,8 @@ fn first_unconfirmed_index() {
         Some(0)
     );
 
-    let mut queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
-    queue.confirmed_index = None;
+    let queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
     assert_eq!(
         queue
             .first_unconfirmed_index(deps.as_ref().storage)
@@ -255,95 +262,4 @@ fn sigset(n: u32) -> SignatorySet {
     sigset.present_vp = 100;
 
     sigset
-}
-
-#[test]
-fn backfill_basic() {
-    let mut deps = mock_dependencies();
-    let mut queue = CheckpointQueue::default();
-
-    queue.index = 10;
-    CHECKPOINTS
-        .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(7)).unwrap())
-        .unwrap();
-    CHECKPOINTS
-        .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(8)).unwrap())
-        .unwrap();
-    CHECKPOINTS
-        .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(9)).unwrap())
-        .unwrap();
-    CHECKPOINTS
-        .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(10)).unwrap())
-        .unwrap();
-
-    let backfill_data = vec![
-        sigset(8).redeem_script(&[0], (2, 3)).unwrap(),
-        sigset(7).redeem_script(&[0], (2, 3)).unwrap(),
-        sigset(6).redeem_script(&[0], (2, 3)).unwrap(),
-        sigset(5).redeem_script(&[0], (2, 3)).unwrap(),
-        sigset(4).redeem_script(&[0], (2, 3)).unwrap(),
-        sigset(3).redeem_script(&[0], (2, 3)).unwrap(),
-    ];
-    queue
-        .backfill(deps.as_mut().storage, 8, backfill_data.into_iter(), (2, 3))
-        .unwrap();
-
-    assert_eq!(queue.len(deps.as_ref().storage).unwrap(), 8);
-    assert_eq!(queue.index, 10);
-
-    assert_eq!(
-        queue
-            .get(deps.as_ref().storage, 3)
-            .unwrap()
-            .sigset
-            .redeem_script(&[0], (2, 3))
-            .unwrap(),
-        sigset(3).redeem_script(&[0], (2, 3)).unwrap(),
-    );
-
-    assert_eq!(
-        queue
-            .get(deps.as_ref().storage, 10)
-            .unwrap()
-            .sigset
-            .redeem_script(&[0], (2, 3))
-            .unwrap(),
-        sigset(10).redeem_script(&[0], (2, 3)).unwrap(),
-    );
-}
-
-#[test]
-fn backfill_with_zeroth() {
-    let mut deps = mock_dependencies();
-    let mut queue = CheckpointQueue::default();
-    queue.index = 1;
-    CHECKPOINTS
-        .push_back(deps.as_mut().storage, &Checkpoint::new(sigset(1)).unwrap())
-        .unwrap();
-
-    let backfill_data = vec![sigset(0).redeem_script(&[0], (2, 3)).unwrap()];
-    queue
-        .backfill(deps.as_mut().storage, 0, backfill_data.into_iter(), (2, 3))
-        .unwrap();
-
-    assert_eq!(queue.len(deps.as_ref().storage).unwrap(), 2);
-    assert_eq!(queue.index, 1);
-    assert_eq!(
-        queue
-            .get(deps.as_ref().storage, 0)
-            .unwrap()
-            .sigset
-            .redeem_script(&[0], (2, 3))
-            .unwrap(),
-        sigset(0).redeem_script(&[0], (2, 3)).unwrap(),
-    );
-    assert_eq!(
-        queue
-            .get(deps.as_ref().storage, 1)
-            .unwrap()
-            .sigset
-            .redeem_script(&[0], (2, 3))
-            .unwrap(),
-        sigset(1).redeem_script(&[0], (2, 3)).unwrap(),
-    );
 }
