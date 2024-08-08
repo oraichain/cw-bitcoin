@@ -25,6 +25,7 @@ bitcoind = {version = "0.27.0", features = ["22_0"]}
 cosmwasm-schema = {version = "1.5"}
 cosmwasm-std = {version = "1.5"}
 cosmwasm-storage = {version = "1.5"}
+cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "ed58567"}
 cosmwasm-vm = {version = "1.5"}
 cw-storage-plus = {version = "1.0.1"}
 cw2 = {version = "1.0.1"}
@@ -36,11 +37,9 @@ serde = "1.0.133"
 serde_json = "1.0.74"
 sha2 = "0.10.6"
 thiserror = "1.0.26"
-tokio = {version = "1.14.0", features = ["full"]}
-
-cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "ed58567"}
 token-bindings = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576"}
 tokenfactory = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576", features = ["library"]}
+tokio = {version = "1.14.0", features = ["full"]}
 
 [profile.release]
 codegen-units = 1
