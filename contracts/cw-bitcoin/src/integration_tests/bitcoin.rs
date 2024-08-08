@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -7,7 +6,7 @@ use super::utils::{
 };
 use crate::adapter::{Adapter, HashBinary};
 use crate::app::ConsensusKey;
-use crate::checkpoint::{self, BatchType, Checkpoint, CheckpointStatus};
+use crate::checkpoint::{Checkpoint, CheckpointStatus};
 use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
 use crate::header::WrappedHeader;
 use crate::interface::{BitcoinConfig, CheckpointConfig, Dest, Xpub};
@@ -231,6 +230,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         let mut bitcoin_config = BitcoinConfig::default();
         bitcoin_config.min_withdrawal_checkpoints = 1;
         bitcoin_config.max_deposit_age = max_deposit_age as u64;
+        bitcoin_config.max_offline_checkpoints = 1;
         let _ = app
             .execute(
                 owner.clone(),
@@ -450,16 +450,19 @@ async fn test_full_flow_happy_case_bitcoin() {
         ExtendedPrivKey::new_master(network, &[0]).unwrap(),
         ExtendedPrivKey::new_master(network, &[1]).unwrap(),
         ExtendedPrivKey::new_master(network, &[2]).unwrap(),
+        ExtendedPrivKey::new_master(network, &[3]).unwrap(),
     ];
     let xpubs = vec![
         ExtendedPubKey::from_priv(&secp, &xprivs[0]),
         ExtendedPubKey::from_priv(&secp, &xprivs[1]),
         ExtendedPubKey::from_priv(&secp, &xprivs[2]),
+        ExtendedPubKey::from_priv(&secp, &xprivs[3]),
     ];
-    let consensus_keys = vec![[0; 32], [1; 32], [2; 32]];
+    let consensus_keys = vec![[0; 32], [1; 32], [2; 32], [3; 32]];
     let validator_1 = Addr::unchecked("orai1Alice");
     let validator_2 = Addr::unchecked("orai1Bob");
     let validator_3 = Addr::unchecked("orai1Dave");
+    let validator_4 = Addr::unchecked("orai1Jayce");
     add_validators(
         &mut app,
         vec![
@@ -469,6 +472,15 @@ async fn test_full_flow_happy_case_bitcoin() {
         vec![(15, consensus_keys[0]), (10, consensus_keys[1])],
     )
     .unwrap();
+    // add validator 4
+    add_validators(
+        &mut app,
+        vec![validator_4.clone().to_string()],
+        vec![(1, consensus_keys[3])],
+    )
+    .unwrap();
+    set_signatory_key(&mut app, validator_4.clone(), Xpub::new(xpubs[3])).unwrap();
+
     set_signatory_key(&mut app, validator_1.clone(), Xpub::new(xpubs[0])).unwrap();
     set_signatory_key(&mut app, validator_2.clone(), Xpub::new(xpubs[1])).unwrap();
     increase_block(&mut app, Binary::from([0; 32])).unwrap(); // should increase number of hash to be unique
@@ -476,7 +488,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     add_validators(
         &mut app,
         vec![validator_3.clone().to_string()],
-        vec![(25, [3; 32])],
+        vec![(25, consensus_keys[2])],
     )
     .unwrap();
     set_signatory_key(&mut app, validator_3.clone(), Xpub::new(xpubs[2])).unwrap();
@@ -633,7 +645,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         .as_querier()
         .query_balance(&receiver, btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.amount.u128(), 119964806000000 as u128);
+    assert_eq!(balance.amount.u128(), 119953074000000 as u128);
     increase_block(&mut app, Binary::from([3; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
         .as_querier()
@@ -668,7 +680,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         .unwrap();
     assert_eq!(confirmed_cp_index, 0);
 
-    // Make sure checkpoint one have 3 validators
+    // Make sure checkpoint one have 4 validators
     let checkpoint: Checkpoint = app
         .as_querier()
         .query_wasm_smart(
@@ -676,7 +688,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             &msg::QueryMsg::CheckpointByIndex { index: 1 },
         )
         .unwrap();
-    assert_eq!(checkpoint.sigset.signatories.len(), 3);
+    assert_eq!(checkpoint.sigset.signatories.len(), 4);
 
     // [TESTCASE] Test deposit + withdraw, for covering more cases here I will add an another validator
     let withdraw_address = wallet.get_new_address(None, None).unwrap();
@@ -781,7 +793,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         .as_querier()
         .query_balance(&receiver, btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.amount.u128(), 189917880000000 as u128);
+    assert_eq!(balance.amount.u128(), 189894417000000 as u128);
 
     let mut trusted_balance = 0;
     match wallet.get_balances() {
@@ -900,7 +912,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         .as_querier()
         .query_balance(&receiver, btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.amount.u128(), 309879045000000 as u128);
+    assert_eq!(balance.amount.u128(), 309846837000000 as u128);
 
     relay_checkpoint(
         &btc_client,
@@ -920,4 +932,48 @@ async fn test_full_flow_happy_case_bitcoin() {
         )
         .unwrap();
     assert_eq!(confirmed_cp_index, 2);
+
+    // [TESTCASE] check validator 4 is punished, validate the changing in signatures length
+    increase_block(&mut app, Binary::from([8; 32])).unwrap(); // should increase number of hash to be unique
+    let checkpoint: Checkpoint = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 0 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.sigset.signatories.len(), 3);
+    assert_eq!(checkpoint.sigset.present_vp, 26);
+
+    // Here validator 3 is added
+    let checkpoint: Checkpoint = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 1 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.sigset.signatories.len(), 4);
+    assert_eq!(checkpoint.sigset.present_vp, 51);
+
+    let checkpoint: Checkpoint = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 2 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.sigset.signatories.len(), 4);
+    assert_eq!(checkpoint.sigset.present_vp, 51);
+
+    let checkpoint: Checkpoint = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 3 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.sigset.signatories.len(), 3);
+    assert_eq!(checkpoint.sigset.present_vp, 50);
+    println!("[BRAVOOO] All testcases passed!");
 }
