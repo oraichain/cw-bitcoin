@@ -16,8 +16,11 @@ fn test_relay_headers() {
         .unwrap();
     let bridge_addr = app
         .create_bridge(
-            Addr::unchecked("perfogic"),
-            &msg::InstantiateMsg { token_factory_addr },
+            Addr::unchecked("alice"),
+            &msg::InstantiateMsg {
+                token_factory_addr,
+                bridge_wasm_addr: None,
+            },
         )
         .unwrap();
 
@@ -135,8 +138,11 @@ fn test_relay_headers_2() {
         .unwrap();
     let bridge_addr = app
         .create_bridge(
-            Addr::unchecked("perfogic"),
-            &msg::InstantiateMsg { token_factory_addr },
+            Addr::unchecked("alice"),
+            &msg::InstantiateMsg {
+                token_factory_addr,
+                bridge_wasm_addr: None,
+            },
         )
         .unwrap();
 

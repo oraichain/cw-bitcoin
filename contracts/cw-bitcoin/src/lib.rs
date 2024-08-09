@@ -20,3 +20,6 @@ pub mod contract;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub mod integration_tests;

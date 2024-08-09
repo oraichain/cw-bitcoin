@@ -11,7 +11,10 @@ use crate::{
     interface::Xpub,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
-    state::{header_height, OUTPOINTS, SIG_KEYS},
+    state::{
+        header_height, BUILDING_INDEX, CONFIRMED_INDEX, FIRST_UNHANDLED_CONFIRMED_INDEX, OUTPOINTS,
+        SIG_KEYS,
+    },
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
@@ -79,7 +82,7 @@ pub fn query_last_complete_tx(store: &dyn Storage) -> ContractResult<Adapter<Tra
     Ok(last_complete_tx)
 }
 
-pub fn query_complete_txs(
+pub fn query_complete_checkpoint_txs(
     store: &dyn Storage,
     limit: u32,
 ) -> ContractResult<Vec<Adapter<Transaction>>> {
@@ -120,6 +123,18 @@ pub fn query_first_unconfirmed_index(store: &dyn Storage) -> ContractResult<Opti
     Ok(first_unconfirmed_index)
 }
 
+pub fn query_building_index(store: &dyn Storage) -> ContractResult<u32> {
+    let checkpoints = CheckpointQueue::default();
+    let building_index = checkpoints.index(store);
+    Ok(building_index)
+}
+
+pub fn query_completed_index(store: &dyn Storage) -> ContractResult<u32> {
+    let checkpoints = CheckpointQueue::default();
+    let completed_index = checkpoints.last_completed_index(store)?;
+    Ok(completed_index)
+}
+
 pub fn query_process_outpoints(store: &dyn Storage) -> ContractResult<Vec<String>> {
     // get all key of oupoints map
     let process_outpoints = OUTPOINTS
@@ -147,7 +162,6 @@ pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
 }
 
 pub fn query_signing_txs_at_checkpoint_index(
-    _querier: QuerierWrapper,
     store: &dyn Storage,
     xpub: HashBinary<Xpub>,
     cp_index: u32,

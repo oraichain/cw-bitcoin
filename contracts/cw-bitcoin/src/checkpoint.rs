@@ -9,11 +9,11 @@ use crate::{
     state::{CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX},
 };
 use crate::{
-    interface::{Accounts, BitcoinConfig, CheckpointConfig, Dest},
-    state::{to_output_script, CHECKPOINTS, RECOVERY_SCRIPTS},
+    interface::{BitcoinConfig, CheckpointConfig, Dest},
+    state::CHECKPOINTS,
 };
+use bitcoin::hashes::Hash;
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
-use bitcoin::{hashes::Hash, Script};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Api, Coin, Env, Order, QuerierWrapper, Storage};
@@ -301,21 +301,6 @@ impl BitcoinTx {
 /// checkpoint.
 #[derive(Debug)]
 pub enum BatchType {
-    /// The batch containing the "final emergency disbursal transactions".
-    ///
-    /// This batch will contain at least one and potentially many transactions,
-    /// paying out to the recipients of the emergency disbursal (e.g. recovery
-    /// wallets of nBTC holders).
-    Disbursal,
-
-    /// The batch containing the intermediate transaction.
-    ///
-    /// This batch will always contain exactly one transaction, the
-    /// "intermediate emergency disbursal transaction", which spends the reserve
-    /// output of a stuck checkpoint transaction, and pays out to inputs which
-    /// will be spent by the final emergency disbursal transactions.
-    IntermediateTx,
-
     /// The batch containing the checkpoint transaction. This batch will always
     /// contain exactly one transaction, the "checkpoint transaction".
     ///
@@ -399,9 +384,7 @@ pub struct Checkpoint {
     pub pending: Vec<(Dest, Coin)>,
 
     /// The batches of transactions in the checkpoint, to each be signed
-    /// atomically, in order. The first batch contains the "final emergency
-    /// disbursal transactions", the second batch contains the "intermediate
-    /// emergency disbursal transaction", and the third batch contains the
+    /// atomically, in order. Currently we have only one batch which is
     /// "checkpoint transaction".
     pub batches: Vec<Batch>,
 
@@ -452,13 +435,6 @@ impl Checkpoint {
             pending: vec![],
             batches: vec![],
         };
-
-        let disbursal_batch = Batch::default();
-        checkpoint.batches.push(disbursal_batch);
-
-        let mut intermediate_tx_batch = Batch::default();
-        intermediate_tx_batch.push(BitcoinTx::default());
-        checkpoint.batches.push(intermediate_tx_batch);
 
         let checkpoint_tx = BitcoinTx::default();
         let mut checkpoint_batch = Batch::default();
@@ -662,27 +638,6 @@ impl Checkpoint {
         self.signed_batches() == self.batches.len()
     }
 
-    /// The emergency disbursal transactions for checkpoint.
-    ///
-    /// The first element of the returned vector is the intermediate
-    /// transaction, and the remaining elements are the final transactions.
-    pub fn emergency_disbursal_txs(&self) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
-        let mut txs = vec![];
-
-        let intermediate_tx_batch = &self.batches[BatchType::IntermediateTx];
-        let Some(intermediate_tx) = intermediate_tx_batch.first() else {
-            return Ok(txs);
-        };
-        txs.push(Adapter::new(intermediate_tx.to_bitcoin_tx()?));
-
-        let disbursal_batch = &self.batches[BatchType::Disbursal];
-        for tx in disbursal_batch.iter() {
-            txs.push(Adapter::new(tx.to_bitcoin_tx()?));
-        }
-
-        Ok(txs)
-    }
-
     pub fn checkpoint_tx_miner_fees(&self) -> ContractResult<u64> {
         let mut fees = 0;
 
@@ -863,298 +818,6 @@ type BuildingAdvanceRes = (
 );
 
 impl BuildingCheckpoint {
-    /// Adds an output to the intermediate emergency disbursal transaction of
-    /// the checkpoint, to be spent by the given final emergency disbursal
-    /// transaction. The corresponding input is also added to the final
-    /// emergency disbursal transaction.
-    fn link_intermediate_tx(
-        &mut self,
-        tx: &mut BitcoinTx,
-        threshold: (u64, u64),
-    ) -> ContractResult<()> {
-        let sigset = self.sigset.clone();
-        let output_script = sigset.output_script(&[0u8], threshold)?;
-        let tx_value = tx.value()?;
-
-        let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
-        let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
-        let num_outputs = u32::try_from(intermediate_tx.output.len())?;
-
-        let prevout = bitcoin::OutPoint::new(intermediate_tx.txid()?, num_outputs);
-        let final_tx_input = Input::new(prevout, &sigset, &[0u8], tx_value, threshold)?;
-
-        let intermediate_tx_output = bitcoin::TxOut {
-            value: tx_value,
-            script_pubkey: output_script,
-        };
-
-        intermediate_tx.output.push(intermediate_tx_output.into());
-
-        tx.input.push(final_tx_input);
-
-        Ok(())
-    }
-
-    /// Deducts satoshis from the outputs of all emergency disbursal
-    /// transactions (the intermediate transaction and all final transactions)
-    /// to make them pay the miner fee at the given fee rate.
-    ///
-    /// Any outputs which are too small to pay their share of the required fees
-    /// will be removed.
-    ///
-    /// It is possible for this process to remove outputs from the intermediate
-    /// transaction, leaving an orphaned final transaction which spends from a
-    /// non-existent output. for simplicity the unconnected final transaction is
-    /// left in the state (it can be skipped by relayers when broadcasting the
-    /// remaining valid emergency disbursal transactions).
-    fn deduct_emergency_disbursal_fees(&mut self, fee_rate: u64) -> ContractResult<()> {
-        // TODO: Unit tests
-        // Deduct fees from intermediate emergency disbursal transaction.
-        // Let-binds the amount deducted so we can ensure to deduct the same
-        // amount from the final emergency disbursal transactions since the
-        // outputs they spend are now worth less than before.
-        let intermediate_tx_fee = {
-            let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
-            let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
-            let fee = intermediate_tx.vsize()? * fee_rate;
-            intermediate_tx.deduct_fee(fee)?;
-            fee
-        };
-
-        let intermediate_tx_batch = &self.batches[BatchType::IntermediateTx];
-        let intermediate_tx = &intermediate_tx_batch[0];
-        let intermediate_tx_id = intermediate_tx.txid()?;
-        let intermediate_tx_len = intermediate_tx.output.len() as u64;
-
-        if intermediate_tx_len == 0 {
-            #[cfg(debug_assertions)]
-            println!("Generated empty emergency disbursal");
-            return Ok(());
-        }
-
-        // Collect a list of the outputs of the intermediate emergency
-        // disbursal, so later on we can ensure there is a 1-to-1 mapping
-        // between final transactions and intermediate outputs, matched by
-        // amount.
-        let mut intermediate_tx_outputs: Vec<(usize, u64)> = intermediate_tx
-            .output
-            .iter()
-            .enumerate()
-            .map(|(i, output)| (i, output.value))
-            .collect();
-
-        // Deduct fees from final emergency disbursal transactions. Only retain
-        // transactions which have enough value to pay the fee.
-        let disbursal_batch = &mut self.batches[BatchType::Disbursal];
-        disbursal_batch.batch = disbursal_batch
-            .batch
-            .clone()
-            .into_iter()
-            .filter_map(|mut tx| {
-                // Do not retain transactions which were never linked to the
-                // intermediate tx.
-                // TODO: is this even possible?
-                let input = match tx.input.get_mut(0) {
-                    Some(input) => input,
-                    None => return None,
-                };
-
-                // Do not retain transactions which are smaller than the amount of
-                // fee applied to the intermediate tx output which they spend. If
-                // large enough, deduct the fee from the input to match what was
-                // already deducted for the intermediate tx output.
-                if input.amount < intermediate_tx_fee / intermediate_tx_len {
-                    return None;
-                }
-                input.amount -= intermediate_tx_fee / intermediate_tx_len;
-
-                // Find the first remaining output of the intermediate tx which
-                // matches the amount being spent by this final tx's input.
-                for (i, (vout, output)) in intermediate_tx_outputs.iter().enumerate() {
-                    if output == &(input.amount) {
-                        // Once found, link the final tx's input to the vout index
-                        // of the the matching output from the intermediate tx, and
-                        // remove it from the matching list.
-
-                        input.prevout = Adapter::new(bitcoin::OutPoint {
-                            txid: intermediate_tx_id,
-                            vout: *vout as u32,
-                        });
-                        intermediate_tx_outputs.remove(i);
-                        // Deduct the final tx's miner fee from its outputs,
-                        // removing any outputs which are too small to pay their
-                        // share of the fee.
-                        let tx_size = tx.vsize().unwrap();
-                        let fee = intermediate_tx_fee / intermediate_tx_len + tx_size * fee_rate;
-                        tx.deduct_fee(fee).unwrap();
-                        return Some(tx);
-                    }
-                }
-                None
-            })
-            .collect();
-        Ok(())
-    }
-
-    /// Generates the emergency disbursal transactions for the checkpoint,
-    /// populating the first and second transaction batches in the checkpoint.
-    ///
-    /// The emergency disbursal transactions are generated from a list of
-    /// outputs representing the holders of nBTC: one for every nBTC account
-    /// which has an associated recovery script, one for every pending transfer
-    /// in the checkpoint, and one for every output passed in by the consumer
-    /// via the `external_outputs` iterator.
-    #[allow(clippy::too_many_arguments)]
-    fn generate_emergency_disbursal_txs(
-        &mut self,
-        env: Env,
-        store: &mut dyn Storage,
-        nbtc_accounts: &Accounts,
-        reserve_outpoint: bitcoin::OutPoint,
-        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
-        fee_rate: u64,
-        reserve_value: u64,
-        config: &CheckpointConfig,
-    ) -> ContractResult<()> {
-        // TODO: Use tree structure instead of single-intermediate, many-final,
-        // since the intermediate tx may grow too large
-        let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
-        if intermediate_tx_batch.is_empty() {
-            return Ok(());
-        }
-
-        let sigset = self.sigset.clone();
-
-        let lock_time =
-            env.block.time.seconds() as u32 + config.emergency_disbursal_lock_time_interval;
-
-        let mut outputs = Vec::new();
-
-        // Create an output for every nBTC account with an associated
-        // recovery script.
-        for script in RECOVERY_SCRIPTS.range(store, None, None, Order::Ascending) {
-            let (address, dest_script) = script?;
-            if let Some(balance) = nbtc_accounts.balance(address) {
-                let tx_out = bitcoin::TxOut {
-                    value: (balance.amount.u128() / 1_000_000u128) as u64,
-                    script_pubkey: dest_script.clone().into_inner(),
-                };
-
-                outputs.push(Ok(tx_out))
-            }
-        }
-
-        // Create an output for every pending nBTC transfer in the checkpoint.
-        // TODO: combine pending transfer outputs into other outputs by adding to amount
-        let pending_outputs: Vec<_> = self
-            .pending
-            .iter()
-            .filter_map(|(dest, coin)| {
-                let script_pubkey = match to_output_script(store, &dest.to_source_addr()) {
-                    Err(err) => return Some(Err(err)),
-                    Ok(maybe_script) => maybe_script,
-                }?;
-                Some(Ok::<_, ContractError>(TxOut {
-                    value: (coin.amount.u128() / 1_000_000u128) as u64,
-                    script_pubkey,
-                }))
-            })
-            .collect();
-
-        // Iterate through outputs and batch them into final txs, adding
-        // outputs to the intermediate tx and linking inputs to them as we
-        // go.
-        let mut final_txs = vec![BitcoinTx::with_lock_time(lock_time)];
-        for output in outputs
-            .into_iter()
-            .chain(pending_outputs.into_iter())
-            .chain(external_outputs)
-        {
-            let output = output?;
-
-            // Skip outputs under the configured minimum amount.
-            if output.value < config.emergency_disbursal_min_tx_amt {
-                continue;
-            }
-
-            // If the last final tx is too large, create a new, empty one
-            // and add our output there instead.
-            // TODO: don't pop and repush, just get a mutable reference
-            let mut curr_tx = final_txs.pop().unwrap();
-            if curr_tx.vsize()? >= config.emergency_disbursal_max_tx_size {
-                self.link_intermediate_tx(&mut curr_tx, config.sigset_threshold)?;
-                final_txs.push(curr_tx);
-                curr_tx = BitcoinTx::with_lock_time(lock_time);
-            }
-
-            // Add output to final tx.
-            curr_tx.output.push(Adapter::new(output));
-
-            final_txs.push(curr_tx);
-        }
-
-        // We are done adding outputs, so link the last final tx to the
-        // intermediate tx.
-        let mut last_tx = final_txs.pop().unwrap();
-        self.link_intermediate_tx(&mut last_tx, config.sigset_threshold)?;
-        final_txs.push(last_tx);
-
-        // Add the reserve output as an input to the intermediate tx, and
-        // set its locktime to the desired value.
-        let tx_in = Input::new(
-            reserve_outpoint,
-            &sigset,
-            &[0u8],
-            reserve_value,
-            config.sigset_threshold,
-        )?;
-        let output_script = self.sigset.output_script(&[0u8], config.sigset_threshold)?;
-        let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
-
-        let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
-        intermediate_tx.lock_time = lock_time;
-        intermediate_tx.input.push(tx_in);
-
-        // For any excess value not accounted for by emergency disbursal
-        // outputs, add an output to the intermediate tx which pays the
-        // excess back to the signatory set. The signatory set will need to
-        // coordinate out-of-band to figure out how to deal with these
-        // unaccounted-for funds to return them to the rightful nBTC
-        // holders.
-        let intermediate_tx_out_value = intermediate_tx.value()?;
-        let excess_value = reserve_value - intermediate_tx_out_value;
-        let excess_tx_out = bitcoin::TxOut {
-            value: excess_value,
-            script_pubkey: output_script,
-        };
-        intermediate_tx.output.push(Adapter::new(excess_tx_out));
-
-        // Push the newly created final txs into the checkpoint batch to
-        // save them in the state.
-        let disbursal_batch = &mut self.batches[BatchType::Disbursal];
-        for tx in final_txs {
-            disbursal_batch.push(tx);
-        }
-
-        // Deduct Bitcoin miner fees from the intermediate tx and all final txs.
-        self.deduct_emergency_disbursal_fees(fee_rate)?;
-
-        // Populate the sighashes to be signed for each final tx's input.
-        let disbursal_batch = &mut self.batches[BatchType::Disbursal];
-        for tx in disbursal_batch.iter_mut() {
-            for j in 0..tx.input.len() {
-                tx.populate_input_sig_message(j)?;
-            }
-        }
-
-        // Populate the sighashes to be signed for the intermediate tx's input.
-        let intermediate_tx_batch = &mut self.batches[BatchType::IntermediateTx];
-        let intermediate_tx = intermediate_tx_batch.get_mut(0).unwrap();
-        intermediate_tx.populate_input_sig_message(0)?;
-
-        Ok(())
-    }
-
     /// Advances the checkpoint to the `Signing` state.
     ///
     /// This will generate the emergency disbursal transactions representing the
@@ -1167,10 +830,6 @@ impl BuildingCheckpoint {
     /// change.    
     pub fn advance(
         &mut self,
-        env: Env,
-        store: &mut dyn Storage,
-        nbtc_accounts: &Accounts,
-        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         timestamping_commitment: Vec<u8>,
         cp_fees: u64,
         config: &CheckpointConfig,
@@ -1233,22 +892,10 @@ impl BuildingCheckpoint {
             input.signatures.set_message(sighash.into_inner());
         }
 
-        // Generate the emergency disbursal transactions, spending from the
-        // reserve output.
         let reserve_outpoint = bitcoin::OutPoint {
             txid: checkpoint_tx.txid()?,
             vout: 0,
         };
-        self.generate_emergency_disbursal_txs(
-            env,
-            store,
-            nbtc_accounts,
-            reserve_outpoint,
-            external_outputs,
-            self.fee_rate,
-            reserve_value,
-            config,
-        )?;
 
         Ok((
             reserve_outpoint,
@@ -1453,21 +1100,6 @@ impl CheckpointQueue {
             .collect()
     }
 
-    /// The emergency disbursal transactions for the last completed checkpoint.
-    ///
-    /// The first element of the returned vector is the intermediate
-    /// transaction, and the remaining elements are the final transactions.
-    pub fn emergency_disbursal_txs(
-        &self,
-        store: &dyn Storage,
-    ) -> ContractResult<Vec<Adapter<bitcoin::Transaction>>> {
-        if let Some(completed) = self.completed(store, 1)?.last() {
-            completed.emergency_disbursal_txs()
-        } else {
-            Ok(vec![])
-        }
-    }
-
     /// The last complete builiding checkpoint transaction, which have the type BatchType::Checkpoint
     /// Here we have only one element in the vector, and I use vector because I don't want to throw
     /// any error if vec! is empty
@@ -1547,22 +1179,22 @@ impl CheckpointQueue {
         &mut self,
         env: Env,
         store: &mut dyn Storage,
-        nbtc_accounts: &Accounts,
-        external_outputs: impl Iterator<Item = ContractResult<bitcoin::TxOut>>,
         btc_height: u32,
         should_allow_deposits: bool,
         timestamping_commitment: Vec<u8>,
         // fee_pool: &mut i64,
         parent_config: &BitcoinConfig,
     ) -> ContractResult<bool> {
-        if !self.should_push(env.clone(), store, &timestamping_commitment, btc_height)? {
+        let is_should_push =
+            self.should_push(env.clone(), store, &timestamping_commitment, btc_height)?;
+        if !is_should_push {
             return Ok(false);
         }
 
-        if self
+        let is_not_maybe_push = self
             .maybe_push(env.clone(), store, should_allow_deposits)?
-            .is_none()
-        {
+            .is_none();
+        if is_not_maybe_push {
             return Ok(false);
         }
 
@@ -1578,15 +1210,7 @@ impl CheckpointQueue {
             let prev_fee_rate = prev.fee_rate;
             let mut building_checkpoint = BuildingCheckpoint(prev);
             let (reserve_outpoint, reserve_value, fees_paid, excess_inputs, excess_outputs) =
-                building_checkpoint.advance(
-                    env,
-                    store,
-                    nbtc_accounts,
-                    external_outputs,
-                    timestamping_commitment,
-                    cp_fees,
-                    &config,
-                )?;
+                building_checkpoint.advance(timestamping_commitment, cp_fees, &config)?;
             // update checkpoint
             self.set(store, prev_index, &building_checkpoint)?;
 
@@ -2032,35 +1656,6 @@ impl CheckpointQueue {
         let unconf_fees_paid = self.unconfirmed_fees_paid(store)?;
         let unconf_vbytes = self.unconfirmed_vbytes(store, config)?;
         Ok((unconf_vbytes * fee_rate).saturating_sub(unconf_fees_paid))
-    }
-
-    pub fn backfill(
-        &mut self,
-        store: &mut dyn Storage,
-        first_index: u32,
-        redeem_scripts: impl Iterator<Item = Script>,
-        threshold_ratio: (u64, u64),
-    ) -> ContractResult<()> {
-        let mut index = first_index + 1;
-        let create_time = CHECKPOINTS.get(store, 0)?.unwrap().create_time();
-
-        for script in redeem_scripts {
-            index -= 1;
-
-            if index >= self.first_index(store)? {
-                continue;
-            }
-
-            let (mut sigset, _) = SignatorySet::from_script(&script, threshold_ratio)?;
-            sigset.index = index;
-            sigset.create_time = create_time;
-            let mut cp = Checkpoint::new(sigset)?;
-            cp.status = CheckpointStatus::Complete;
-
-            CHECKPOINTS.push_front(store, &cp)?;
-        }
-
-        Ok(())
     }
 }
 
