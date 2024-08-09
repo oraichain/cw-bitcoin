@@ -1,10 +1,9 @@
 use crate::adapter::Adapter;
 use crate::checkpoint::Checkpoint;
-use crate::constants::BTC_NATIVE_TOKEN_DENOM;
 use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
-    get_full_btc_denom, get_validators, BITCOIN_CONFIG, CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    get_full_btc_denom, get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL,
     FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, SIG_KEYS, VALIDATORS, XPUBS,
 };
 use crate::threshold_sig;

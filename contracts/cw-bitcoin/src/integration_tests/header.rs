@@ -3,12 +3,7 @@ use bitcoind::{bitcoincore_rpc::RpcApi, BitcoinD, Conf, P2P};
 use cosmwasm_std::Addr;
 
 use crate::{
-    adapter::Adapter,
-    constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD},
-    header::WrappedHeader,
-    interface::HeaderConfig,
-    msg,
-    tests::helper::MockApp,
+    adapter::Adapter, header::WrappedHeader, interface::HeaderConfig, msg, tests::helper::MockApp,
 };
 
 fn into_json<T>(val: T) -> Result<bitcoind::bitcoincore_rpc::jsonrpc::serde_json::Value, RpcError>

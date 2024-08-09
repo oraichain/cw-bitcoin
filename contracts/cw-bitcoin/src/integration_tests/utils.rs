@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{
-    adapter::Adapter, error::ContractResult, header::WrappedHeader, threshold_sig::Signature,
-};
+use crate::{adapter::Adapter, header::WrappedHeader};
 use bitcoin::{BlockHash, BlockHeader};
 use bitcoincore_rpc_async::{Auth, Client as BitcoinRpcClient, RpcApi};
 

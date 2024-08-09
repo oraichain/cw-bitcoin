@@ -6,7 +6,7 @@ use cosmwasm_schema::{
     schemars::JsonSchema,
     serde::{de, ser, Deserialize, Serialize},
 };
-use cosmwasm_std::{from_json, to_json_vec, Addr, Binary, Coin, StdError, Storage, Uint128};
+use cosmwasm_std::{from_json, to_json_vec, Addr, Binary, StdError, Storage, Uint128};
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
 use sha2::{Digest, Sha256};
@@ -20,7 +20,6 @@ use crate::constants::{
     RETARGET_INTERVAL, SIGSET_THRESHOLD, TARGET_SPACING, TARGET_TIMESPAN, TRANSFER_FEE,
     USER_FEE_FACTOR,
 };
-use crate::error::ContractError;
 use crate::error::ContractResult;
 use crate::header::WorkHeader;
 use crate::header::WrappedHeader;
