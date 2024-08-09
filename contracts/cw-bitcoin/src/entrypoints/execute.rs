@@ -48,7 +48,6 @@ pub fn update_header_config(
     config: HeaderConfig,
 ) -> ContractResult<Response> {
     assert_eq!(info.sender, CONFIG.load(store)?.owner);
-    HEADER_CONFIG.save(store, &config)?;
     let mut header_queue = HeaderQueue::default();
     let _ = header_queue.configure(store, config.clone())?;
     Ok(Response::new().add_attribute("action", "update_header_config"))

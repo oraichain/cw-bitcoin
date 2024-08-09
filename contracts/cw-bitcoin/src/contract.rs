@@ -4,17 +4,16 @@ use cosmwasm_std::entry_point;
 use crate::{
     entrypoints::*,
     error::ContractError,
+    header::HeaderQueue,
     interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
     msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
-        FIRST_UNHANDLED_CONFIRMED_INDEX, HEADERS, HEADER_CONFIG, VALIDATORS,
+        FIRST_UNHANDLED_CONFIRMED_INDEX,
     },
 };
 
-use cosmwasm_std::{
-    to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, WasmMsg,
-};
+use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 
 // version info for migration info
@@ -39,14 +38,17 @@ pub fn instantiate(
         },
     )?;
 
+    // Set up header
     let header_config = HeaderConfig::mainnet()?;
-    HEADER_CONFIG.save(deps.storage, &header_config)?;
-    let work_header = header_config.work_header();
-    HEADERS.push_back(deps.storage, &work_header).unwrap();
+    let mut header_queue = HeaderQueue::default();
+    let _ = header_queue.configure(deps.storage, header_config.clone())?;
 
+    // Set up config
     CHECKPOINT_CONFIG.save(deps.storage, &CheckpointConfig::default())?;
     BITCOIN_CONFIG.save(deps.storage, &&BitcoinConfig::default())?;
     FEE_POOL.save(deps.storage, &0)?;
+
+    // Set up checkpoint index
     BUILDING_INDEX.save(deps.storage, &0)?;
     FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.storage, &0)?;
 
