@@ -55,7 +55,7 @@ pub fn relay_headers(
 ) -> ContractResult<Response> {
     // let header_config = HEADER_CONFIG.load(store)?;
     let mut header_queue = HeaderQueue::default();
-    header_queue.add(store, HeaderList::from(headers)).unwrap();
+    header_queue.add(store, HeaderList::from(headers))?;
     Ok(Response::new().add_attribute("action", "add_headers"))
 }
 
@@ -81,8 +81,7 @@ pub fn relay_deposit(
         btc_vout,
         sigset_index,
         dest,
-    )
-    .unwrap();
+    )?;
 
     Ok(response)
 }
@@ -102,8 +101,7 @@ pub fn withdraw_to_bitcoin(
         let denom = get_full_btc_denom(store)?;
         if fund.denom == denom {
             let amount = fund.amount;
-            btc.add_withdrawal(store, script_pubkey.clone(), amount)
-                .unwrap();
+            btc.add_withdrawal(store, script_pubkey.clone(), amount)?;
 
             // burn here
             cosmos_msgs.push(WasmMsg::Execute {
@@ -130,8 +128,7 @@ pub fn relay_checkpoint(
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
     let response = Response::new().add_attribute("action", "relay_checkpoint");
-    btc.relay_checkpoint(store, btc_height, btc_proof, cp_index)
-        .unwrap();
+    btc.relay_checkpoint(store, btc_height, btc_proof, cp_index)?;
     Ok(response)
 }
 
@@ -145,9 +142,7 @@ pub fn submit_checkpoint_signature(
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut checkpoints = btc.checkpoints;
-    checkpoints
-        .sign(api, store, &xpub.0, sigs, cp_index, btc_height)
-        .unwrap();
+    checkpoints.sign(api, store, &xpub.0, sigs, cp_index, btc_height)?;
     let response = Response::new().add_attribute("action", "submit_checkpoint_signature");
     Ok(response)
 }
@@ -160,7 +155,7 @@ pub fn submit_recovery_signature(
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut recovery_txs = btc.recovery_txs;
-    recovery_txs.sign(api, store, &xpub.0, sigs).unwrap();
+    recovery_txs.sign(api, store, &xpub.0, sigs)?;
     let response = Response::new().add_attribute("action", "submit_recovery_signature");
     Ok(response)
 }
@@ -171,7 +166,7 @@ pub fn set_signatory_key(
     xpub: HashBinary<Xpub>,
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
-    btc.set_signatory_key(store, info.sender, xpub.0).unwrap();
+    btc.set_signatory_key(store, info.sender, xpub.0)?;
     let response = Response::new().add_attribute("action", "set_signatory_key");
     Ok(response)
 }
@@ -184,13 +179,9 @@ pub fn add_validators(
     infos: Vec<(u64, ConsensusKey)>,
 ) -> ContractResult<Response> {
     assert_eq!(info.sender, CONFIG.load(store)?.owner);
-    for (index, addr) in addrs.iter().enumerate() {
-        let info = infos.get(index).unwrap();
-        let (power, cons_key) = info;
-        SIGNERS.save(store, addr, &cons_key).unwrap();
-        VALIDATORS
-            .save(store, &cons_key, &(power.to_owned(), addr.to_owned()))
-            .unwrap();
+    for (addr, (power, cons_key)) in addrs.iter().zip(infos) {
+        SIGNERS.save(store, addr, &cons_key)?;
+        VALIDATORS.save(store, &cons_key, &(power.to_owned(), addr.to_owned()))?;
     }
     let response = Response::new().add_attribute("action", "add_validators");
     Ok(response)

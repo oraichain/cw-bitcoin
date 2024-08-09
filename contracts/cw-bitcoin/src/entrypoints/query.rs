@@ -168,5 +168,5 @@ pub fn query_signing_txs_at_checkpoint_index(
     if checkpoint.status != CheckpointStatus::Signing {
         return Err(ContractError::App("checkpoint is not signing".to_string()));
     }
-    Ok(checkpoint.to_sign(&xpub.0).unwrap())
+    Ok(checkpoint.to_sign(&xpub.0)?)
 }

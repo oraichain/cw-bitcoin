@@ -935,7 +935,7 @@ impl CheckpointQueue {
     }
 
     pub fn confirmed_index(&self, store: &dyn Storage) -> Option<u32> {
-        let index = CONFIRMED_INDEX.may_load(store).unwrap();
+        let index = CONFIRMED_INDEX.may_load(store).unwrap_or_default();
         index
     }
 
