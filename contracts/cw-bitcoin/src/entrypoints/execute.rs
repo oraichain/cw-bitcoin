@@ -1,14 +1,10 @@
 use crate::{
     adapter::{Adapter, HashBinary},
     app::{Bitcoin, ConsensusKey},
-    constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
-    state::{
-        get_full_btc_denom, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG, SIGNERS,
-        VALIDATORS,
-    },
+    state::{get_full_btc_denom, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS, VALIDATORS},
     threshold_sig::Signature,
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};

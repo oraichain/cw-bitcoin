@@ -11,10 +11,7 @@ use crate::{
     interface::Xpub,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
-    state::{
-        header_height, BUILDING_INDEX, CONFIRMED_INDEX, FIRST_UNHANDLED_CONFIRMED_INDEX, OUTPOINTS,
-        SIG_KEYS,
-    },
+    state::{header_height, OUTPOINTS, SIG_KEYS},
 };
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
