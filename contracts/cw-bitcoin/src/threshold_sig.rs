@@ -265,12 +265,6 @@ impl ThresholdSig {
         pubkey: &Pubkey,
         sig: &Signature,
     ) -> ContractResult<()> {
-        // TODO: re-use secp context
-        // let secp = Secp256k1::verification_only();
-        // let pubkey = PublicKey::from_slice(&pubkey.bytes)?;
-        // let sig = ecdsa::Signature::from_compact(&sig.0)?;
-        // secp.verify_ecdsa(msg, &sig, &pubkey)?;
-
         let verified = api.secp256k1_verify(msg, &sig.0, pubkey.as_slice())?;
 
         if !verified {
