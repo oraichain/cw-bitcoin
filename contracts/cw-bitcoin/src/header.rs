@@ -583,7 +583,7 @@ impl HeaderQueue {
 
     /// The height of the configured trusted header.    
     pub fn trusted_height(&self, store: &dyn Storage) -> ContractResult<u32> {
-        let config = HEADER_CONFIG.load(store).unwrap();
+        let config = HEADER_CONFIG.load(store)?;
         Ok(config.trusted_height)
     }
 

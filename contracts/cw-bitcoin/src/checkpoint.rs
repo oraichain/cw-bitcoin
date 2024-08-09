@@ -485,7 +485,7 @@ impl Checkpoint {
 
                 // Iterate over all inputs in the transaction.
                 for k in 0..tx.input.len() {
-                    let input = tx.input.get_mut(k).unwrap();
+                    let input = &mut tx.input[k];
                     let pubkey = xpub.derive_pubkey(input.sigset_index)?;
 
                     // Skip input if either the signatory is not part of this
@@ -838,7 +838,7 @@ impl BuildingCheckpoint {
 
         let outs = self.additional_outputs(config, &timestamping_commitment)?;
         let checkpoint_batch = &mut self.batches[BatchType::Checkpoint];
-        let checkpoint_tx = checkpoint_batch.get_mut(0).unwrap();
+        let checkpoint_tx = &mut checkpoint_batch[0];
         for out in outs.iter().rev() {
             checkpoint_tx.output.insert(0, Adapter::new(out.clone()));
         }
@@ -860,12 +860,12 @@ impl BuildingCheckpoint {
         // TODO: Input/Output sum functions
         let mut in_amount = 0;
         for i in 0..checkpoint_tx.input.len() {
-            let input = checkpoint_tx.input.get(i).unwrap();
+            let input = &checkpoint_tx.input[i];
             in_amount += input.amount;
         }
         let mut out_amount = 0;
         for i in 0..checkpoint_tx.output.len() {
-            let output = checkpoint_tx.output.get(i).unwrap();
+            let output = &checkpoint_tx.output[i];
             out_amount += output.value;
         }
 
@@ -874,7 +874,7 @@ impl BuildingCheckpoint {
         let reserve_value = in_amount.checked_sub(out_amount + cp_fees).ok_or_else(|| {
             ContractError::Checkpoint("Insufficient reserve value to cover miner fees".into())
         })?;
-        let reserve_out = checkpoint_tx.output.get_mut(0).unwrap();
+        let reserve_out = &mut checkpoint_tx.output[0];
         reserve_out.value = reserve_value;
 
         // Prepare the checkpoint tx's inputs to be signed by calculating their
@@ -882,7 +882,7 @@ impl BuildingCheckpoint {
         let bitcoin_tx = checkpoint_tx.to_bitcoin_tx()?;
         let mut sc = bitcoin::util::sighash::SighashCache::new(&bitcoin_tx);
         for i in 0..checkpoint_tx.input.len() {
-            let input = checkpoint_tx.input.get_mut(i).unwrap();
+            let input = &mut checkpoint_tx.input[i];
             let sighash = sc.segwit_signature_hash(
                 i,
                 &input.redeem_script,
@@ -941,7 +941,7 @@ impl CheckpointQueue {
 
     /// Removes all checkpoints from the queue and resets the index to zero.
     pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
-        let _ = BUILDING_INDEX.save(store, &0).unwrap();
+        let _ = BUILDING_INDEX.save(store, &0)?;
         FIRST_UNHANDLED_CONFIRMED_INDEX.remove(store);
         CONFIRMED_INDEX.remove(store);
         CHECKPOINTS.clear(store)
@@ -1258,7 +1258,7 @@ impl CheckpointQueue {
             let mut building = self.building(store)?;
             building.fee_rate = fee_rate;
             let building_checkpoint_batch = &mut building.batches[BatchType::Checkpoint];
-            let checkpoint_tx = building_checkpoint_batch.get_mut(0).unwrap();
+            let checkpoint_tx = &mut building_checkpoint_batch[0];
 
             // The new checkpoint tx's first input is the reserve output from
             // the previous checkpoint.
