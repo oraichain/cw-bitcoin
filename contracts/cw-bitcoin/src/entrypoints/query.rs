@@ -8,11 +8,26 @@ use crate::{
     checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue, CheckpointStatus},
     error::{ContractError, ContractResult},
     header::HeaderQueue,
-    interface::Xpub,
+    interface::{BitcoinConfig, CheckpointConfig, HeaderConfig, Xpub},
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
-    state::{header_height, OUTPOINTS, SIG_KEYS},
+    state::{header_height, BITCOIN_CONFIG, CHECKPOINT_CONFIG, HEADER_CONFIG, OUTPOINTS, SIG_KEYS},
 };
+
+pub fn query_bitcoin_config(store: &dyn Storage) -> ContractResult<BitcoinConfig> {
+    let bitcoin_config = BITCOIN_CONFIG.load(store)?;
+    Ok(bitcoin_config)
+}
+
+pub fn query_checkpoint_config(store: &dyn Storage) -> ContractResult<CheckpointConfig> {
+    let checkpoint_config = CHECKPOINT_CONFIG.load(store)?;
+    Ok(checkpoint_config)
+}
+
+pub fn query_header_config(store: &dyn Storage) -> ContractResult<HeaderConfig> {
+    let header_config = HEADER_CONFIG.load(store)?;
+    Ok(header_config)
+}
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
     header_height(store)

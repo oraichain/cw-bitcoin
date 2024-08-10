@@ -136,6 +136,9 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
+        QueryMsg::BitcoinConfig {} => to_json_binary(&query_bitcoin_config(deps.storage)?),
+        QueryMsg::CheckpointConfig {} => to_json_binary(&query_checkpoint_config(deps.storage)?),
+        QueryMsg::HeaderConfig {} => to_json_binary(&query_header_config(deps.storage)?),
         QueryMsg::DepositFees { index } => {
             to_json_binary(&query_deposit_fees(deps.storage, index)?)
         }

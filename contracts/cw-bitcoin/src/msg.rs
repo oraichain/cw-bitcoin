@@ -82,6 +82,12 @@ pub enum SudoMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(BitcoinConfig)]
+    BitcoinConfig {},
+    #[returns(CheckpointConfig)]
+    CheckpointConfig {},
+    #[returns(HeaderConfig)]
+    HeaderConfig {},
     #[returns(u32)]
     HeaderHeight {},
     #[returns(u64)]

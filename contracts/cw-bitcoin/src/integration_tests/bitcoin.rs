@@ -480,7 +480,6 @@ async fn test_full_flow_happy_case_bitcoin() {
     )
     .unwrap();
     set_signatory_key(&mut app, validator_4.clone(), Xpub::new(xpubs[3])).unwrap();
-
     set_signatory_key(&mut app, validator_1.clone(), Xpub::new(xpubs[0])).unwrap();
     set_signatory_key(&mut app, validator_2.clone(), Xpub::new(xpubs[1])).unwrap();
     increase_block(&mut app, Binary::from([0; 32])).unwrap(); // should increase number of hash to be unique
