@@ -1,3 +1,4 @@
+use cosmwasm_std::to_json_vec;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tsify::Tsify;
@@ -32,12 +33,24 @@ impl Dest {
         }
     }
 
+    pub fn to_source_addr(&self) -> String {
+        match self {
+            Self::Address(addr) => addr.to_string(),
+            Self::Ibc(dest) => dest.sender.to_string(),
+        }
+    }
+
     pub fn commitment_bytes(&self) -> ContractResult<Vec<u8>> {
         let bytes = match self {
             Self::Address(addr) => addr.as_bytes().into(),
-            Self::Ibc(dest) => Sha256::digest(dest.receiver.as_bytes()).to_vec(),
+            Self::Ibc(dest) => Sha256::digest(to_json_vec(dest).unwrap()).to_vec(),
         };
 
         Ok(bytes)
     }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn commitmentBytes(dest: Dest) -> Vec<u8> {
+    dest.commitment_bytes().unwrap()
 }

@@ -108,7 +108,7 @@ impl Dest {
     pub fn commitment_bytes(&self) -> ContractResult<Vec<u8>> {
         let bytes = match self {
             Self::Address(addr) => addr.as_bytes().into(),
-            Self::Ibc(dest) => Sha256::digest(dest.receiver.as_bytes()).to_vec(),
+            Self::Ibc(dest) => Sha256::digest(to_json_vec(dest)?).to_vec(),
         };
 
         Ok(bytes)

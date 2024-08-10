@@ -1,33 +1,34 @@
 [package]
-name = "wasm"
-version.workspace = true
 authors.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
 documentation.workspace = true
+edition.workspace = true
 exclude.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "wasm"
+repository.workspace = true
+version.workspace = true
 
 [lib]
-path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
 
 [dependencies]
-bitcoin = { git = "https://github.com/oraichain/rust-bitcoin.git", rev = "40fab689", features = [
-    "serde",
-] }
-thiserror = { workspace = true }
-serde = { version = "1.0", default-features = false, features = ["derive"] }
-derive_more = { workspace = true }
-sha2 = { workspace = true }
-bitcoin-script = { workspace = true }
+bitcoin = {git = "https://github.com/oraichain/rust-bitcoin.git", rev = "40fab689", features = [
+  "serde",
+]}
+bitcoin-script = {workspace = true}
+cosmwasm-std = {workspace = true}
+derive_more = {workspace = true}
+serde = {version = "1.0", default-features = false, features = ["derive"]}
+sha2 = {workspace = true}
+thiserror = {workspace = true}
 
-wasm-bindgen = "0.2.89"
-serde-wasm-bindgen = "0.6.3"
-tsify = "0.4.5"
-paste = "1.0.14"
+base64 = "0.13.1"
 js-sys = "0.3.66"
 log = "0.4.17"
-base64 = "0.13.1"
+paste = "1.0.14"
 serde-json-wasm = "0.5.0"
+serde-wasm-bindgen = "0.6.3"
+tsify = "0.4.5"
+wasm-bindgen = "0.2.89"
