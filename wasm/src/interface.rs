@@ -54,3 +54,13 @@ impl Dest {
 pub fn commitmentBytes(dest: Dest) -> Vec<u8> {
     dest.commitment_bytes().unwrap()
 }
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn toReceiverAddr(dest: Dest) -> String {
+    dest.to_receiver_addr()
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn toSourceAddr(dest: Dest) -> String {
+    dest.to_source_addr()
+}
