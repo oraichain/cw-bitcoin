@@ -156,6 +156,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::CheckpointByIndex { index } => {
             to_json_binary(&query_checkpoint_by_index(deps.storage, index)?)
         }
+        QueryMsg::BuildingCheckpoint {} => {
+            to_json_binary(&query_building_checkpoint(deps.storage)?)
+        }
         QueryMsg::SigningRecoveryTxs { xpub } => to_json_binary(&query_signing_recovery_txs(
             deps.querier,
             deps.storage,
@@ -169,6 +172,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             xpub,
             checkpoint_index,
         )?),
+        QueryMsg::ProcessedOutpoint { key } => {
+            to_json_binary(&query_process_outpoints(deps.storage, key)?)
+        }
         QueryMsg::CompletedIndex {} => to_json_binary(&query_completed_index(deps.storage)?),
         QueryMsg::BuildingIndex {} => to_json_binary(&query_building_index(deps.storage)?),
         QueryMsg::ConfirmedIndex {} => to_json_binary(&query_comfirmed_index(deps.storage)?),

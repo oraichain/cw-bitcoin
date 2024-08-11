@@ -11,7 +11,10 @@ use crate::{
     interface::{BitcoinConfig, CheckpointConfig, HeaderConfig, Xpub},
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
-    state::{header_height, BITCOIN_CONFIG, CHECKPOINT_CONFIG, HEADER_CONFIG, OUTPOINTS, SIG_KEYS},
+    state::{
+        header_height, BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, HEADER_CONFIG, OUTPOINTS,
+        SIG_KEYS,
+    },
 };
 
 pub fn query_bitcoin_config(store: &dyn Storage) -> ContractResult<BitcoinConfig> {
@@ -70,9 +73,10 @@ pub fn query_checkpoint_by_index(store: &dyn Storage, index: u32) -> ContractRes
     Ok(checkpoint)
 }
 
-pub fn query_building_checkpoint(store: &dyn Storage) -> ContractResult<BuildingCheckpoint> {
+pub fn query_building_checkpoint(store: &dyn Storage) -> ContractResult<Checkpoint> {
+    let building_index = query_building_index(store)?;
     let checkpoints = CheckpointQueue::default();
-    let checkpoint = checkpoints.building(store)?;
+    let checkpoint = checkpoints.get(store, building_index)?;
     Ok(checkpoint)
 }
 
@@ -147,15 +151,9 @@ pub fn query_completed_index(store: &dyn Storage) -> ContractResult<u32> {
     Ok(completed_index)
 }
 
-pub fn query_process_outpoints(store: &dyn Storage) -> ContractResult<Vec<String>> {
+pub fn query_process_outpoints(store: &dyn Storage, key: String) -> ContractResult<bool> {
     // get all key of oupoints map
-    let process_outpoints = OUTPOINTS
-        .range(store, None, None, Order::Ascending)
-        .map(|item| {
-            let (k, _) = item?;
-            Ok(k.to_string())
-        })
-        .collect::<ContractResult<Vec<String>>>()?;
+    let process_outpoints = OUTPOINTS.has(store, &key);
     Ok(process_outpoints)
 }
 

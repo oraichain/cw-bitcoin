@@ -6,6 +6,7 @@ use token_bindings::Metadata;
 use crate::{
     adapter::{Adapter, HashBinary},
     app::ConsensusKey,
+    checkpoint::Checkpoint,
     header::WrappedHeader,
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
     threshold_sig::Signature,
@@ -100,8 +101,10 @@ pub enum QueryMsg {
     WithdrawalFees { address: String, index: Option<u32> },
     #[returns(HashBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
-    #[returns(u64)]
+    #[returns(Checkpoint)]
     CheckpointByIndex { index: u32 },
+    #[returns(Checkpoint)]
+    BuildingCheckpoint {},
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
     SigningRecoveryTxs { xpub: HashBinary<Xpub> },
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
@@ -109,6 +112,8 @@ pub enum QueryMsg {
         xpub: HashBinary<Xpub>,
         checkpoint_index: u32,
     },
+    #[returns(bool)]
+    ProcessedOutpoint { key: String },
     // Query index
     #[returns(u32)]
     ConfirmedIndex {},

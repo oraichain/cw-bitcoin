@@ -17,6 +17,7 @@ use bitcoin::blockdata::opcodes::{self, OP_FALSE};
 use bitcoin::blockdata::script::{read_scriptint, Instruction};
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
+use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Order;
 use cosmwasm_std::Storage;
@@ -37,8 +38,9 @@ use cosmwasm_std::Storage;
 /// impact on script size and fees.
 
 /// A signatory in a signatory set, consisting of a public key and voting power.
-#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize, JsonSchema)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct Signatory {
     pub voting_power: u64,
     pub pubkey: Pubkey,
@@ -50,8 +52,11 @@ pub struct Signatory {
 /// Bitcoin scripts can be generated from a signatory set, which can be used to
 /// create a UTXO which can be only spent by a threshold of the signatories,
 /// based on voting power.
-#[derive(Clone, Debug, Default, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[derive(
+    Clone, Debug, Default, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize, JsonSchema,
+)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct SignatorySet {
     /// The time at which this signatory set was created, in seconds.
     ///
