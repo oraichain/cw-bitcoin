@@ -112,6 +112,8 @@ pub enum QueryMsg {
         xpub: HashBinary<Xpub>,
         checkpoint_index: u32,
     },
+    #[returns(bool)]
+    ProcessedOutpoint { key: String },
     // Query index
     #[returns(u32)]
     ConfirmedIndex {},

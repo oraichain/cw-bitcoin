@@ -151,15 +151,9 @@ pub fn query_completed_index(store: &dyn Storage) -> ContractResult<u32> {
     Ok(completed_index)
 }
 
-pub fn query_process_outpoints(store: &dyn Storage) -> ContractResult<Vec<String>> {
+pub fn query_process_outpoints(store: &dyn Storage, key: String) -> ContractResult<bool> {
     // get all key of oupoints map
-    let process_outpoints = OUTPOINTS
-        .range(store, None, None, Order::Ascending)
-        .map(|item| {
-            let (k, _) = item?;
-            Ok(k.to_string())
-        })
-        .collect::<ContractResult<Vec<String>>>()?;
+    let process_outpoints = OUTPOINTS.has(store, &key);
     Ok(process_outpoints)
 }
 
