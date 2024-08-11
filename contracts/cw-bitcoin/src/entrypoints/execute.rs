@@ -176,12 +176,20 @@ pub fn add_validators(
     store: &mut dyn Storage,
     info: MessageInfo,
     addrs: Vec<String>,
-    infos: Vec<(u64, ConsensusKey)>,
+    voting_powers: Vec<u64>,
+    consensus_keys: Vec<ConsensusKey>,
 ) -> ContractResult<Response> {
     assert_eq!(info.sender, CONFIG.load(store)?.owner);
-    for (addr, (power, cons_key)) in addrs.iter().zip(infos) {
-        SIGNERS.save(store, addr, &cons_key)?;
-        VALIDATORS.save(store, &cons_key, &(power.to_owned(), addr.to_owned()))?;
+    assert_eq!(addrs.len(), voting_powers.len());
+    assert_eq!(addrs.len(), consensus_keys.len());
+
+    for i in 0..addrs.len() {
+        let addr = &addrs[i];
+        let power = voting_powers[i];
+        let cons_key = &consensus_keys[i];
+
+        SIGNERS.save(store, addr, cons_key)?;
+        VALIDATORS.save(store, cons_key, &(power, addr.clone()))?;
     }
     let response = Response::new().add_attribute("action", "add_validators");
     Ok(response)

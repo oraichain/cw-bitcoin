@@ -63,7 +63,8 @@ pub enum ExecuteMsg {
     },
     AddValidators {
         addrs: Vec<String>,
-        infos: Vec<(u64, ConsensusKey)>,
+        voting_powers: Vec<u64>,
+        consensus_keys: Vec<ConsensusKey>,
     },
     RegisterDenom {
         subdenom: String,

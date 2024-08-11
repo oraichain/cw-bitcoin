@@ -115,9 +115,11 @@ pub fn execute(
             submit_recovery_signature(deps.api, deps.storage, xpub, sigs)
         }
         ExecuteMsg::SetSignatoryKey { xpub } => set_signatory_key(deps.storage, info, xpub),
-        ExecuteMsg::AddValidators { addrs, infos } => {
-            add_validators(deps.storage, info, addrs, infos)
-        }
+        ExecuteMsg::AddValidators {
+            addrs,
+            voting_powers,
+            consensus_keys,
+        } => add_validators(deps.storage, info, addrs, voting_powers, consensus_keys),
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }

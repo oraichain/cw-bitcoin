@@ -312,12 +312,17 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     let add_validators = |app: &mut MockApp,
                           addrs: Vec<String>,
-                          infos: Vec<(u64, ConsensusKey)>|
+                          voting_powers: Vec<u64>,
+                          consensus_keys: Vec<[u8; 32]>|
      -> Result<AppResponse, _> {
         app.execute(
             owner.clone(),
             bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::AddValidators { addrs, infos },
+            &msg::ExecuteMsg::AddValidators {
+                addrs,
+                voting_powers,
+                consensus_keys,
+            },
             &[],
         )
     };
@@ -469,14 +474,16 @@ async fn test_full_flow_happy_case_bitcoin() {
             validator_1.clone().to_string(),
             validator_2.clone().to_string(),
         ],
-        vec![(15, consensus_keys[0]), (10, consensus_keys[1])],
+        vec![15, 10],
+        vec![consensus_keys[0], consensus_keys[1]],
     )
     .unwrap();
     // add validator 4
     add_validators(
         &mut app,
         vec![validator_4.clone().to_string()],
-        vec![(1, consensus_keys[3])],
+        vec![1],
+        vec![consensus_keys[3]],
     )
     .unwrap();
     set_signatory_key(&mut app, validator_4.clone(), Xpub::new(xpubs[3])).unwrap();
@@ -487,7 +494,8 @@ async fn test_full_flow_happy_case_bitcoin() {
     add_validators(
         &mut app,
         vec![validator_3.clone().to_string()],
-        vec![(25, consensus_keys[2])],
+        vec![25],
+        vec![consensus_keys[2]],
     )
     .unwrap();
     set_signatory_key(&mut app, validator_3.clone(), Xpub::new(xpubs[2])).unwrap();
