@@ -8,6 +8,7 @@ use bitcoin::secp256k1::{
     ecdsa, PublicKey,
 };
 use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Api;
 
@@ -21,8 +22,9 @@ pub type Message = [u8; MESSAGE_SIZE];
 pub struct Signature(#[serde(serialize_with = "<[_]>::serialize")] pub Vec<u8>);
 
 /// A compressed secp256k1 public key.
-#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord, Deserialize, Serialize, JsonSchema)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct Pubkey {
     #[serde(serialize_with = "<[_]>::serialize")]
     bytes: Vec<u8>,
@@ -89,8 +91,9 @@ impl From<PublicKey> for Pubkey {
 ///
 /// It is populated based on a `SignatorySet` and a message to sign, and then
 /// each signer signs the message and adds their signature to the state.]
-#[derive(Default, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct ThresholdSig {
     /// The threshold of voting power required for a the signature to be
     /// considered "signed".

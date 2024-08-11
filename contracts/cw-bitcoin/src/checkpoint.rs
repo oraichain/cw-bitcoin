@@ -14,8 +14,8 @@ use crate::{
 };
 use bitcoin::hashes::Hash;
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
-use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde, schemars::JsonSchema};
 use cosmwasm_std::{Api, Coin, Env, QuerierWrapper, Storage};
 use derive_more::{Deref, DerefMut};
 
@@ -45,8 +45,9 @@ pub enum CheckpointStatus {
 /// This structure contains the necessary data for signing an input, and once
 /// signed can be turned into a `bitcoin::TxIn` for inclusion in a Bitcoin
 /// transaction.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct Input {
     /// The outpoint being spent by this input.
     pub prevout: Adapter<bitcoin::OutPoint>,
@@ -135,8 +136,9 @@ impl Input {
 pub type Output = Adapter<bitcoin::TxOut>;
 
 /// A bitcoin transaction, as a native `orga` data structure.
-#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct BitcoinTx {
     /// The locktime field included in the bitcoin transaction, representing
     /// either a block height or timestamp.
@@ -330,8 +332,9 @@ impl<T> std::ops::IndexMut<BatchType> for Vec<T> {
 /// together. Signatories submit signatures for all inputs in all transactions
 /// in the batch at once. Once the batch is fully signed, the checkpoint can
 /// advance to signing of the next batch, if any.
-#[derive(Default, Debug, Serialize, Deserialize, Deref, DerefMut, Clone, PartialEq)]
+#[derive(Default, Debug, Serialize, Deserialize, Deref, DerefMut, Clone, PartialEq, JsonSchema)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct Batch {
     signed_txs: u16,
     #[deref]
@@ -368,8 +371,9 @@ impl Batch {
 /// "intermediate emergency disbursal transaction" (in the second batch of the
 /// `batches` deque), and one or more "final emergency disbursal transactions"
 /// (in the first batch of the `batches` deque).
-#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct Checkpoint {
     /// The status of the checkpoint, either `Building`, `Signing`, or
     /// `Complete`.
