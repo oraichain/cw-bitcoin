@@ -3,7 +3,7 @@ use cosmwasm_std::{Order, QuerierWrapper, Storage};
 use std::str::FromStr;
 
 use crate::{
-    adapter::{Adapter, StringBinary},
+    adapter::{Adapter, WrappedBinary},
     app::{Bitcoin, ConsensusKey},
     checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue, CheckpointStatus},
     error::{ContractError, ContractResult},
@@ -60,10 +60,10 @@ pub fn query_withdrawal_fees(
     Ok(withdrawal_fees)
 }
 
-pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<StringBinary<BlockHash>> {
+pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<WrappedBinary<BlockHash>> {
     // let header_config = HEADER_CONFIG.load(store)?;
     let headers = HeaderQueue::default();
-    let hash = StringBinary(headers.hash(store)?);
+    let hash = WrappedBinary(headers.hash(store)?);
     Ok(hash)
 }
 
@@ -116,7 +116,7 @@ pub fn query_signed_recovery_txs(store: &dyn Storage) -> ContractResult<Vec<Sign
 pub fn query_signing_recovery_txs(
     _querier: QuerierWrapper,
     store: &dyn Storage,
-    xpub: StringBinary<Xpub>,
+    xpub: WrappedBinary<Xpub>,
 ) -> ContractResult<Vec<([u8; 32], u32)>> {
     let recovery_txs = RecoveryTxs::default();
     recovery_txs.to_sign(store, &xpub.0)
@@ -173,7 +173,7 @@ pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
 
 pub fn query_signing_txs_at_checkpoint_index(
     store: &dyn Storage,
-    xpub: StringBinary<Xpub>,
+    xpub: WrappedBinary<Xpub>,
     cp_index: u32,
 ) -> ContractResult<Vec<([u8; 32], u32)>> {
     let checkpoints = CheckpointQueue::default();
