@@ -123,7 +123,6 @@ pub fn execute(
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }
-        #[cfg(test)]
         ExecuteMsg::TriggerBeginBlock { hash } => clock_end_block(&env, deps.storage, hash),
     }
 }

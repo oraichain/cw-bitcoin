@@ -612,6 +612,6 @@ impl HeaderQueue {
     /// The network the header queue is configured for.
     pub fn network(&self) -> bitcoin::Network {
         // TODO: should be dynamic, from config
-        bitcoin::Network::Bitcoin
+        bitcoin::Network::Testnet
     }
 }

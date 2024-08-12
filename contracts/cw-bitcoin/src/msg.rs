@@ -70,7 +70,6 @@ pub enum ExecuteMsg {
         subdenom: String,
         metadata: Option<Metadata>,
     },
-    #[cfg(test)]
     TriggerBeginBlock {
         hash: Binary,
     },
