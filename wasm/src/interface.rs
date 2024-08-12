@@ -76,3 +76,14 @@ pub fn toSourceAddr(dest: Dest) -> String {
 pub struct Xpub {
     pub key: ExtendedPubKey,
 }
+
+#[wasm_bindgen]
+pub fn newExtendedPubKey(val: &str) -> ContractResult<ExtendedPubKey> {
+    let key = ExtendedPubKey::from_str(val)?;
+    Ok(key)
+}
+
+#[wasm_bindgen]
+pub fn encodePubKey(key: ExtendedPubKey) -> String {
+    base64::encode(key.encode())
+}
