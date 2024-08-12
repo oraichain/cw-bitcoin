@@ -159,7 +159,7 @@ dependencies = [
 [[package]]
 name = "bitcoin"
 version = "0.29.2"
-source = "git+https://github.com/oraichain/rust-bitcoin.git?rev=40fab689#40fab689bbb259660054efc1819b900fa2cc1670"
+source = "git+https://github.com/oraichain/rust-bitcoin.git?rev=a1f8ebd7#a1f8ebd7f7133f9e060ab4d7368cc9d40083c6a8"
 dependencies = [
  "bech32 0.9.1",
  "bitcoin_hashes",
@@ -2845,7 +2845,7 @@ name = "wasm"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.1",
- "bitcoin 0.29.2 (git+https://github.com/oraichain/rust-bitcoin.git?rev=40fab689)",
+ "bitcoin 0.29.2 (git+https://github.com/oraichain/rust-bitcoin.git?rev=a1f8ebd7)",
  "bitcoin-script",
  "cosmwasm-std",
  "derive_more",

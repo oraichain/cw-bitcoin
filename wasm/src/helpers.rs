@@ -1,7 +1,7 @@
 use crate::error::ContractResult;
 use bitcoin::{
     consensus::{Decodable, Encodable},
-    util::merkleblock::PartialMerkleTree,
+    util::merkleblock::{MerkleBlock, PartialMerkleTree},
     BlockHeader, Script, Transaction,
 };
 use wasm_bindgen::prelude::*;
@@ -31,3 +31,4 @@ encode_ops!(BlockHeader);
 encode_ops!(Script);
 encode_ops!(PartialMerkleTree);
 encode_ops!(Transaction);
+encode_ops!(MerkleBlock);

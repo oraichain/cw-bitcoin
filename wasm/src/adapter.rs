@@ -18,11 +18,6 @@ impl<T> Adapter<T> {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
-
-    /// Consumes the `Adapter` and returns the inner value.
-    pub fn into_inner(self) -> T {
-        self.inner
-    }
 }
 
 impl<T> From<T> for Adapter<T> {
