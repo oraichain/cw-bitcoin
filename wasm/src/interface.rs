@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use bitcoin::util::bip32::ExtendedPubKey;
+use bitcoin::{hashes::hex::FromHex, util::bip32::ExtendedPubKey};
 use cosmwasm_std::to_json_vec;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -67,6 +67,13 @@ pub fn toReceiverAddr(dest: Dest) -> String {
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn toSourceAddr(dest: Dest) -> String {
     dest.to_source_addr()
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn decodeRawTx(raw_tx: String) -> bitcoin::Transaction {
+    let bytes: Vec<u8> = FromHex::from_hex(&raw_tx).unwrap();
+    let tx = bitcoin::consensus::encode::deserialize(&bytes).unwrap();
+    tx
 }
 
 /// A Bitcoin extended public key, used to derive Bitcoin public keys which
