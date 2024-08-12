@@ -54,22 +54,22 @@ impl Dest {
     }
 }
 
-#[wasm_bindgen::prelude::wasm_bindgen]
+#[wasm_bindgen]
 pub fn commitmentBytes(dest: Dest) -> Vec<u8> {
     dest.commitment_bytes().unwrap()
 }
 
-#[wasm_bindgen::prelude::wasm_bindgen]
+#[wasm_bindgen]
 pub fn toReceiverAddr(dest: Dest) -> String {
     dest.to_receiver_addr()
 }
 
-#[wasm_bindgen::prelude::wasm_bindgen]
+#[wasm_bindgen]
 pub fn toSourceAddr(dest: Dest) -> String {
     dest.to_source_addr()
 }
 
-#[wasm_bindgen::prelude::wasm_bindgen]
+#[wasm_bindgen]
 pub fn decodeRawTx(raw_tx: String) -> bitcoin::Transaction {
     let bytes: Vec<u8> = FromHex::from_hex(&raw_tx).unwrap();
     let tx = bitcoin::consensus::encode::deserialize(&bytes).unwrap();
@@ -81,16 +81,11 @@ pub fn decodeRawTx(raw_tx: String) -> bitcoin::Transaction {
 #[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Deserialize, Serialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Xpub {
+    #[tsify(type = "string")]
     pub key: ExtendedPubKey,
 }
 
 #[wasm_bindgen]
-pub fn newExtendedPubKey(val: &str) -> ContractResult<ExtendedPubKey> {
-    let key = ExtendedPubKey::from_str(val)?;
-    Ok(key)
-}
-
-#[wasm_bindgen]
-pub fn encodePubKey(key: ExtendedPubKey) -> String {
-    base64::encode(key.encode())
+pub fn encodeXpub(xpub: Xpub) -> String {
+    base64::encode(xpub.key.encode())
 }
