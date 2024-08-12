@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-bitcoin = { git = "https://github.com/oraichain/rust-bitcoin.git", rev = "a1f8ebd7", features = [
+bitcoin = { git = "https://github.com/oraichain/rust-bitcoin.git", rev = "baf38400", features = [
     "serde",
 ] }
 bitcoin-script = { workspace = true }

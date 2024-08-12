@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::utils::{
     get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
 };
-use crate::adapter::{Adapter, HashBinary};
+use crate::adapter::{Adapter, StringBinary};
 use crate::app::ConsensusKey;
 use crate::checkpoint::{Checkpoint, CheckpointStatus};
 use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
@@ -346,7 +346,7 @@ async fn test_full_flow_happy_case_bitcoin() {
                 sender,
                 bitcoin_bridge_addr.clone(),
                 &msg::ExecuteMsg::SetSignatoryKey {
-                    xpub: HashBinary(xpub),
+                    xpub: StringBinary(xpub),
                 },
                 &[],
             )
@@ -374,7 +374,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             .query_wasm_smart(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningTxsAtCheckpointIndex {
-                    xpub: HashBinary(Xpub::new(xpub)),
+                    xpub: StringBinary(Xpub::new(xpub)),
                     checkpoint_index: cp_index,
                 },
             )
@@ -384,7 +384,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             sender,
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::SubmitCheckpointSignature {
-                xpub: HashBinary(Xpub::new(xpub)),
+                xpub: StringBinary(Xpub::new(xpub)),
                 sigs,
                 checkpoint_index: cp_index,
                 btc_height,
@@ -404,7 +404,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             .query_wasm_smart(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningRecoveryTxs {
-                    xpub: HashBinary(Xpub::new(xpub)),
+                    xpub: StringBinary(Xpub::new(xpub)),
                 },
             )
             .unwrap();
@@ -413,7 +413,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             sender,
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::SubmitRecoverySignature {
-                xpub: HashBinary(Xpub::new(xpub)),
+                xpub: StringBinary(Xpub::new(xpub)),
                 sigs,
             },
             &[],

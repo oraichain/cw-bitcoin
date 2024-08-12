@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use bitcoin::secp256k1;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::BlockHeader;

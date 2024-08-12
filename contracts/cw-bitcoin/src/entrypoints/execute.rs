@@ -1,5 +1,5 @@
 use crate::{
-    adapter::{Adapter, HashBinary},
+    adapter::{Adapter, StringBinary},
     app::{Bitcoin, ConsensusKey},
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
@@ -135,7 +135,7 @@ pub fn relay_checkpoint(
 pub fn submit_checkpoint_signature(
     api: &dyn Api,
     store: &mut dyn Storage,
-    xpub: HashBinary<Xpub>,
+    xpub: StringBinary<Xpub>,
     sigs: Vec<Signature>,
     cp_index: u32,
     btc_height: u32,
@@ -150,7 +150,7 @@ pub fn submit_checkpoint_signature(
 pub fn submit_recovery_signature(
     api: &dyn Api,
     store: &mut dyn Storage,
-    xpub: HashBinary<Xpub>,
+    xpub: StringBinary<Xpub>,
     sigs: Vec<Signature>,
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
@@ -163,7 +163,7 @@ pub fn submit_recovery_signature(
 pub fn set_signatory_key(
     store: &mut dyn Storage,
     info: MessageInfo,
-    xpub: HashBinary<Xpub>,
+    xpub: StringBinary<Xpub>,
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
     btc.set_signatory_key(store, info.sender, xpub.0)?;

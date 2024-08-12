@@ -1,7 +1,11 @@
+use std::str::FromStr;
+
+use bitcoin::util::bip32::ExtendedPubKey;
 use cosmwasm_std::to_json_vec;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 
 use crate::error::ContractResult;
 
@@ -63,4 +67,12 @@ pub fn toReceiverAddr(dest: Dest) -> String {
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn toSourceAddr(dest: Dest) -> String {
     dest.to_source_addr()
+}
+
+/// A Bitcoin extended public key, used to derive Bitcoin public keys which
+/// signatories sign transactions with.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct Xpub {
+    pub key: ExtendedPubKey,
 }

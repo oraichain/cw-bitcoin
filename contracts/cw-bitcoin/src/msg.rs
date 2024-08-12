@@ -4,7 +4,7 @@ use cosmwasm_std::{Addr, Binary};
 use token_bindings::Metadata;
 
 use crate::{
-    adapter::{Adapter, HashBinary},
+    adapter::{Adapter, StringBinary},
     app::ConsensusKey,
     checkpoint::Checkpoint,
     header::WrappedHeader,
@@ -49,17 +49,17 @@ pub enum ExecuteMsg {
         script_pubkey: Adapter<Script>,
     },
     SubmitCheckpointSignature {
-        xpub: HashBinary<Xpub>,
+        xpub: StringBinary<Xpub>,
         sigs: Vec<Signature>,
         checkpoint_index: u32,
         btc_height: u32,
     },
     SubmitRecoverySignature {
-        xpub: HashBinary<Xpub>,
+        xpub: StringBinary<Xpub>,
         sigs: Vec<Signature>,
     },
     SetSignatoryKey {
-        xpub: HashBinary<Xpub>,
+        xpub: StringBinary<Xpub>,
     },
     AddValidators {
         addrs: Vec<String>,
@@ -100,17 +100,17 @@ pub enum QueryMsg {
     SignedRecoveryTxs {},
     #[returns(u64)]
     WithdrawalFees { address: String, index: Option<u32> },
-    #[returns(HashBinary<bitcoin::BlockHash>)]
+    #[returns(StringBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
     #[returns(Checkpoint)]
     CheckpointByIndex { index: u32 },
     #[returns(Checkpoint)]
     BuildingCheckpoint {},
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
-    SigningRecoveryTxs { xpub: HashBinary<Xpub> },
+    SigningRecoveryTxs { xpub: StringBinary<Xpub> },
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
     SigningTxsAtCheckpointIndex {
-        xpub: HashBinary<Xpub>,
+        xpub: StringBinary<Xpub>,
         checkpoint_index: u32,
     },
     #[returns(bool)]

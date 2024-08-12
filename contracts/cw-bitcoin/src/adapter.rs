@@ -1,4 +1,4 @@
-use bitcoin::consensus::{Decodable, Encodable};
+use bitcoin::consensus::{deserialize, serialize, Decodable, Encodable};
 
 use cosmwasm_schema::schemars::{gen, schema, JsonSchema};
 use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
@@ -63,11 +63,7 @@ impl<T: Encodable> Serialize for Adapter<T> {
     where
         S: ser::Serializer,
     {
-        let mut dest = Binary::default();
-        self.inner
-            .consensus_encode(&mut dest.0)
-            .map_err(ser::Error::custom)?;
-        dest.serialize(serializer)
+        serialize(&self.inner).serialize(serializer)
     }
 }
 
@@ -78,7 +74,7 @@ impl<'de, T: Decodable> Deserialize<'de> for Adapter<T> {
         D: de::Deserializer<'de>,
     {
         let v = Binary::deserialize(deserializer)?;
-        let inner: T = Decodable::consensus_decode(&mut v.as_slice()).map_err(de::Error::custom)?;
+        let inner: T = deserialize(v.as_slice()).map_err(de::Error::custom)?;
         Ok(inner.into())
     }
 }
@@ -88,7 +84,7 @@ impl<T: Copy> Copy for Adapter<T> {}
 /// A wrapper that adds core `orga` traits to types from the `bitcoin` crate.
 #[derive(Clone, Debug, PartialEq, Deref, DerefMut, Serialize, Deserialize)]
 #[serde(crate = "cosmwasm_schema::serde")]
-pub struct HashBinary<T>(pub T);
+pub struct StringBinary<T>(pub T);
 
 forward_schema_impl!(Adapter => Binary);
-forward_schema_impl!(HashBinary => HexBinary);
+forward_schema_impl!(StringBinary => String);
