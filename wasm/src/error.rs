@@ -5,6 +5,8 @@ pub enum ContractError {
     #[error(transparent)]
     Wasm(#[from] serde_wasm_bindgen::Error),
     #[error(transparent)]
+    SerWasm(#[from] serde_json_wasm::ser::Error),
+    #[error(transparent)]
     Bitcoin(#[from] bitcoin::Error),
     #[error(transparent)]
     ParseOutPoint(#[from] ParseOutPointError),

@@ -18,7 +18,6 @@ bitcoin = { git = "https://github.com/oraichain/rust-bitcoin.git", rev = "373374
     "serde",
 ] }
 bitcoin-script = { workspace = true }
-cosmwasm-std = { workspace = true }
 derive_more = { workspace = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 sha2 = { workspace = true }
