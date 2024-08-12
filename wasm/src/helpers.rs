@@ -35,8 +35,7 @@ macro_rules! encode_ops {
 
             #[wasm_bindgen]
             pub fn [<fromBinary $inner>] (value: js_sys::Uint8Array) -> ContractResult<$inner> {
-                    let slice = base64::decode(value.to_vec().as_slice())?;
-                    let inner: $inner = Decodable::consensus_decode(&mut slice.as_slice())?;
+                    let inner: $inner = Decodable::consensus_decode(&mut value.to_vec().as_slice())?;
                     Ok(inner)
             }
 
