@@ -11,21 +11,21 @@ macro_rules! encode_ops {
     ($inner:ty) => {
         ::paste::paste! {
             #[wasm_bindgen]
-            pub fn [<toBinary $inner>] (inner: $inner) -> ContractResult<String> {
+            pub fn [<toBase64 $inner>] (inner: $inner) -> ContractResult<String> {
                     let mut dest: Vec<u8> = Vec::new();
                     inner.consensus_encode(&mut dest)?;
                     Ok(base64::encode(dest))
             }
 
             #[wasm_bindgen]
-            pub fn [<fromBinary $inner>] (value: &str) -> ContractResult<$inner> {
+            pub fn [<fromBase64 $inner>] (value: &str) -> ContractResult<$inner> {
                     let slice = base64::decode(value)?;
                     let inner: $inner = Decodable::consensus_decode(&mut slice.as_slice())?;
                     Ok(inner)
             }
 
             #[wasm_bindgen]
-            pub fn [<toBuffer $inner>] (inner: $inner) -> ContractResult<js_sys::Uint8Array> {
+            pub fn [<toBinary $inner>] (inner: $inner) -> ContractResult<js_sys::Uint8Array> {
                     let mut dest: Vec<u8> = Vec::new();
                     inner.consensus_encode(&mut dest)?;
                     let buffer = js_sys::Uint8Array::new_with_length(dest.len() as u32);
@@ -34,7 +34,7 @@ macro_rules! encode_ops {
             }
 
             #[wasm_bindgen]
-            pub fn [<fromBuffer $inner>] (value: js_sys::Uint8Array) -> ContractResult<$inner> {
+            pub fn [<fromBinary $inner>] (value: js_sys::Uint8Array) -> ContractResult<$inner> {
                     let slice = base64::decode(value.to_vec().as_slice())?;
                     let inner: $inner = Decodable::consensus_decode(&mut slice.as_slice())?;
                     Ok(inner)
