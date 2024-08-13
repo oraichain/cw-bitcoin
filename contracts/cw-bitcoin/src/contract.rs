@@ -146,6 +146,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawalFees { address, index } => {
             to_json_binary(&query_withdrawal_fees(deps.storage, address, index)?)
         }
+        QueryMsg::CheckpointFees { index } => {
+            to_json_binary(&query_checkpoint_fees(deps.storage, index)?)
+        }
         QueryMsg::CompletedCheckpointTxs { limit } => {
             to_json_binary(&query_complete_checkpoint_txs(deps.storage, limit)?)
         }

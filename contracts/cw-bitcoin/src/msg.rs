@@ -93,12 +93,14 @@ pub enum QueryMsg {
     HeaderHeight {},
     #[returns(u64)]
     DepositFees { index: Option<u32> },
+    #[returns(u64)]
+    CheckpointFees { index: Option<u32> },
+    #[returns(u64)]
+    WithdrawalFees { address: String, index: Option<u32> },
     #[returns(Vec<Adapter<Transaction>>)]
     CompletedCheckpointTxs { limit: u32 },
     #[returns(Vec<Adapter<Transaction>>)]
     SignedRecoveryTxs {},
-    #[returns(u64)]
-    WithdrawalFees { address: String, index: Option<u32> },
     #[returns(WrappedBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
     #[returns(Checkpoint)]

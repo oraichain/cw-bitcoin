@@ -5,7 +5,6 @@ use super::utils::{
     get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
 };
 use crate::adapter::{Adapter, WrappedBinary};
-use crate::app::ConsensusKey;
 use crate::checkpoint::{Checkpoint, CheckpointStatus};
 use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
 use crate::header::WrappedHeader;

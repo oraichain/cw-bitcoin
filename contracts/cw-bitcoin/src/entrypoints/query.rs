@@ -60,6 +60,16 @@ pub fn query_withdrawal_fees(
     Ok(withdrawal_fees)
 }
 
+pub fn query_checkpoint_fees(store: &dyn Storage, index: Option<u32>) -> ContractResult<u64> {
+    let btc = Bitcoin::default();
+    let building_index = BUILDING_INDEX.load(store)?;
+    let checkpoint_fees = btc
+        .checkpoints
+        .calc_fee_checkpoint(store, index.unwrap_or(building_index), &[0])
+        .unwrap();
+    Ok(checkpoint_fees)
+}
+
 pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<WrappedBinary<BlockHash>> {
     // let header_config = HEADER_CONFIG.load(store)?;
     let headers = HeaderQueue::default();
