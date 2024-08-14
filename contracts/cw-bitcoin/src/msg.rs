@@ -117,7 +117,7 @@ pub enum QueryMsg {
     #[returns(bool)]
     ProcessedOutpoint { key: String },
     // Query index
-    #[returns(u32)]
+    #[returns(Option<u32>)]
     ConfirmedIndex {},
     #[returns(u32)]
     BuildingIndex {},
