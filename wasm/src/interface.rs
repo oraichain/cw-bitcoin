@@ -73,6 +73,11 @@ pub fn decodeRawTx(raw_tx: String) -> bitcoin::Transaction {
     tx
 }
 
+#[wasm_bindgen]
+pub fn getBitcoinTransactionTxid(tx: bitcoin::Transaction) -> String {
+    tx.txid().to_string()
+}
+
 /// A Bitcoin extended public key, used to derive Bitcoin public keys which
 /// signatories sign transactions with.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Deserialize, Serialize, Tsify)]
