@@ -158,8 +158,11 @@ fn num_unconfirmed() {
 
     let queue = create_queue_with_status(deps.as_mut().storage, 0, true).unwrap();
     CONFIRMED_INDEX.remove(deps.as_mut().storage);
-
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 0);
+
+    let queue = create_queue_with_status(deps.as_mut().storage, 1, false).unwrap();
+    CONFIRMED_INDEX.remove(deps.as_mut().storage);
+    assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 1);
 
     let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     CONFIRMED_INDEX.remove(deps.as_mut().storage);

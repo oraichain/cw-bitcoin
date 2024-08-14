@@ -128,7 +128,7 @@ pub enum QueryMsg {
     BuildingIndex {},
     #[returns(u32)]
     CompletedIndex {},
-    #[returns(u32)]
+    #[returns(Option<u32>)]
     UnhandledConfirmedIndex {},
     // End query index
 }

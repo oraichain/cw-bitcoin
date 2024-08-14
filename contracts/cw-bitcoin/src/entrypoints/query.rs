@@ -150,9 +150,9 @@ pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<Option<u32>>
     Ok(confirmed_index)
 }
 
-pub fn query_first_unconfirmed_index(store: &dyn Storage) -> ContractResult<u32> {
+pub fn query_first_unconfirmed_index(store: &dyn Storage) -> ContractResult<Option<u32>> {
     let checkpoints: CheckpointQueue = CheckpointQueue::default();
-    let first_unconfirmed_index = checkpoints.first_unconfirmed_index(store)?.unwrap();
+    let first_unconfirmed_index = checkpoints.first_unconfirmed_index(store)?;
     Ok(first_unconfirmed_index)
 }
 
