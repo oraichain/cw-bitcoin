@@ -92,6 +92,8 @@ pub enum QueryMsg {
     CheckpointConfig {},
     #[returns(HeaderConfig)]
     HeaderConfig {},
+    #[returns(Option<WrappedBinary<Xpub>>)]
+    SignatoryKey { addr: Addr },
     #[returns(u32)]
     HeaderHeight {},
     #[returns(u64)]

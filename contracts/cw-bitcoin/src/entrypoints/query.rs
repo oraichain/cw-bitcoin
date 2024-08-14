@@ -1,5 +1,5 @@
 use bitcoin::{BlockHash, Transaction};
-use cosmwasm_std::{Order, QuerierWrapper, Storage};
+use cosmwasm_std::{Addr, Order, QuerierWrapper, Storage};
 use std::str::FromStr;
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     signatory::SignatorySet,
     state::{
         header_height, BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, HEADER_CONFIG, OUTPOINTS,
-        SIG_KEYS,
+        SIGNERS, SIG_KEYS,
     },
 };
 
@@ -30,6 +30,19 @@ pub fn query_checkpoint_config(store: &dyn Storage) -> ContractResult<Checkpoint
 pub fn query_header_config(store: &dyn Storage) -> ContractResult<HeaderConfig> {
     let header_config = HEADER_CONFIG.load(store)?;
     Ok(header_config)
+}
+
+pub fn query_signatory_key(
+    store: &dyn Storage,
+    addr: Addr,
+) -> ContractResult<Option<WrappedBinary<Xpub>>> {
+    let consensus_key = SIGNERS.load(store, addr.as_str())?;
+    let sig_keys = SIG_KEYS.load(store, &consensus_key);
+    let result = match sig_keys {
+        Ok(xpub) => Some(WrappedBinary(xpub)),
+        Err(_) => None,
+    };
+    Ok(result)
 }
 
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {

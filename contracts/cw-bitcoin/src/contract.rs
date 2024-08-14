@@ -141,6 +141,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::BitcoinConfig {} => to_json_binary(&query_bitcoin_config(deps.storage)?),
         QueryMsg::CheckpointConfig {} => to_json_binary(&query_checkpoint_config(deps.storage)?),
         QueryMsg::HeaderConfig {} => to_json_binary(&query_header_config(deps.storage)?),
+        QueryMsg::SignatoryKey { addr } => {
+            to_json_binary(&query_signatory_key(deps.storage, addr)?)
+        }
         QueryMsg::DepositFees { index } => {
             to_json_binary(&query_deposit_fees(deps.storage, index)?)
         }
