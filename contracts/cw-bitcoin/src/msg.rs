@@ -70,6 +70,9 @@ pub enum ExecuteMsg {
         subdenom: String,
         metadata: Option<Metadata>,
     },
+    ChangeBtcAdmin {
+        new_admin: String,
+    },
     TriggerBeginBlock {
         hash: Binary,
     },

@@ -123,6 +123,7 @@ pub fn execute(
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }
+        ExecuteMsg::ChangeBtcAdmin { new_admin } => change_btc_admin(deps.storage, info, new_admin),
         ExecuteMsg::TriggerBeginBlock { hash } => clock_end_block(&env, deps.storage, hash),
     }
 }

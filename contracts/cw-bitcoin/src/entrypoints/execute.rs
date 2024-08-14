@@ -14,7 +14,6 @@ use cosmwasm_std::{
 };
 use token_bindings::Metadata;
 
-/// TODO: check logic
 pub fn update_checkpoint_config(
     store: &mut dyn Storage,
     info: MessageInfo,
@@ -25,7 +24,6 @@ pub fn update_checkpoint_config(
     Ok(Response::new().add_attribute("action", "update_checkpoint_config"))
 }
 
-/// TODO: check logic
 pub fn update_bitcoin_config(
     store: &mut dyn Storage,
     info: MessageInfo,
@@ -36,8 +34,6 @@ pub fn update_bitcoin_config(
     Ok(Response::new().add_attribute("action", "update_bitcoin_config"))
 }
 
-/// TODO: check logic
-/// ONLY USE ONE
 pub fn update_header_config(
     store: &mut dyn Storage,
     info: MessageInfo,
@@ -195,7 +191,6 @@ pub fn add_validators(
     Ok(response)
 }
 
-// TODO: Add check only owners of this contract can call
 pub fn register_denom(
     store: &mut dyn Storage,
     info: MessageInfo,
@@ -218,4 +213,28 @@ pub fn register_denom(
     Ok(Response::new()
         .add_messages(cosmos_msgs)
         .add_attribute("action", "register_denom"))
+}
+
+// USE THIS WHEN WE HAVE TO CHANGE TO ANOTHER BRIDGE CONTRACT
+pub fn change_btc_admin(
+    store: &mut dyn Storage,
+    info: MessageInfo,
+    new_admin: String,
+) -> ContractResult<Response> {
+    assert_eq!(info.sender, CONFIG.load(store)?.owner);
+
+    let config = CONFIG.load(store)?;
+    let mut cosmos_msgs = vec![];
+    cosmos_msgs.push(wasm_execute(
+        config.token_factory_addr,
+        &tokenfactory::msg::ExecuteMsg::ChangeAdmin {
+            denom: get_full_btc_denom(store)?,
+            new_admin_address: new_admin,
+        },
+        info.funds,
+    )?);
+
+    Ok(Response::new()
+        .add_messages(cosmos_msgs)
+        .add_attribute("action", "change_denom_admin"))
 }
