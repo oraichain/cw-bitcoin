@@ -132,20 +132,15 @@ pub fn query_signing_recovery_txs(
     recovery_txs.to_sign(store, &xpub.0)
 }
 
-pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<u32> {
+pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<Option<u32>> {
     let checkpoints = CheckpointQueue::default();
-    let has_signing = checkpoints.signing(store)?.is_some();
-    let signing_offset = has_signing as u32;
-    let confirmed_index = match checkpoints.confirmed_index(store) {
-        None => return Ok(checkpoints.len(store)? - 1 - signing_offset),
-        Some(index) => index,
-    };
+    let confirmed_index = checkpoints.confirmed_index(store);
     Ok(confirmed_index)
 }
 
-pub fn query_first_unconfirmed_index(store: &dyn Storage) -> ContractResult<Option<u32>> {
-    let checkpoints = CheckpointQueue::default();
-    let first_unconfirmed_index = checkpoints.first_unconfirmed_index(store)?;
+pub fn query_first_unconfirmed_index(store: &dyn Storage) -> ContractResult<u32> {
+    let checkpoints: CheckpointQueue = CheckpointQueue::default();
+    let first_unconfirmed_index = checkpoints.first_unconfirmed_index(store)?.unwrap();
     Ok(first_unconfirmed_index)
 }
 
