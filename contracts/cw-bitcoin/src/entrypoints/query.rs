@@ -102,6 +102,18 @@ pub fn query_active_sigset(store: &dyn Storage) -> ContractResult<SignatorySet> 
     Ok(active_sigset)
 }
 
+pub fn query_checkpoint_tx(
+    store: &dyn Storage,
+    index: Option<u32>,
+) -> ContractResult<Adapter<Transaction>> {
+    let checkpoints = CheckpointQueue::default();
+    let checkpoint = match index {
+        Some(index) => checkpoints.get(store, index)?,
+        None => checkpoints.get(store, checkpoints.index(store))?,
+    };
+    Ok(checkpoint.checkpoint_tx()?)
+}
+
 pub fn query_last_complete_tx(store: &dyn Storage) -> ContractResult<Adapter<Transaction>> {
     let checkpoints = CheckpointQueue::default();
     let last_complete_tx = checkpoints.last_completed_tx(store)?;

@@ -101,6 +101,8 @@ pub enum QueryMsg {
     CompletedCheckpointTxs { limit: u32 },
     #[returns(Vec<Adapter<Transaction>>)]
     SignedRecoveryTxs {},
+    #[returns(Vec<Adapter<Transaction>>)]
+    CheckpointTx { index: Option<u32> },
     #[returns(WrappedBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
     #[returns(Checkpoint)]

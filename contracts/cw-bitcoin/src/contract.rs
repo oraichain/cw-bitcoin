@@ -152,6 +152,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::CompletedCheckpointTxs { limit } => {
             to_json_binary(&query_complete_checkpoint_txs(deps.storage, limit)?)
         }
+        QueryMsg::CheckpointTx { index } => {
+            to_json_binary(&query_checkpoint_tx(deps.storage, index)?)
+        }
         QueryMsg::SignedRecoveryTxs {} => to_json_binary(&query_signed_recovery_txs(deps.storage)?),
         QueryMsg::HeaderHeight {} => to_json_binary(&query_header_height(deps.storage)?),
         QueryMsg::SidechainBlockHash {} => {
