@@ -1,5 +1,5 @@
 use bitcoin::{BlockHash, Transaction};
-use cosmwasm_std::{Addr, Order, QuerierWrapper, Storage};
+use cosmwasm_std::{Addr, Env, QuerierWrapper, Storage};
 use std::str::FromStr;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue, CheckpointStatus},
     error::{ContractError, ContractResult},
     header::HeaderQueue,
-    interface::{BitcoinConfig, CheckpointConfig, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, ChangeRates, CheckpointConfig, HeaderConfig, Xpub},
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
     state::{
@@ -212,4 +212,15 @@ pub fn query_signing_txs_at_checkpoint_index(
         return Err(ContractError::App("checkpoint is not signing".to_string()));
     }
     Ok(checkpoint.to_sign(&xpub.0)?)
+}
+
+pub fn query_change_rates(
+    store: &dyn Storage,
+    env: Env,
+    interval: u64,
+) -> ContractResult<ChangeRates> {
+    let now = env.block.time;
+    let btc = Bitcoin::default();
+    let change_rates = btc.change_rates(store, interval, now.seconds())?;
+    Ok(change_rates)
 }

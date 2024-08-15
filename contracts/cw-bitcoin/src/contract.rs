@@ -192,6 +192,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::UnhandledConfirmedIndex {} => {
             to_json_binary(&query_first_unconfirmed_index(deps.storage)?)
         }
+        QueryMsg::ChangeRates { interval } => {
+            to_json_binary(&query_change_rates(deps.storage, _env, interval)?)
+        }
     }
 }
 

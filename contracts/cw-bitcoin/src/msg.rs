@@ -8,7 +8,7 @@ use crate::{
     app::ConsensusKey,
     checkpoint::Checkpoint,
     header::WrappedHeader,
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, ChangeRates, CheckpointConfig, Dest, HeaderConfig, Xpub},
     threshold_sig::Signature,
 };
 
@@ -133,6 +133,8 @@ pub enum QueryMsg {
     #[returns(Option<u32>)]
     UnhandledConfirmedIndex {},
     // End query index
+    #[returns(ChangeRates)]
+    ChangeRates { interval: u64 },
 }
 
 #[cw_serde]

@@ -89,7 +89,7 @@ fn relay_height_validity() -> ContractResult<()> {
             Dest::Address(Addr::unchecked("")),
         )
     };
-    
+
     assert_eq!(
         try_relay(h + 100).unwrap_err().to_string(),
         "App Error: Invalid bitcoin block height",
@@ -252,7 +252,7 @@ fn check_change_rates() -> ContractResult<()> {
     maybe_step(env, deps.as_mut().storage)?;
     let change_rates = btc
         .borrow()
-        .change_rates(deps.as_mut().storage, 2000, 2100, 0)?;
+        .change_rates(deps.as_mut().storage, 2000, 2100)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 0);
     sign_cp(deps.as_mut(), 10)?;
@@ -271,7 +271,7 @@ fn check_change_rates() -> ContractResult<()> {
     maybe_step(env, deps.as_mut().storage)?;
     let change_rates = btc
         .borrow()
-        .change_rates(deps.as_mut().storage, 3000, 3100, 0)?;
+        .change_rates(deps.as_mut().storage, 3000, 3100)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 0);
     sign_cp(deps.as_mut(), 10)?;
@@ -283,7 +283,7 @@ fn check_change_rates() -> ContractResult<()> {
     maybe_step(env, deps.as_mut().storage)?;
     let change_rates = btc
         .borrow()
-        .change_rates(deps.as_mut().storage, 3000, 4100, 0)?;
+        .change_rates(deps.as_mut().storage, 3000, 4100)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 5);
@@ -295,7 +295,7 @@ fn check_change_rates() -> ContractResult<()> {
     maybe_step(env, deps.as_mut().storage)?;
     let change_rates = btc
         .borrow()
-        .change_rates(deps.as_mut().storage, 3000, 5100, 0)?;
+        .change_rates(deps.as_mut().storage, 3000, 5100)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 6);
@@ -306,7 +306,7 @@ fn check_change_rates() -> ContractResult<()> {
     maybe_step(env, deps.as_mut().storage)?;
     let change_rates = btc
         .borrow()
-        .change_rates(deps.as_mut().storage, 3000, 5100, 0)?;
+        .change_rates(deps.as_mut().storage, 3000, 5100)?;
     assert_eq!(change_rates.withdrawal, 8664);
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(
@@ -318,9 +318,7 @@ fn check_change_rates() -> ContractResult<()> {
             .index,
         5
     );
-    let change_rates = btc
-        .borrow()
-        .change_rates(deps.as_mut().storage, 3000, 5100, 5)?;
+    let change_rates = btc.borrow().change_rates(deps.as_mut().storage, 0, 5100)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 0);
 

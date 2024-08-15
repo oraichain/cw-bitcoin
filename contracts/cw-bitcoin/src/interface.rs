@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use bitcoin::secp256k1;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::BlockHeader;
@@ -482,8 +480,9 @@ impl HeaderConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(crate = "cosmwasm_schema::serde")]
+#[schemars(crate = "cosmwasm_schema::schemars")]
 pub struct ChangeRates {
     pub withdrawal: u16,
     pub sigset_change: u16,

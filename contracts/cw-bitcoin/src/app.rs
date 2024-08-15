@@ -493,16 +493,13 @@ impl Bitcoin {
         store: &dyn Storage,
         interval: u64,
         now: u64,
-        reset_index: u32,
     ) -> ContractResult<ChangeRates> {
         let signing = self
             .checkpoints
             .signing(store)?
             .ok_or_else(|| ContractError::App("No checkpoint to be signed".to_string()))?;
 
-        if now > interval && now - interval > signing.create_time()
-            || reset_index >= signing.sigset.index
-        {
+        if now > interval && now - interval > signing.create_time() {
             return Ok(ChangeRates::default());
         }
         let now = signing.create_time().max(now);
@@ -517,7 +514,7 @@ impl Bitcoin {
 
         let prev_index = completed
             .iter()
-            .rposition(|c| (now - c.create_time()) > interval || c.sigset.index <= reset_index)
+            .rposition(|c| (now - c.create_time()) > interval)
             .unwrap_or(0);
 
         let prev_checkpoint = completed.get(prev_index).unwrap();
