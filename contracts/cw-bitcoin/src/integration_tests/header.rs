@@ -1,6 +1,7 @@
 use bitcoincore_rpc_async::jsonrpc::error::RpcError;
 use bitcoind::{bitcoincore_rpc::RpcApi, BitcoinD, Conf, P2P};
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, Uint128};
+use oraiswap::asset::AssetInfo;
 
 use crate::{
     adapter::Adapter, header::WrappedHeader, interface::HeaderConfig, msg, tests::helper::MockApp,
@@ -24,7 +25,13 @@ async fn reorg() {
             owner.clone(),
             &msg::InstantiateMsg {
                 token_factory_addr: token_factory_addr.clone(),
-                bridge_wasm_addr: None,
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+                swap_router_contract: None,
             },
         )
         .unwrap();
@@ -165,7 +172,13 @@ async fn reorg_competing_chain_similar() {
             owner.clone(),
             &msg::InstantiateMsg {
                 token_factory_addr: token_factory_addr.clone(),
-                bridge_wasm_addr: None,
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+                swap_router_contract: None,
             },
         )
         .unwrap();
@@ -308,7 +321,13 @@ fn reorg_deep() {
             owner.clone(),
             &msg::InstantiateMsg {
                 token_factory_addr: token_factory_addr.clone(),
-                bridge_wasm_addr: None,
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+                swap_router_contract: None,
             },
         )
         .unwrap();

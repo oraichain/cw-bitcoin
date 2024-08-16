@@ -6,7 +6,8 @@ use crate::msg;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
 use chrono::{TimeZone, Utc};
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, Uint128};
+use oraiswap::asset::AssetInfo;
 
 #[test]
 fn test_relay_headers() {
@@ -19,7 +20,13 @@ fn test_relay_headers() {
             Addr::unchecked("alice"),
             &msg::InstantiateMsg {
                 token_factory_addr,
-                bridge_wasm_addr: None,
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+                swap_router_contract: None,
             },
         )
         .unwrap();
@@ -141,7 +148,13 @@ fn test_relay_headers_2() {
             Addr::unchecked("alice"),
             &msg::InstantiateMsg {
                 token_factory_addr,
-                bridge_wasm_addr: None,
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+                swap_router_contract: None,
             },
         )
         .unwrap();

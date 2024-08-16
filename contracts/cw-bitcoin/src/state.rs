@@ -1,4 +1,5 @@
 use bitcoin::util::uint::Uint256;
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
 
@@ -14,6 +15,12 @@ use crate::{
     },
     recovery::RecoveryTx,
 };
+
+#[cw_serde]
+pub struct Ratio {
+    pub nominator: u64,
+    pub denominator: u64,
+}
 
 pub const CONFIG: Item<Config> = Item::new("config");
 
@@ -68,6 +75,9 @@ pub const CONFIRMED_INDEX: Item<u32> = Item::new("confirmed_index");
 pub const FIRST_UNHANDLED_CONFIRMED_INDEX: Item<u32> = Item::new("first_unhandled_confirmed_index");
 /// Header current work
 pub const CURRENT_WORK: Item<Adapter<Uint256>> = Item::new("current_work");
+
+/// Fee
+pub const TOKEN_FEE_RATIO: Item<Ratio> = Item::new("token_fee_ratio");
 
 pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
     VALIDATORS

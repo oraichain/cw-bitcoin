@@ -3,16 +3,71 @@ use crate::{
     app::{Bitcoin, ConsensusKey},
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
-    state::{get_full_btc_denom, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS, VALIDATORS},
+    interface::{BitcoinConfig, CheckpointConfig, Config, Dest, HeaderConfig, Xpub},
+    state::{
+        get_full_btc_denom, Ratio, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS,
+        TOKEN_FEE_RATIO, VALIDATORS,
+    },
     threshold_sig::Signature,
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 
 use cosmwasm_std::{
-    to_json_binary, wasm_execute, Api, Env, MessageInfo, Response, Storage, WasmMsg,
+    to_json_binary, wasm_execute, Addr, Api, Env, MessageInfo, Response, Storage, Uint128, WasmMsg,
 };
+use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
+
+pub fn update_config(
+    store: &mut dyn Storage,
+    info: MessageInfo,
+    relayer_fee_token: Option<AssetInfo>,
+    token_fee_receiver: Option<Addr>,
+    relayer_fee_receiver: Option<Addr>,
+    relayer_fee: Option<Uint128>,
+    swap_router_contract: Option<Addr>,
+    token_fee: Option<Ratio>,
+    token_factory_addr: Option<Addr>,
+    owner: Option<Addr>,
+) -> ContractResult<Response> {
+    let mut config = CONFIG.load(store)?;
+    assert_eq!(info.sender, config.owner);
+
+    if let Some(relayer_fee_token) = relayer_fee_token {
+        config.relayer_fee_token = relayer_fee_token;
+    }
+
+    if let Some(token_fee_receiver) = token_fee_receiver {
+        config.token_fee_receiver = token_fee_receiver;
+    }
+
+    if let Some(relayer_fee_receiver) = relayer_fee_receiver {
+        config.relayer_fee_receiver = relayer_fee_receiver;
+    }
+
+    if let Some(relayer_fee) = relayer_fee {
+        config.relayer_fee = relayer_fee;
+    }
+
+    if let Some(swap_router_contract) = swap_router_contract {
+        config.swap_router_contract = Some(swap_router_contract);
+    }
+
+    if let Some(token_fee) = token_fee {
+        TOKEN_FEE_RATIO.save(store, &token_fee)?;
+    }
+
+    if let Some(token_factory_addr) = token_factory_addr {
+        config.token_factory_addr = token_factory_addr;
+    }
+
+    if let Some(owner) = owner {
+        config.owner = owner;
+    }
+
+    CONFIG.save(store, &config)?;
+    Ok(Response::new().add_attribute("action", "update_config"))
+}
 
 pub fn update_checkpoint_config(
     store: &mut dyn Storage,

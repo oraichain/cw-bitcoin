@@ -10,13 +10,14 @@ mod interface;
 pub mod msg;
 
 mod adapter;
+pub mod contract;
+mod fee;
+pub mod helper;
 mod outpoint_set;
 mod recovery;
 mod signatory;
 mod state;
 mod threshold_sig;
-
-pub mod contract;
 
 #[cfg(test)]
 mod tests;

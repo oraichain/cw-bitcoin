@@ -1,6 +1,7 @@
 use bitcoin::{util::merkleblock::PartialMerkleTree, Script, Transaction};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Binary};
+use cosmwasm_std::{Addr, Binary, Coin, Uint128};
+use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
 
 use crate::{
@@ -9,17 +10,39 @@ use crate::{
     checkpoint::Checkpoint,
     header::WrappedHeader,
     interface::{BitcoinConfig, ChangeRates, CheckpointConfig, Dest, HeaderConfig, Xpub},
+    state::Ratio,
     threshold_sig::Signature,
 };
 
 #[cw_serde]
+pub struct FeeData {
+    pub deducted_amount: Uint128,
+    pub token_fee: Coin,
+    pub relayer_fee: Coin,
+}
+
+#[cw_serde]
 pub struct InstantiateMsg {
     pub token_factory_addr: Addr,
-    pub bridge_wasm_addr: Option<Addr>,
+    pub relayer_fee_token: AssetInfo,
+    pub relayer_fee: Uint128, // This fee depends on the network type, not token type decimals of relayer fee should always be 10^6
+    pub token_fee_receiver: Addr,
+    pub relayer_fee_receiver: Addr,
+    pub swap_router_contract: Option<Addr>,
 }
 
 #[cw_serde]
 pub enum ExecuteMsg {
+    UpdateConfig {
+        relayer_fee_token: Option<AssetInfo>,
+        token_fee_receiver: Option<Addr>,
+        relayer_fee_receiver: Option<Addr>,
+        relayer_fee: Option<Uint128>,
+        swap_router_contract: Option<Addr>,
+        token_fee: Option<Ratio>,
+        token_factory_addr: Option<Addr>,
+        owner: Option<Addr>,
+    },
     UpdateBitcoinConfig {
         config: BitcoinConfig,
     },

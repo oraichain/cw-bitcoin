@@ -34,7 +34,11 @@ pub fn instantiate(
         &Config {
             owner: info.sender,
             token_factory_addr: msg.token_factory_addr,
-            bridge_wasm_addr: msg.bridge_wasm_addr,
+            relayer_fee_receiver: msg.relayer_fee_receiver,
+            token_fee_receiver: msg.token_fee_receiver,
+            relayer_fee_token: msg.relayer_fee_token,
+            relayer_fee: msg.relayer_fee,
+            swap_router_contract: msg.swap_router_contract,
         },
     )?;
 
@@ -63,6 +67,27 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
+        ExecuteMsg::UpdateConfig {
+            relayer_fee_token,
+            token_fee_receiver,
+            relayer_fee_receiver,
+            relayer_fee,
+            swap_router_contract,
+            token_fee,
+            token_factory_addr,
+            owner,
+        } => update_config(
+            deps.storage,
+            info,
+            relayer_fee_token,
+            token_fee_receiver,
+            relayer_fee_receiver,
+            relayer_fee,
+            swap_router_contract,
+            token_fee,
+            token_factory_addr,
+            owner,
+        ),
         ExecuteMsg::RelayDeposit {
             btc_tx,
             btc_height,
@@ -124,14 +149,18 @@ pub fn execute(
             register_denom(deps.storage, info, subdenom, metadata)
         }
         ExecuteMsg::ChangeBtcAdmin { new_admin } => change_btc_admin(deps.storage, info, new_admin),
-        ExecuteMsg::TriggerBeginBlock { hash } => clock_end_block(&env, deps.storage, hash),
+        ExecuteMsg::TriggerBeginBlock { hash } => {
+            clock_end_block(&env, deps.storage, &deps.querier, deps.api, hash)
+        }
     }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
-        SudoMsg::ClockEndBlock { hash } => clock_end_block(&env, deps.storage, hash),
+        SudoMsg::ClockEndBlock { hash } => {
+            clock_end_block(&env, deps.storage, &deps.querier, deps.api, hash)
+        }
     }
 }
 

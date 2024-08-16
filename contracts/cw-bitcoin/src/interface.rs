@@ -9,6 +9,7 @@ use cosmwasm_schema::{
 use cosmwasm_std::{from_json, to_json_vec, Addr, Binary, StdError, Storage, Uint128};
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
+use oraiswap::asset::AssetInfo;
 use sha2::{Digest, Sha256};
 
 use crate::adapter::Adapter;
@@ -492,7 +493,11 @@ pub struct ChangeRates {
 pub struct Config {
     pub token_factory_addr: Addr,
     pub owner: Addr,
-    pub bridge_wasm_addr: Option<Addr>,
+    pub relayer_fee_token: AssetInfo,
+    pub relayer_fee: Uint128, // This fee depends on the network type, not token type decimals of relayer fee should always be 10^6
+    pub token_fee_receiver: Addr,
+    pub relayer_fee_receiver: Addr,
+    pub swap_router_contract: Option<Addr>,
 }
 
 #[derive(Serialize, Deserialize)]
