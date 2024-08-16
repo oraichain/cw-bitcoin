@@ -1,5 +1,3 @@
-use std::os::unix::process;
-
 use crate::{
     app::Bitcoin,
     error::ContractResult,
