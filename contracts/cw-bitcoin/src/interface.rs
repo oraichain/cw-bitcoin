@@ -153,7 +153,7 @@ impl Dest {
                     source_port: clone_dest.source_port,
                     source_channel: clone_dest.source_channel,
                     token: Some(ProtoCoin(coin.clone()).into()),
-                    sender: clone_dest.sender.to_string(),
+                    sender: bitcoin_bridge_addr.to_string(),
                     receiver: clone_dest.receiver,
                     timeout_height: None,
                     timeout_timestamp: dest.timeout_timestamp,
