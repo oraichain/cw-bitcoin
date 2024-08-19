@@ -7,15 +7,21 @@ use cosmwasm_schema::{
     serde::{de, ser, Deserialize, Serialize},
 };
 use cosmwasm_std::{
-    from_json, to_json_binary, to_json_vec, Addr, Binary, Coin, CosmosMsg, IbcTimeout, StdError,
-    Storage, Timestamp, Uint128, WasmMsg,
+    from_json, to_json_binary, to_json_vec, Addr, Binary, Coin, CosmosMsg, StdError, Storage,
+    Uint128, WasmMsg,
 };
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
-use ibc_proto::ibc::apps::transfer::v1::MsgTransfer;
-use oraiswap::asset::AssetInfo;
+use oraiswap::{
+    asset::AssetInfo,
+    universal_swap_memo::{
+        memo::{IbcTransfer, PostAction},
+        Memo,
+    },
+};
 use sha2::{Digest, Sha256};
 
+use crate::adapter::Adapter;
 use crate::app::ConsensusKey;
 use crate::app::NETWORK;
 use crate::constants::{
@@ -27,12 +33,9 @@ use crate::constants::{
 use crate::error::ContractResult;
 use crate::header::WorkHeader;
 use crate::header::WrappedHeader;
-use crate::{adapter::Adapter, proto_coin::ProtoCoin};
 use libsecp256k1_core::curve::{Affine, ECMultContext, Field, Scalar};
 use libsecp256k1_core::util::{TAG_PUBKEY_EVEN, TAG_PUBKEY_ODD};
 use prost::Message;
-
-const IBC_MSG_TRANSFER_TYPE_URL: &str = "/ibc.applications.transfer.v1.MsgTransfer";
 
 #[derive(Deref, DerefMut)]
 pub struct DequeExtension<'a, T> {
@@ -126,8 +129,9 @@ impl Dest {
         &self,
         msgs: &mut Vec<CosmosMsg>,
         coin: Coin,
-        token_factory_addr: Addr,
         bitcoin_bridge_addr: Addr,
+        token_factory_addr: Addr,
+        osor_api_contract: Option<Addr>,
     ) {
         match self {
             Self::Address(addr) => {
@@ -143,22 +147,45 @@ impl Dest {
                 }));
             }
             Self::Ibc(dest) => {
+                if osor_api_contract.is_none() {
+                    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                        contract_addr: token_factory_addr.to_string(),
+                        msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
+                            denom: coin.denom.to_owned(),
+                            amount: coin.amount,
+                            mint_to_address: dest.sender.to_string(),
+                        })
+                        .unwrap(),
+                        funds: vec![],
+                    }));
+                    return;
+                }
+
                 // Currently we only support transfer port
                 if dest.source_port != "transfer" {
                     return;
                 }
 
-                let clone_dest = dest.clone();
-                let msg = MsgTransfer {
-                    source_port: clone_dest.source_port,
-                    source_channel: clone_dest.source_channel,
-                    token: Some(ProtoCoin(coin.clone()).into()),
-                    sender: bitcoin_bridge_addr.to_string(),
-                    receiver: clone_dest.receiver,
-                    timeout_height: None,
+                let memo = Memo {
+                    minimum_receive: coin.amount.to_string(),
+                    post_swap_action: Some(PostAction {
+                        contract_call: None,
+                        ibc_wasm_transfer_msg: None,
+                        transfer_msg: None,
+                        ibc_transfer_msg: Some(IbcTransfer {
+                            receiver: dest.receiver.to_string(),
+                            source_port: dest.source_port.to_string(),
+                            source_channel: dest.source_channel.to_string(),
+                            memo: dest.memo.to_string(),
+                            recover_address: dest.sender.to_string(),
+                        }),
+                    }),
+                    recovery_addr: dest.sender.to_string(),
                     timeout_timestamp: dest.timeout_timestamp,
-                    memo: clone_dest.memo,
+                    user_swap: None,
                 };
+                let encoded_memo = Memo::encode_to_vec(&memo);
+                let str_memo = Binary::from(encoded_memo).to_string();
 
                 // Create stargate message from osmosis ibc transfer message
 
@@ -172,10 +199,14 @@ impl Dest {
                     .unwrap(),
                     funds: vec![],
                 }));
-                msgs.push(CosmosMsg::Stargate {
-                    type_url: IBC_MSG_TRANSFER_TYPE_URL.to_string(),
-                    value: msg.encode_to_vec().into(),
-                });
+                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: osor_api_contract.unwrap().to_string(),
+                    msg: to_json_binary(&skip::entry_point::ExecuteMsg::UniversalSwap {
+                        memo: str_memo,
+                    })
+                    .unwrap(),
+                    funds: vec![],
+                }));
             }
         };
     }
@@ -563,6 +594,7 @@ pub struct Config {
     pub token_fee_receiver: Addr,
     pub relayer_fee_receiver: Addr,
     pub swap_router_contract: Option<Addr>,
+    pub osor_entry_point_contract: Option<Addr>,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -39,6 +39,7 @@ prost = "0.11"
 serde = "1.0.133"
 serde_json = "1.0.74"
 sha2 = "0.10.6"
+skip = {git = "https://github.com/oraichain/osor-api-contracts.git", rev = "14d852c"}
 thiserror = "1.0.26"
 token-bindings = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576"}
 tokenfactory = {git = "https://github.com/oraichain/token-bindings.git", rev = "7861576", features = ["library"]}

@@ -32,6 +32,7 @@ async fn reorg() {
                 },
                 token_fee_receiver: Addr::unchecked("token_fee_receiver"),
                 swap_router_contract: None,
+                osor_entry_point_contract: None,
             },
         )
         .unwrap();
@@ -179,6 +180,7 @@ async fn reorg_competing_chain_similar() {
                 },
                 token_fee_receiver: Addr::unchecked("token_fee_receiver"),
                 swap_router_contract: None,
+                osor_entry_point_contract: None,
             },
         )
         .unwrap();
@@ -328,6 +330,7 @@ fn reorg_deep() {
                 },
                 token_fee_receiver: Addr::unchecked("token_fee_receiver"),
                 swap_router_contract: None,
+                osor_entry_point_contract: None,
             },
         )
         .unwrap();

@@ -29,6 +29,7 @@ pub struct InstantiateMsg {
     pub token_fee_receiver: Addr,
     pub relayer_fee_receiver: Addr,
     pub swap_router_contract: Option<Addr>,
+    pub osor_entry_point_contract: Option<Addr>,
 }
 
 #[cw_serde]

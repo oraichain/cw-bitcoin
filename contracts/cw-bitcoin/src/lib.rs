@@ -14,7 +14,6 @@ pub mod contract;
 mod fee;
 pub mod helper;
 mod outpoint_set;
-mod proto_coin;
 mod recovery;
 mod signatory;
 mod state;

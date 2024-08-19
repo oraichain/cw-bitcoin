@@ -21,6 +21,7 @@ fn test_fee_collected() -> ContractResult<()> {
             },
             relayer_fee: Uint128::from(0u128),
             swap_router_contract: None,
+            osor_entry_point_contract: None,
         },
     )?;
     TOKEN_FEE_RATIO.save(

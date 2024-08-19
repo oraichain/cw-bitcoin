@@ -39,6 +39,7 @@ pub fn instantiate(
             relayer_fee_token: msg.relayer_fee_token,
             relayer_fee: msg.relayer_fee,
             swap_router_contract: msg.swap_router_contract,
+            osor_entry_point_contract: msg.osor_entry_point_contract,
         },
     )?;
 

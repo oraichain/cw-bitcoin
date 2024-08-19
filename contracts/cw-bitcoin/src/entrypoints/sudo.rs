@@ -2,7 +2,6 @@ use crate::{
     app::Bitcoin,
     error::ContractResult,
     fee::process_deduct_fee,
-    interface::Dest,
     state::{CONFIG, VALIDATORS},
 };
 use cosmwasm_std::{
@@ -23,6 +22,7 @@ pub fn clock_end_block(
 
     let config = CONFIG.load(storage)?;
     let token_factory = config.token_factory_addr;
+    let osor_entry_point_contract = config.osor_entry_point_contract;
 
     let mut msgs = vec![];
     for pending in pending_nbtc_transfers {
@@ -36,8 +36,9 @@ pub fn clock_end_block(
                     denom: denom.clone(),
                     amount: fee_data.deducted_amount,
                 },
-                token_factory.clone(),
                 env.contract.address.clone(),
+                token_factory.clone(),
+                osor_entry_point_contract.clone(),
             );
 
             if fee_data.relayer_fee.amount.gt(&Uint128::zero()) {

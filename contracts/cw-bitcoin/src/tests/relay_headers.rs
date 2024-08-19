@@ -27,6 +27,7 @@ fn test_relay_headers() {
                 },
                 token_fee_receiver: Addr::unchecked("token_fee_receiver"),
                 swap_router_contract: None,
+                osor_entry_point_contract: None,
             },
         )
         .unwrap();
@@ -155,6 +156,7 @@ fn test_relay_headers_2() {
                 },
                 token_fee_receiver: Addr::unchecked("token_fee_receiver"),
                 swap_router_contract: None,
+                osor_entry_point_contract: None,
             },
         )
         .unwrap();

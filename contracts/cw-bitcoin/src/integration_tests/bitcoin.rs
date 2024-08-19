@@ -198,6 +198,7 @@ async fn test_full_flow_happy_case_bitcoin() {
                 },
                 token_fee_receiver: Addr::unchecked("token_fee_receiver"),
                 swap_router_contract: None,
+                osor_entry_point_contract: None,
             },
         )
         .unwrap();
@@ -1028,6 +1029,7 @@ async fn test_deposit_with_token_fee() {
                 },
                 token_fee_receiver: Addr::unchecked("token_fee_receiver"),
                 swap_router_contract: None,
+                osor_entry_point_contract: None,
             },
         )
         .unwrap();
