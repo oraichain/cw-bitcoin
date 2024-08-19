@@ -2,10 +2,12 @@ use crate::{
     app::Bitcoin,
     error::ContractResult,
     fee::process_deduct_fee,
+    interface::Dest,
     state::{CONFIG, VALIDATORS},
 };
 use cosmwasm_std::{
-    to_json_binary, Api, Binary, Env, QuerierWrapper, Response, Storage, Uint128, WasmMsg,
+    to_json_binary, Api, Binary, Coin, CosmosMsg, Env, QuerierWrapper, Response, Storage, Uint128,
+    WasmMsg,
 };
 
 pub fn clock_end_block(
@@ -26,38 +28,40 @@ pub fn clock_end_block(
     for pending in pending_nbtc_transfers {
         for (dest, coin) in pending {
             let fee_data = process_deduct_fee(storage, querier, api, coin.clone())?;
-            msgs.push(WasmMsg::Execute {
-                contract_addr: token_factory.to_string(),
-                msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                    denom: coin.denom.to_owned(),
+            let denom = coin.denom.to_owned();
+
+            dest.build_cosmos_msg(
+                &mut msgs,
+                Coin {
+                    denom: denom.clone(),
                     amount: fee_data.deducted_amount,
-                    mint_to_address: dest.to_source_addr(),
-                })?,
-                funds: vec![],
-            });
+                },
+                token_factory.clone(),
+                env.contract.address.clone(),
+            );
 
             if fee_data.relayer_fee.amount.gt(&Uint128::zero()) {
-                msgs.push(WasmMsg::Execute {
+                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: token_factory.to_string(),
                     msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                        denom: coin.denom.to_owned(),
+                        denom: denom.clone(),
                         amount: fee_data.relayer_fee.amount,
                         mint_to_address: config.relayer_fee_receiver.to_string(),
                     })?,
                     funds: vec![],
-                });
+                }));
             }
 
             if fee_data.token_fee.amount.gt(&Uint128::zero()) {
-                msgs.push(WasmMsg::Execute {
+                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: token_factory.to_string(),
                     msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                        denom: coin.denom.to_owned(),
+                        denom: denom.clone(),
                         amount: fee_data.token_fee.amount,
                         mint_to_address: config.token_fee_receiver.to_string(),
                     })?,
                     funds: vec![],
-                });
+                }));
             }
         }
     }

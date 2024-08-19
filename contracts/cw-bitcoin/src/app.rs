@@ -757,8 +757,8 @@ impl Bitcoin {
         // note: we don't need to burn coin here
         // coin.burn();
 
-        // self.fee_pool += amount as i64;
-        let fee_pool = self.fee_pool(store)?;
+        let mut fee_pool = self.fee_pool(store)?;
+        fee_pool += amount as i64;
         FEE_POOL.save(store, &fee_pool)?;
 
         let mut checkpoint = self.checkpoints.building(store)?;

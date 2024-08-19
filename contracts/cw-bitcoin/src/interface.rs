@@ -6,13 +6,16 @@ use cosmwasm_schema::{
     schemars::JsonSchema,
     serde::{de, ser, Deserialize, Serialize},
 };
-use cosmwasm_std::{from_json, to_json_vec, Addr, Binary, StdError, Storage, Uint128};
+use cosmwasm_std::{
+    from_json, to_json_binary, to_json_vec, Addr, Binary, Coin, CosmosMsg, IbcTimeout, StdError,
+    Storage, Timestamp, Uint128, WasmMsg,
+};
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
+use ibc_proto::ibc::apps::transfer::v1::MsgTransfer;
 use oraiswap::asset::AssetInfo;
 use sha2::{Digest, Sha256};
 
-use crate::adapter::Adapter;
 use crate::app::ConsensusKey;
 use crate::app::NETWORK;
 use crate::constants::{
@@ -24,8 +27,12 @@ use crate::constants::{
 use crate::error::ContractResult;
 use crate::header::WorkHeader;
 use crate::header::WrappedHeader;
+use crate::{adapter::Adapter, proto_coin::ProtoCoin};
 use libsecp256k1_core::curve::{Affine, ECMultContext, Field, Scalar};
 use libsecp256k1_core::util::{TAG_PUBKEY_EVEN, TAG_PUBKEY_ODD};
+use prost::Message;
+
+const IBC_MSG_TRANSFER_TYPE_URL: &str = "/ibc.applications.transfer.v1.MsgTransfer";
 
 #[derive(Deref, DerefMut)]
 pub struct DequeExtension<'a, T> {
@@ -109,10 +116,68 @@ impl Dest {
     pub fn commitment_bytes(&self) -> ContractResult<Vec<u8>> {
         let bytes = match self {
             Self::Address(addr) => addr.as_bytes().into(),
-            Self::Ibc(dest) => Sha256::digest(to_json_vec(dest)?).to_vec(),
+            Self::Ibc(dest) => Sha256::digest(&to_json_vec(dest).unwrap()).to_vec(),
         };
 
         Ok(bytes)
+    }
+
+    pub fn build_cosmos_msg(
+        &self,
+        msgs: &mut Vec<CosmosMsg>,
+        coin: Coin,
+        token_factory_addr: Addr,
+        bitcoin_bridge_addr: Addr,
+    ) {
+        match self {
+            Self::Address(addr) => {
+                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: token_factory_addr.to_string(),
+                    msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
+                        denom: coin.denom.to_owned(),
+                        amount: coin.amount,
+                        mint_to_address: addr.to_string(),
+                    })
+                    .unwrap(),
+                    funds: vec![],
+                }));
+            }
+            Self::Ibc(dest) => {
+                // Currently we only support transfer port
+                if dest.source_port != "transfer" {
+                    return;
+                }
+
+                let clone_dest = dest.clone();
+                let msg = MsgTransfer {
+                    source_port: clone_dest.source_port,
+                    source_channel: clone_dest.source_channel,
+                    token: Some(ProtoCoin(coin.clone()).into()),
+                    sender: clone_dest.sender.to_string(),
+                    receiver: clone_dest.receiver,
+                    timeout_height: None,
+                    timeout_timestamp: dest.timeout_timestamp,
+                    memo: clone_dest.memo,
+                };
+
+                // Create stargate message from osmosis ibc transfer message
+
+                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: token_factory_addr.to_string(),
+                    msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
+                        denom: coin.denom.to_owned(),
+                        amount: coin.amount,
+                        mint_to_address: bitcoin_bridge_addr.to_string(),
+                    })
+                    .unwrap(),
+                    funds: vec![],
+                }));
+                msgs.push(CosmosMsg::Stargate {
+                    type_url: IBC_MSG_TRANSFER_TYPE_URL.to_string(),
+                    value: msg.encode_to_vec().into(),
+                });
+            }
+        };
     }
 }
 

@@ -1,4 +1,5 @@
 use bitcoin::{hashes::hex::FromHex, util::bip32::ExtendedPubKey};
+use cosmwasm_std::to_json_vec;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tsify::Tsify;
@@ -11,9 +12,7 @@ use crate::error::ContractResult;
 pub struct IbcDest {
     pub source_port: String,
     pub source_channel: String,
-    #[serde(skip)]
     pub receiver: String,
-    #[serde(skip)]
     pub sender: String,
     pub timeout_timestamp: u64,
     pub memo: String,
@@ -44,7 +43,7 @@ impl Dest {
     pub fn commitment_bytes(&self) -> ContractResult<Vec<u8>> {
         let bytes = match self {
             Self::Address(addr) => addr.as_bytes().into(),
-            Self::Ibc(dest) => Sha256::digest(serde_json_wasm::to_vec(dest)?).to_vec(),
+            Self::Ibc(dest) => Sha256::digest(&to_json_vec(dest).unwrap()).to_vec(),
         };
 
         Ok(bytes)

@@ -607,6 +607,13 @@ async fn test_full_flow_happy_case_bitcoin() {
             .unwrap()
             .txn;
 
+    let deposit_fee: u64 = app
+        .as_querier()
+        .query_wasm_smart(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::DepositFees { index: None },
+        )
+        .unwrap();
     relay_deposit(
         &mut app,
         Adapter::from(btc_tx),
@@ -659,7 +666,10 @@ async fn test_full_flow_happy_case_bitcoin() {
         .as_querier()
         .query_balance(&receiver, btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.amount.u128(), 119953074000000 as u128);
+    assert_eq!(
+        balance.amount.u128(),
+        (deposit_amount.to_sat() * 1000000 - deposit_fee) as u128
+    );
     increase_block(&mut app, Binary::from([3; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
         .as_querier()
@@ -711,6 +721,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         .output_script(&dest.commitment_bytes().unwrap(), threshold)
         .unwrap();
     let deposit_addr = bitcoin::Address::from_script(&script, bitcoin::Network::Regtest).unwrap();
+
     let btc_txid = wallet
         .send_to_address(
             &deposit_addr,
@@ -764,6 +775,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     let proof = bitcoin::util::merkleblock::MerkleBlock::consensus_decode(&mut tx_proof.as_slice())
         .unwrap()
         .txn;
+
     relay_deposit(
         &mut app,
         Adapter::from(btc_tx),

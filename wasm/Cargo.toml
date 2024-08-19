@@ -14,20 +14,20 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-bitcoin = { git = "https://github.com/oraichain/rust-bitcoin.git", rev = "37337421", features = [
-    "serde",
-] }
-bitcoin-script = { workspace = true }
-derive_more = { workspace = true }
-serde = { version = "1.0", default-features = false, features = ["derive"] }
-sha2 = { workspace = true }
-thiserror = { workspace = true }
-
 base64 = "0.13.1"
+bitcoin = {git = "https://github.com/oraichain/rust-bitcoin.git", rev = "37337421", features = [
+  "serde",
+]}
+bitcoin-script = {workspace = true}
+cosmwasm-std = {version = "1.5", features = ["stargate"]}
+derive_more = {workspace = true}
 js-sys = "0.3.66"
 log = "0.4.17"
 paste = "1.0.14"
+serde = {version = "1.0", default-features = false, features = ["derive"]}
 serde-json-wasm = "0.5.0"
 serde-wasm-bindgen = "0.6.3"
+sha2 = {workspace = true}
+thiserror = {workspace = true}
 tsify = "0.4.5"
 wasm-bindgen = "0.2.89"
