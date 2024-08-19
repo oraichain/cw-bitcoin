@@ -205,7 +205,7 @@ impl Dest {
                         memo: str_memo,
                     })
                     .unwrap(),
-                    funds: vec![],
+                    funds: vec![coin],
                 }));
             }
         };
