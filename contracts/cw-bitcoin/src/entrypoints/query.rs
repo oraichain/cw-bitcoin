@@ -5,7 +5,7 @@ use std::str::FromStr;
 use crate::{
     adapter::{Adapter, WrappedBinary},
     app::{Bitcoin, ConsensusKey},
-    checkpoint::{BuildingCheckpoint, Checkpoint, CheckpointQueue, CheckpointStatus},
+    checkpoint::{Checkpoint, CheckpointQueue, CheckpointStatus},
     error::{ContractError, ContractResult},
     header::HeaderQueue,
     interface::{BitcoinConfig, ChangeRates, CheckpointConfig, HeaderConfig, Xpub},

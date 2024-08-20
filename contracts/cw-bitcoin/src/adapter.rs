@@ -1,8 +1,8 @@
-use bitcoin::consensus::{deserialize, serialize, Decodable, Encodable};
+use bitcoin::consensus::{Decodable, Encodable};
 
 use cosmwasm_schema::schemars::{gen, schema, JsonSchema};
 use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
-use cosmwasm_std::{Binary, HexBinary};
+use cosmwasm_std::Binary;
 use derive_more::{Deref, DerefMut};
 
 macro_rules! forward_schema_impl {

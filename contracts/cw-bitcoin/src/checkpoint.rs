@@ -796,8 +796,6 @@ impl SigningCheckpoint {
     pub fn sign(
         &mut self,
         api: &dyn Api,
-        querier: QuerierWrapper,
-        store: &mut dyn Storage,
         xpub: Xpub,
         sigs: Vec<Signature>,
         btc_height: u32,

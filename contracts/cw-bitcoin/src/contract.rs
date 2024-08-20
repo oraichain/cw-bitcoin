@@ -150,9 +150,6 @@ pub fn execute(
             register_denom(deps.storage, info, subdenom, metadata)
         }
         ExecuteMsg::ChangeBtcAdmin { new_admin } => change_btc_admin(deps.storage, info, new_admin),
-        ExecuteMsg::TriggerBeginBlock { hash } => {
-            clock_end_block(&env, deps.storage, &deps.querier, deps.api, hash)
-        }
     }
 }
 

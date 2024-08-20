@@ -1,4 +1,3 @@
-use bitcoin::hashes::hex::ToHex;
 use cosmwasm_std::Binary;
 use oraiswap::universal_swap_memo::{
     memo::{IbcTransfer, PostAction},

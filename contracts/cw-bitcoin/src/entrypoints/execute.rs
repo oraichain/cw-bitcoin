@@ -3,7 +3,7 @@ use crate::{
     app::{Bitcoin, ConsensusKey},
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
-    interface::{BitcoinConfig, CheckpointConfig, Config, Dest, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
     state::{
         get_full_btc_denom, Ratio, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS,
         TOKEN_FEE_RATIO, VALIDATORS,

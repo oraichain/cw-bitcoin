@@ -97,9 +97,6 @@ pub enum ExecuteMsg {
     ChangeBtcAdmin {
         new_admin: String,
     },
-    TriggerBeginBlock {
-        hash: Binary,
-    },
 }
 
 #[cw_serde]
