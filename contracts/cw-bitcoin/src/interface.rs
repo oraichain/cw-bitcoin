@@ -7,7 +7,7 @@ use cosmwasm_schema::{
     serde::{de, ser, Deserialize, Serialize},
 };
 use cosmwasm_std::{
-    from_json, to_json_binary, to_json_vec, Addr, Binary, Coin, CosmosMsg, StdError, Storage,
+    from_json, to_json_binary, to_json_vec, Addr, Binary, Coin, CosmosMsg, Env, StdError, Storage,
     Uint128, WasmMsg,
 };
 use cw_storage_plus::Deque;
@@ -127,6 +127,7 @@ impl Dest {
 
     pub fn build_cosmos_msg(
         &self,
+        env: &Env,
         msgs: &mut Vec<CosmosMsg>,
         coin: Coin,
         bitcoin_bridge_addr: Addr,
@@ -147,7 +148,7 @@ impl Dest {
                 }));
             }
             Self::Ibc(dest) => {
-                if osor_api_contract.is_none() {
+                if osor_api_contract.is_none() || dest.timeout_timestamp < env.block.time.nanos() {
                     msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                         contract_addr: token_factory_addr.to_string(),
                         msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {

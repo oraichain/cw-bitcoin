@@ -31,6 +31,7 @@ pub fn clock_end_block(
             let denom = coin.denom.to_owned();
 
             dest.build_cosmos_msg(
+                env,
                 &mut msgs,
                 Coin {
                     denom: denom.clone(),
