@@ -665,14 +665,11 @@ impl Bitcoin {
     ) -> ContractResult<()> {
         VALIDATORS.remove(store, cons_key);
         SIGNERS.remove(store, &addr);
-        let xpub = SIG_KEYS.may_load(store, cons_key)?;
-        match xpub {
-            Some(xpub) => {
-                XPUBS.remove(store, &xpub.key.encode());
-                SIG_KEYS.remove(store, cons_key);
-            }
-            None => {}
+        if let Some(xpub) = SIG_KEYS.may_load(store, cons_key)? {
+            XPUBS.remove(store, &xpub.key.encode());
+            SIG_KEYS.remove(store, cons_key);
         }
+
         Ok(())
     }
     /// Takes the pending nBTC transfers from the most recent fully-signed
@@ -700,9 +697,7 @@ impl Bitcoin {
             self.checkpoints.set(store, *confirmed_index, &checkpoint)?;
         }
         if let Some(last_index) = unhandled_confirmed_cps.last() {
-            let _ = FIRST_UNHANDLED_CONFIRMED_INDEX
-                .save(store, &(*last_index + 1))
-                .unwrap();
+            FIRST_UNHANDLED_CONFIRMED_INDEX.save(store, &(*last_index + 1))?;
         }
         Ok(confirmed_dests)
     }
@@ -741,10 +736,7 @@ impl Bitcoin {
             self.checkpoints.set(store, checkpoint_index, &checkpoint)?;
         }
 
-        Ok(confirmed_dests
-            .into_iter()
-            .chain(completed_dests.into_iter())
-            .collect())
+        Ok(confirmed_dests.into_iter().chain(completed_dests).collect())
     }
 
     pub fn give_miner_fee(

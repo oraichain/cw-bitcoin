@@ -96,7 +96,7 @@ pub fn update_header_config(
 ) -> ContractResult<Response> {
     assert_eq!(info.sender, CONFIG.load(store)?.owner);
     let mut header_queue = HeaderQueue::default();
-    let _ = header_queue.configure(store, config.clone())?;
+    header_queue.configure(store, config.clone())?;
     Ok(Response::new().add_attribute("action", "update_header_config"))
 }
 
@@ -255,18 +255,14 @@ pub fn register_denom(
     assert_eq!(info.sender, CONFIG.load(store)?.owner);
 
     let config = CONFIG.load(store)?;
-    let mut cosmos_msgs = vec![];
-    cosmos_msgs.push(wasm_execute(
+    let msg = wasm_execute(
         config.token_factory_addr,
-        &tokenfactory::msg::ExecuteMsg::CreateDenom {
-            subdenom: subdenom,
-            metadata: metadata,
-        },
+        &tokenfactory::msg::ExecuteMsg::CreateDenom { subdenom, metadata },
         info.funds,
-    )?);
+    )?;
 
     Ok(Response::new()
-        .add_messages(cosmos_msgs)
+        .add_message(msg)
         .add_attribute("action", "register_denom"))
 }
 
@@ -279,17 +275,16 @@ pub fn change_btc_admin(
     assert_eq!(info.sender, CONFIG.load(store)?.owner);
 
     let config = CONFIG.load(store)?;
-    let mut cosmos_msgs = vec![];
-    cosmos_msgs.push(wasm_execute(
+    let msg = wasm_execute(
         config.token_factory_addr,
         &tokenfactory::msg::ExecuteMsg::ChangeAdmin {
             denom: get_full_btc_denom(store)?,
             new_admin_address: new_admin,
         },
         info.funds,
-    )?);
+    )?;
 
     Ok(Response::new()
-        .add_messages(cosmos_msgs)
+        .add_message(msg)
         .add_attribute("action", "change_denom_admin"))
 }

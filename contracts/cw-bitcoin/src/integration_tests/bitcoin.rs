@@ -240,16 +240,15 @@ async fn test_full_flow_happy_case_bitcoin() {
         bitcoin_config.min_withdrawal_checkpoints = 1;
         bitcoin_config.max_deposit_age = max_deposit_age as u64;
         bitcoin_config.max_offline_checkpoints = 1;
-        let _ = app
-            .execute(
-                owner.clone(),
-                bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::UpdateBitcoinConfig {
-                    config: bitcoin_config,
-                },
-                &[],
-            )
-            .unwrap();
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateBitcoinConfig {
+                config: bitcoin_config,
+            },
+            &[],
+        )
+        .unwrap();
     };
 
     let init_checkpoint_config = |app: &mut MockApp| -> () {
@@ -257,16 +256,15 @@ async fn test_full_flow_happy_case_bitcoin() {
         let mut checkpoint_config = CheckpointConfig::default();
         checkpoint_config.min_checkpoint_interval = 1; // 1 seconds
 
-        let _ = app
-            .execute(
-                owner.clone(),
-                bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::UpdateCheckpointConfig {
-                    config: checkpoint_config,
-                },
-                &[],
-            )
-            .unwrap();
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateCheckpointConfig {
+                config: checkpoint_config,
+            },
+            &[],
+        )
+        .unwrap();
     };
 
     let init_headers =
@@ -284,16 +282,15 @@ async fn test_full_flow_happy_case_bitcoin() {
                 min_difficulty_blocks: false,
                 trusted_header: Adapter::from(trusted_header),
             };
-            let _ = app
-                .execute(
-                    owner.clone(),
-                    bitcoin_bridge_addr.clone(),
-                    &msg::ExecuteMsg::UpdateHeaderConfig {
-                        config: header_config,
-                    },
-                    &[],
-                )
-                .unwrap();
+            app.execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::UpdateHeaderConfig {
+                    config: header_config,
+                },
+                &[],
+            )
+            .unwrap();
         };
 
     let relay_deposit = |app: &mut MockApp,
@@ -1070,16 +1067,15 @@ async fn test_deposit_with_token_fee() {
         bitcoin_config.min_withdrawal_checkpoints = 1;
         bitcoin_config.max_deposit_age = max_deposit_age as u64;
         bitcoin_config.max_offline_checkpoints = 1;
-        let _ = app
-            .execute(
-                owner.clone(),
-                bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::UpdateBitcoinConfig {
-                    config: bitcoin_config,
-                },
-                &[],
-            )
-            .unwrap();
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateBitcoinConfig {
+                config: bitcoin_config,
+            },
+            &[],
+        )
+        .unwrap();
     };
 
     let init_checkpoint_config = |app: &mut MockApp| -> () {
@@ -1087,16 +1083,15 @@ async fn test_deposit_with_token_fee() {
         let mut checkpoint_config = CheckpointConfig::default();
         checkpoint_config.min_checkpoint_interval = 1; // 1 seconds
 
-        let _ = app
-            .execute(
-                owner.clone(),
-                bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::UpdateCheckpointConfig {
-                    config: checkpoint_config,
-                },
-                &[],
-            )
-            .unwrap();
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateCheckpointConfig {
+                config: checkpoint_config,
+            },
+            &[],
+        )
+        .unwrap();
     };
 
     let init_headers =
@@ -1114,16 +1109,15 @@ async fn test_deposit_with_token_fee() {
                 min_difficulty_blocks: false,
                 trusted_header: Adapter::from(trusted_header),
             };
-            let _ = app
-                .execute(
-                    owner.clone(),
-                    bitcoin_bridge_addr.clone(),
-                    &msg::ExecuteMsg::UpdateHeaderConfig {
-                        config: header_config,
-                    },
-                    &[],
-                )
-                .unwrap();
+            app.execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::UpdateHeaderConfig {
+                    config: header_config,
+                },
+                &[],
+            )
+            .unwrap();
         };
 
     let relay_deposit = |app: &mut MockApp,

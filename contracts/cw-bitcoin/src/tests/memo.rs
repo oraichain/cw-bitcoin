@@ -25,7 +25,7 @@ fn test_memo() {
         timeout_timestamp: 19219319231,
         user_swap: None,
     };
-    let _ = memo.validate().unwrap();
+    memo.validate().unwrap();
     let encode_memo = Memo::encode_to_vec(&memo);
     let str_memo = Binary::from(encode_memo).to_string();
     let decode_memo = Memo::decode_memo(Binary::from_base64(str_memo.as_str()).unwrap()).unwrap();

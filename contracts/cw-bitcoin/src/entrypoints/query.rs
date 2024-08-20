@@ -124,7 +124,7 @@ pub fn query_checkpoint_tx(
         Some(index) => checkpoints.get(store, index)?,
         None => checkpoints.get(store, checkpoints.index(store))?,
     };
-    Ok(checkpoint.checkpoint_tx()?)
+    checkpoint.checkpoint_tx()
 }
 
 pub fn query_last_complete_tx(store: &dyn Storage) -> ContractResult<Adapter<Transaction>> {
@@ -211,7 +211,7 @@ pub fn query_signing_txs_at_checkpoint_index(
     if checkpoint.status != CheckpointStatus::Signing {
         return Err(ContractError::App("checkpoint is not signing".to_string()));
     }
-    Ok(checkpoint.to_sign(&xpub.0)?)
+    checkpoint.to_sign(&xpub.0)
 }
 
 pub fn query_change_rates(

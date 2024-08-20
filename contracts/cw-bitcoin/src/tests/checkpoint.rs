@@ -132,7 +132,7 @@ fn completed_pruned() {
     let mut deps = mock_dependencies();
     let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
     let index = BUILDING_INDEX.load(deps.as_mut().storage).unwrap();
-    let _ = BUILDING_INDEX
+    BUILDING_INDEX
         .save(deps.as_mut().storage, &(index + 10))
         .unwrap();
 
@@ -145,11 +145,11 @@ fn completed_pruned() {
 fn num_unconfirmed() {
     let mut deps = mock_dependencies();
     let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
-    let _ = CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
+    CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
     let queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
-    let _ = CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
+    CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
     assert_eq!(queue.num_unconfirmed(deps.as_ref().storage).unwrap(), 4);
 
     let queue = create_queue_with_status(deps.as_mut().storage, 0, false).unwrap();
@@ -178,7 +178,7 @@ fn num_unconfirmed() {
 fn first_unconfirmed_index() {
     let mut deps = mock_dependencies();
     let queue = create_queue_with_status(deps.as_mut().storage, 10, false).unwrap();
-    let _ = CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
+    CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
     assert_eq!(
         queue
             .first_unconfirmed_index(deps.as_ref().storage)
@@ -187,7 +187,7 @@ fn first_unconfirmed_index() {
     );
 
     let queue = create_queue_with_status(deps.as_mut().storage, 10, true).unwrap();
-    let _ = CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
+    CONFIRMED_INDEX.save(deps.as_mut().storage, &5).unwrap();
     assert_eq!(
         queue
             .first_unconfirmed_index(deps.as_ref().storage)

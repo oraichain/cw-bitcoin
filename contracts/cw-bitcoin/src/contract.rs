@@ -46,11 +46,11 @@ pub fn instantiate(
     // Set up header
     let header_config = HeaderConfig::mainnet()?;
     let mut header_queue = HeaderQueue::default();
-    let _ = header_queue.configure(deps.storage, header_config.clone())?;
+    header_queue.configure(deps.storage, header_config.clone())?;
 
     // Set up config
     CHECKPOINT_CONFIG.save(deps.storage, &CheckpointConfig::default())?;
-    BITCOIN_CONFIG.save(deps.storage, &&BitcoinConfig::default())?;
+    BITCOIN_CONFIG.save(deps.storage, &BitcoinConfig::default())?;
     FEE_POOL.save(deps.storage, &0)?;
 
     // Set up checkpoint index

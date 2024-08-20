@@ -16,7 +16,7 @@ use bitcoin::hashes::Hash;
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_schema::{cw_serde, schemars::JsonSchema};
-use cosmwasm_std::{Api, Coin, Env, QuerierWrapper, Storage};
+use cosmwasm_std::{Api, Coin, Env, Storage};
 use derive_more::{Deref, DerefMut};
 
 /// The status of a checkpoint. Checkpoints start as `Building`, and eventually
@@ -922,13 +922,11 @@ impl BuildingCheckpoint {
 impl CheckpointQueue {
     /// The queue's current configuration parameters.
     pub fn config(&self, store: &dyn Storage) -> CheckpointConfig {
-        let checkpoint_config = CHECKPOINT_CONFIG.load(store).unwrap();
-        checkpoint_config
+        CHECKPOINT_CONFIG.load(store).unwrap()
     }
 
     pub fn index(&self, store: &dyn Storage) -> u32 {
-        let building_index = BUILDING_INDEX.load(store).unwrap();
-        building_index
+        BUILDING_INDEX.load(store).unwrap()
     }
 
     pub fn first_unhandled_confirmed_index(&self, store: &dyn Storage) -> u32 {
@@ -943,7 +941,7 @@ impl CheckpointQueue {
 
     /// Removes all checkpoints from the queue and resets the index to zero.
     pub fn reset(&mut self, store: &mut dyn Storage) -> ContractResult<()> {
-        let _ = BUILDING_INDEX.save(store, &0)?;
+        BUILDING_INDEX.save(store, &0)?;
         FIRST_UNHANDLED_CONFIRMED_INDEX.remove(store);
         CONFIRMED_INDEX.remove(store);
         CHECKPOINTS.clear(store)
@@ -1477,7 +1475,7 @@ impl CheckpointQueue {
             return Ok(None);
         }
 
-        let _ = BUILDING_INDEX.save(store, &index);
+        BUILDING_INDEX.save(store, &index)?;
         CHECKPOINTS.push_back(store, &Checkpoint::new(sigset)?)?;
 
         let mut building = self.building(store)?;
