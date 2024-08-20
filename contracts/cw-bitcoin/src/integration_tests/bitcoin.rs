@@ -174,6 +174,7 @@ async fn relay_recovery(
     }
 }
 
+#[cfg(feature = "mainnet")]
 #[tokio::test]
 async fn test_full_flow_happy_case_bitcoin() {
     // Set up app
@@ -1003,6 +1004,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     println!("[BRAVOOO] All testcases passed!");
 }
 
+#[cfg(feature = "mainnet")]
 #[tokio::test]
 async fn test_deposit_with_token_fee() {
     // Set up app

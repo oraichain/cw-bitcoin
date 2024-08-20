@@ -62,11 +62,14 @@ impl MockApp {
     pub fn new(init_balances: &[(&str, &[Coin])]) -> Self {
         let mut app = cosmwasm_testing_util::MockApp::new(init_balances);
 
-        let bridge_id = app.upload(Box::new(ContractWrapper::new_with_empty(
-            crate::contract::execute,
-            crate::contract::instantiate,
-            crate::contract::query,
-        )));
+        let bridge_id = app.upload(Box::new(
+            ContractWrapper::new_with_empty(
+                crate::contract::execute,
+                crate::contract::instantiate,
+                crate::contract::query,
+            )
+            .with_sudo_empty(crate::contract::sudo),
+        ));
 
         Self { app, bridge_id }
     }
