@@ -62,15 +62,15 @@ pub struct SignatorySet {
     pub signatories: Vec<Signatory>,
 }
 
+type IterItem<'a> = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>;
+
 impl SignatorySet {
     pub fn from_script(
         script: &bitcoin::Script,
         threshold_ratio: (u64, u64),
     ) -> ContractResult<(Self, Vec<u8>)> {
         fn take_instruction<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
+            ins: &mut impl Iterator<Item = IterItem<'a>>,
         ) -> ContractResult<Instruction<'a>> {
             ins.next()
                 .ok_or_else(|| ContractError::App("Unexpected end of script".into()))?
@@ -78,9 +78,7 @@ impl SignatorySet {
         }
 
         fn take_bytes<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
+            ins: &mut impl Iterator<Item = IterItem<'a>>,
         ) -> ContractResult<&'a [u8]> {
             let instruction = take_instruction(ins)?;
 
@@ -91,11 +89,7 @@ impl SignatorySet {
             Ok(bytes)
         }
 
-        fn take_key<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
-        ) -> ContractResult<Pubkey> {
+        fn take_key<'a>(ins: &mut impl Iterator<Item = IterItem<'a>>) -> ContractResult<Pubkey> {
             let bytes = take_bytes(ins)?;
 
             if bytes.len() != 33 {
@@ -105,19 +99,13 @@ impl SignatorySet {
             Pubkey::try_from_slice(bytes)
         }
 
-        fn take_number<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
-        ) -> ContractResult<i64> {
+        fn take_number<'a>(ins: &mut impl Iterator<Item = IterItem<'a>>) -> ContractResult<i64> {
             let bytes = take_bytes(ins)?;
             read_scriptint(bytes).map_err(|_| ContractError::App("Failed to read scriptint".into()))
         }
 
         fn take_op<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
+            ins: &mut impl Iterator<Item = IterItem<'a>>,
             expected_op: opcodes::All,
         ) -> ContractResult<opcodes::All> {
             let instruction = take_instruction(ins)?;
@@ -136,9 +124,7 @@ impl SignatorySet {
         }
 
         fn take_first_signatory<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
+            ins: &mut impl Iterator<Item = IterItem<'a>>,
         ) -> ContractResult<Signatory> {
             let pubkey = take_key(ins)?;
             take_op(ins, OP_CHECKSIG)?;
@@ -155,9 +141,7 @@ impl SignatorySet {
         }
 
         fn take_nth_signatory<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
+            ins: &mut impl Iterator<Item = IterItem<'a>>,
         ) -> ContractResult<Signatory> {
             take_op(ins, OP_SWAP)?;
             let pubkey = take_key(ins)?;
@@ -173,20 +157,14 @@ impl SignatorySet {
             })
         }
 
-        fn take_threshold<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
-        ) -> ContractResult<u64> {
+        fn take_threshold<'a>(ins: &mut impl Iterator<Item = IterItem<'a>>) -> ContractResult<u64> {
             let threshold = take_number(ins)?;
             take_op(ins, OP_GREATERTHAN)?;
             Ok(threshold as u64)
         }
 
         fn take_commitment<'a>(
-            ins: &mut impl Iterator<
-                Item = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>,
-            >,
+            ins: &mut impl Iterator<Item = IterItem<'a>>,
         ) -> ContractResult<&'a [u8]> {
             let bytes = take_bytes(ins)?;
             take_op(ins, OP_DROP)?;

@@ -1528,9 +1528,11 @@ impl CheckpointQueue {
         checkpoint.sign(api, xpub, sigs, btc_height)?;
 
         if matches!(status, CheckpointStatus::Signing) && checkpoint.signed() {
-            let checkpoint_tx = checkpoint.checkpoint_tx()?;
             #[cfg(debug_assertions)]
-            println!("Checkpoint signing complete {:?}", checkpoint_tx);
+            println!(
+                "Checkpoint signing complete {:?}",
+                checkpoint.checkpoint_tx()?
+            );
             checkpoint.advance();
             checkpoint.status = CheckpointStatus::Complete
         }
