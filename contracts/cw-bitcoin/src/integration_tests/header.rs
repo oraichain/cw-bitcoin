@@ -15,6 +15,7 @@ where
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn reorg() {
     // Set up app
     let owner = Addr::unchecked("perfogic");
@@ -163,6 +164,7 @@ async fn reorg() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn reorg_competing_chain_similar() {
     // Set up app
     let owner = Addr::unchecked("perfogic");

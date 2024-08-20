@@ -176,6 +176,7 @@ async fn relay_recovery(
 
 #[cfg(feature = "mainnet")]
 #[tokio::test]
+#[serial_test::serial]
 async fn test_full_flow_happy_case_bitcoin() {
     // Set up app
     let owner = Addr::unchecked("perfogic");
@@ -1003,6 +1004,7 @@ async fn test_full_flow_happy_case_bitcoin() {
 
 #[cfg(feature = "mainnet")]
 #[tokio::test]
+#[serial_test::serial]
 async fn test_deposit_with_token_fee() {
     // Set up app
     let owner = Addr::unchecked("perfogic");
