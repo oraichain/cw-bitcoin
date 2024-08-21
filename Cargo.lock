@@ -592,9 +592,9 @@ dependencies = [
  "cw-multi-test 1.2.0",
  "cw20 1.1.2",
  "cw20-base",
- "token-bindings",
+ "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
  "token-bindings-test",
- "tokenfactory",
+ "tokenfactory 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
 ]
 
 [[package]]
@@ -611,9 +611,9 @@ dependencies = [
  "cw-multi-test 1.2.0",
  "cw20 1.1.2",
  "cw20-base",
- "token-bindings",
+ "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
  "token-bindings-test",
- "tokenfactory",
+ "tokenfactory 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
 ]
 
 [[package]]
@@ -845,8 +845,8 @@ dependencies = [
  "sha2 0.10.8",
  "skip",
  "thiserror",
- "token-bindings",
- "tokenfactory",
+ "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=a783854)",
+ "tokenfactory 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=a783854)",
  "tokio",
 ]
 
@@ -3291,6 +3291,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "token-bindings"
+version = "0.11.0"
+source = "git+https://github.com/oraichain/token-bindings.git?rev=a783854#a78385410811796f69ba8be083802d0270d10be9"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "token-bindings-test"
 version = "0.11.0"
 source = "git+https://github.com/oraichain/token-bindings.git?rev=7861576#78615761c7c0eb8ff8ebe64e26f70d20fec5b4e2"
@@ -3303,7 +3314,7 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
- "token-bindings",
+ "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
 ]
 
 [[package]]
@@ -3319,7 +3330,24 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
- "token-bindings",
+ "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
+]
+
+[[package]]
+name = "tokenfactory"
+version = "0.11.0"
+source = "git+https://github.com/oraichain/token-bindings.git?rev=a783854#a78385410811796f69ba8be083802d0270d10be9"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cosmwasm-storage",
+ "cw-storage-plus 1.2.0",
+ "cw-utils 1.0.3",
+ "cw2 1.1.2",
+ "schemars",
+ "serde",
+ "thiserror",
+ "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=a783854)",
 ]
 
 [[package]]
