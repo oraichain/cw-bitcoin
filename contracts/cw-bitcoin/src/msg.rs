@@ -7,9 +7,8 @@ use token_bindings::Metadata;
 use crate::{
     adapter::{Adapter, WrappedBinary},
     app::ConsensusKey,
-    checkpoint::Checkpoint,
     header::WrappedHeader,
-    interface::{BitcoinConfig, ChangeRates, CheckpointConfig, Dest, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
     state::Ratio,
     threshold_sig::Signature,
 };
@@ -131,9 +130,9 @@ pub enum QueryMsg {
     CheckpointTx { index: Option<u32> },
     #[returns(WrappedBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
-    #[returns(Checkpoint)]
+    #[returns(crate::checkpoint::Checkpoint)]
     CheckpointByIndex { index: u32 },
-    #[returns(Checkpoint)]
+    #[returns(crate::checkpoint::Checkpoint)]
     BuildingCheckpoint {},
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
     SigningRecoveryTxs { xpub: WrappedBinary<Xpub> },
@@ -154,7 +153,7 @@ pub enum QueryMsg {
     #[returns(Option<u32>)]
     UnhandledConfirmedIndex {},
     // End query index
-    #[returns(ChangeRates)]
+    #[returns(crate::interface::ChangeRates)]
     ChangeRates { interval: u64 },
 }
 

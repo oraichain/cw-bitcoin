@@ -11,8 +11,6 @@ pub enum ContractError {
     #[error(transparent)]
     ParseOutPoint(#[from] ParseOutPointError),
     #[error(transparent)]
-    BitcoinAddress(#[from] bitcoin::util::address::Error),
-    #[error(transparent)]
     BitcoinHash(#[from] bitcoin::hashes::Error),
     #[error(transparent)]
     BitcoinLockTime(#[from] bitcoin::locktime::Error),

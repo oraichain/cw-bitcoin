@@ -1,6 +1,4 @@
-use bitcoin::blockdata::transaction::ParseOutPointError;
-use cosmwasm_std::{OverflowError, StdError, VerificationError};
-use std::env::VarError;
+use cosmwasm_std::{StdError, VerificationError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ContractError {
@@ -17,17 +15,9 @@ pub enum ContractError {
     #[error(transparent)]
     Bitcoin(#[from] bitcoin::Error),
     #[error(transparent)]
-    Overflow(#[from] OverflowError),
-    #[error(transparent)]
-    ParseOutPoint(#[from] ParseOutPointError),
-    #[error(transparent)]
-    BitcoinAddress(#[from] bitcoin::util::address::Error),
+    ParseOutPoint(#[from] bitcoin::blockdata::transaction::ParseOutPointError),
     #[error(transparent)]
     BitcoinHash(#[from] bitcoin::hashes::Error),
-    #[error("{0}")]
-    BitcoinPubkeyHash(String),
-    #[error(transparent)]
-    BitcoinLockTime(#[from] bitcoin::locktime::Error),
     #[error(transparent)]
     BitcoinEncode(#[from] bitcoin::consensus::encode::Error),
     #[error("Unable to deduct fee: {0}")]
@@ -55,23 +45,9 @@ pub enum ContractError {
     #[error("Input index: {0} out of bounds")]
     InputIndexOutOfBounds(usize),
     #[error("{0}")]
-    OutputError(String),
-    #[error("Invalid Deposit Address")]
-    InvalidDepositAddress,
-    #[error("{0}")]
-    Relayer(String),
-    #[error("{0}")]
     Signer(String),
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error("Warp Rejection")]
-    WarpRejection(),
-    #[error("{0}")]
-    VarError(VarError),
     #[error("unauthorized")]
     Unauthorized {},
-    #[error("Unknown Error")]
-    Unknown,
 }
 
 impl From<ContractError> for StdError {
