@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::utils::{
     get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
 };
-use crate::adapter::{Adapter, WrappedBinary};
+use crate::adapter::Adapter;
 use crate::checkpoint::{Checkpoint, CheckpointStatus};
 use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
 use crate::header::WrappedHeader;
@@ -352,9 +352,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             app.execute(
                 sender,
                 bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::SetSignatoryKey {
-                    xpub: WrappedBinary(xpub),
-                },
+                &msg::ExecuteMsg::SetSignatoryKey { xpub },
                 &[],
             )
         };
@@ -379,7 +377,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             .query_wasm_smart(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningTxsAtCheckpointIndex {
-                    xpub: WrappedBinary(Xpub::new(xpub)),
+                    xpub: Xpub::new(xpub),
                     checkpoint_index: cp_index,
                 },
             )
@@ -389,7 +387,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             sender,
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::SubmitCheckpointSignature {
-                xpub: WrappedBinary(Xpub::new(xpub)),
+                xpub: Xpub::new(xpub),
                 sigs,
                 checkpoint_index: cp_index,
                 btc_height,
@@ -409,7 +407,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             .query_wasm_smart(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningRecoveryTxs {
-                    xpub: WrappedBinary(Xpub::new(xpub)),
+                    xpub: Xpub::new(xpub),
                 },
             )
             .unwrap();
@@ -418,7 +416,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             sender,
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::SubmitRecoverySignature {
-                xpub: WrappedBinary(Xpub::new(xpub)),
+                xpub: Xpub::new(xpub),
                 sigs,
             },
             &[],
@@ -1167,9 +1165,7 @@ async fn test_deposit_with_token_fee() {
             app.execute(
                 sender,
                 bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::SetSignatoryKey {
-                    xpub: WrappedBinary(xpub),
-                },
+                &msg::ExecuteMsg::SetSignatoryKey { xpub },
                 &[],
             )
         };
@@ -1194,7 +1190,7 @@ async fn test_deposit_with_token_fee() {
             .query_wasm_smart(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningTxsAtCheckpointIndex {
-                    xpub: WrappedBinary(Xpub::new(xpub)),
+                    xpub: Xpub::new(xpub),
                     checkpoint_index: cp_index,
                 },
             )
@@ -1204,7 +1200,7 @@ async fn test_deposit_with_token_fee() {
             sender,
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::SubmitCheckpointSignature {
-                xpub: WrappedBinary(Xpub::new(xpub)),
+                xpub: Xpub::new(xpub),
                 sigs,
                 checkpoint_index: cp_index,
                 btc_height,

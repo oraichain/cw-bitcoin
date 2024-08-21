@@ -5,9 +5,11 @@ use cosmwasm_schema::serde::{de, ser, Deserialize, Serialize};
 use cosmwasm_std::Binary;
 use derive_more::{Deref, DerefMut};
 
+use crate::interface::Xpub;
+
 macro_rules! forward_schema_impl {
-    ($impl:tt => $target:ty) => {
-        impl<T> JsonSchema for $impl<T> {
+    (($($impl:tt)+) => $target:ty) => {
+        impl $($impl)+ {
             fn schema_name() -> String {
                 <$target>::schema_name()
             }
@@ -20,6 +22,9 @@ macro_rules! forward_schema_impl {
                 <$target>::json_schema(gen)
             }
         }
+    };
+    ($ty:ty => $target:ty) => {
+        forward_schema_impl!((JsonSchema for $ty) => $target);
     };
 }
 
@@ -86,10 +91,5 @@ impl<'de, T: Decodable> Deserialize<'de> for Adapter<T> {
 
 impl<T: Copy> Copy for Adapter<T> {}
 
-/// A wrapper that adds core `orga` traits to types from the `bitcoin` crate.
-#[derive(Clone, Debug, PartialEq, Deref, DerefMut, Serialize, Deserialize)]
-#[serde(crate = "cosmwasm_schema::serde")]
-pub struct WrappedBinary<T>(pub T);
-
-forward_schema_impl!(Adapter => Binary);
-forward_schema_impl!(WrappedBinary => String);
+forward_schema_impl!((<T> JsonSchema for Adapter<T>) => Binary);
+forward_schema_impl!(Xpub => String);

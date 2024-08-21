@@ -5,7 +5,7 @@ use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
 
 use crate::{
-    adapter::{Adapter, WrappedBinary},
+    adapter::Adapter,
     app::ConsensusKey,
     header::WrappedHeader,
     interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
@@ -72,17 +72,17 @@ pub enum ExecuteMsg {
         script_pubkey: Adapter<Script>,
     },
     SubmitCheckpointSignature {
-        xpub: WrappedBinary<Xpub>,
+        xpub: Xpub,
         sigs: Vec<Signature>,
         checkpoint_index: u32,
         btc_height: u32,
     },
     SubmitRecoverySignature {
-        xpub: WrappedBinary<Xpub>,
+        xpub: Xpub,
         sigs: Vec<Signature>,
     },
     SetSignatoryKey {
-        xpub: WrappedBinary<Xpub>,
+        xpub: Xpub,
     },
     AddValidators {
         addrs: Vec<String>,
@@ -112,7 +112,7 @@ pub enum QueryMsg {
     CheckpointConfig {},
     #[returns(HeaderConfig)]
     HeaderConfig {},
-    #[returns(Option<WrappedBinary<Xpub>>)]
+    #[returns(Option<Xpub>)]
     SignatoryKey { addr: Addr },
     #[returns(u32)]
     HeaderHeight {},
@@ -128,19 +128,16 @@ pub enum QueryMsg {
     SignedRecoveryTxs {},
     #[returns(Adapter<Transaction>)]
     CheckpointTx { index: Option<u32> },
-    #[returns(WrappedBinary<bitcoin::BlockHash>)]
+    #[returns(Adapter<bitcoin::BlockHash>)]
     SidechainBlockHash {},
     #[returns(crate::checkpoint::Checkpoint)]
     CheckpointByIndex { index: u32 },
     #[returns(crate::checkpoint::Checkpoint)]
     BuildingCheckpoint {},
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
-    SigningRecoveryTxs { xpub: WrappedBinary<Xpub> },
+    SigningRecoveryTxs { xpub: Xpub },
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
-    SigningTxsAtCheckpointIndex {
-        xpub: WrappedBinary<Xpub>,
-        checkpoint_index: u32,
-    },
+    SigningTxsAtCheckpointIndex { xpub: Xpub, checkpoint_index: u32 },
     #[returns(bool)]
     ProcessedOutpoint { key: String },
     // Query index

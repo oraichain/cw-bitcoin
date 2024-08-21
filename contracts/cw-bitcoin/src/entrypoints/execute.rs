@@ -1,5 +1,5 @@
 use crate::{
-    adapter::{Adapter, WrappedBinary},
+    adapter::Adapter,
     app::{Bitcoin, ConsensusKey},
     error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
@@ -186,14 +186,14 @@ pub fn relay_checkpoint(
 pub fn submit_checkpoint_signature(
     api: &dyn Api,
     store: &mut dyn Storage,
-    xpub: WrappedBinary<Xpub>,
+    xpub: Xpub,
     sigs: Vec<Signature>,
     cp_index: u32,
     btc_height: u32,
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut checkpoints = btc.checkpoints;
-    checkpoints.sign(api, store, &xpub.0, sigs, cp_index, btc_height)?;
+    checkpoints.sign(api, store, &xpub, sigs, cp_index, btc_height)?;
     let response = Response::new().add_attribute("action", "submit_checkpoint_signature");
     Ok(response)
 }
@@ -201,12 +201,12 @@ pub fn submit_checkpoint_signature(
 pub fn submit_recovery_signature(
     api: &dyn Api,
     store: &mut dyn Storage,
-    xpub: WrappedBinary<Xpub>,
+    xpub: Xpub,
     sigs: Vec<Signature>,
 ) -> ContractResult<Response> {
     let btc = Bitcoin::default();
     let mut recovery_txs = btc.recovery_txs;
-    recovery_txs.sign(api, store, &xpub.0, sigs)?;
+    recovery_txs.sign(api, store, &xpub, sigs)?;
     let response = Response::new().add_attribute("action", "submit_recovery_signature");
     Ok(response)
 }
@@ -214,10 +214,10 @@ pub fn submit_recovery_signature(
 pub fn set_signatory_key(
     store: &mut dyn Storage,
     info: MessageInfo,
-    xpub: WrappedBinary<Xpub>,
+    xpub: Xpub,
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
-    btc.set_signatory_key(store, info.sender, xpub.0)?;
+    btc.set_signatory_key(store, info.sender, xpub)?;
     let response = Response::new().add_attribute("action", "set_signatory_key");
     Ok(response)
 }
