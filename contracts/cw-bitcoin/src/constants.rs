@@ -27,4 +27,4 @@ pub const MAX_TARGET: u32 = 0x1d00ffff;
 pub const MAX_SIGNATORIES: u64 = 20;
 pub const SIGSET_THRESHOLD: (u64, u64) = (2, 3);
 
-pub const BTC_NATIVE_TOKEN_DENOM: &str = "obtc";
+pub const BTC_NATIVE_TOKEN_DENOM: &str = "XuanDang";
