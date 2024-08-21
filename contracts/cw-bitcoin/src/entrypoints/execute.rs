@@ -267,10 +267,10 @@ pub fn register_denom(
 }
 
 // USE THIS WHEN WE HAVE TO CHANGE TO ANOTHER BRIDGE CONTRACT
-pub fn change_btc_admin(
+pub fn change_btc_denom_owner(
     store: &mut dyn Storage,
     info: MessageInfo,
-    new_admin: String,
+    new_owner: String,
 ) -> ContractResult<Response> {
     let config = CONFIG.load(store)?;
     assert_eq!(info.sender, config.owner);
@@ -278,14 +278,14 @@ pub fn change_btc_admin(
     let denom = get_full_btc_denom(config.token_factory_addr.as_str());
     let msg = wasm_execute(
         config.token_factory_addr,
-        &tokenfactory::msg::ExecuteMsg::ChangeAdmin {
+        &tokenfactory::msg::ExecuteMsg::ChangeDenomOwner {
             denom,
-            new_admin_address: new_admin,
+            new_admin_address: new_owner,
         },
         info.funds,
     )?;
 
     Ok(Response::new()
         .add_message(msg)
-        .add_attribute("action", "change_denom_admin"))
+        .add_attribute("action", "change_btc_denom_owner"))
 }

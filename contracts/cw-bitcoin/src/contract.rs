@@ -149,7 +149,9 @@ pub fn execute(
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }
-        ExecuteMsg::ChangeBtcAdmin { new_admin } => change_btc_admin(deps.storage, info, new_admin),
+        ExecuteMsg::ChangeBtcDenomOwner { new_owner } => {
+            change_btc_denom_owner(deps.storage, info, new_owner)
+        }
         ExecuteMsg::TriggerBeginBlock { hash } => {
             clock_end_block(&env, deps.storage, &deps.querier, deps.api, hash)
         }
