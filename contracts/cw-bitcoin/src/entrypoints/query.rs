@@ -3,7 +3,7 @@ use cosmwasm_std::{Addr, Env, QuerierWrapper, Storage};
 use std::str::FromStr;
 
 use crate::{
-    adapter::Adapter,
+    adapter::{Adapter, WrappedBinary},
     app::{Bitcoin, ConsensusKey},
     checkpoint::{Checkpoint, CheckpointQueue, CheckpointStatus},
     error::{ContractError, ContractResult},
@@ -32,11 +32,14 @@ pub fn query_header_config(store: &dyn Storage) -> ContractResult<HeaderConfig> 
     Ok(header_config)
 }
 
-pub fn query_signatory_key(store: &dyn Storage, addr: Addr) -> ContractResult<Option<Xpub>> {
+pub fn query_signatory_key(
+    store: &dyn Storage,
+    addr: Addr,
+) -> ContractResult<Option<WrappedBinary<Xpub>>> {
     let consensus_key = SIGNERS.load(store, addr.as_str())?;
     let sig_keys = SIG_KEYS.load(store, &consensus_key);
     let result = match sig_keys {
-        Ok(xpub) => Some(xpub),
+        Ok(xpub) => Some(WrappedBinary(xpub)),
         Err(_) => None,
     };
     Ok(result)
@@ -80,10 +83,10 @@ pub fn query_checkpoint_fees(store: &dyn Storage, index: Option<u32>) -> Contrac
     Ok(checkpoint_fees)
 }
 
-pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<Adapter<BlockHash>> {
+pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<WrappedBinary<BlockHash>> {
     // let header_config = HEADER_CONFIG.load(store)?;
     let headers = HeaderQueue::default();
-    let hash = Adapter::new(headers.hash(store)?);
+    let hash = WrappedBinary(headers.hash(store)?);
     Ok(hash)
 }
 
@@ -148,10 +151,10 @@ pub fn query_signed_recovery_txs(store: &dyn Storage) -> ContractResult<Vec<Sign
 pub fn query_signing_recovery_txs(
     _querier: QuerierWrapper,
     store: &dyn Storage,
-    xpub: Xpub,
+    xpub: WrappedBinary<Xpub>,
 ) -> ContractResult<Vec<([u8; 32], u32)>> {
     let recovery_txs = RecoveryTxs::default();
-    recovery_txs.to_sign(store, &xpub)
+    recovery_txs.to_sign(store, &xpub.0)
 }
 
 pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<Option<u32>> {
@@ -200,7 +203,7 @@ pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
 
 pub fn query_signing_txs_at_checkpoint_index(
     store: &dyn Storage,
-    xpub: Xpub,
+    xpub: WrappedBinary<Xpub>,
     cp_index: u32,
 ) -> ContractResult<Vec<([u8; 32], u32)>> {
     let checkpoints = CheckpointQueue::default();
@@ -208,7 +211,7 @@ pub fn query_signing_txs_at_checkpoint_index(
     if checkpoint.status != CheckpointStatus::Signing {
         return Err(ContractError::App("checkpoint is not signing".to_string()));
     }
-    checkpoint.to_sign(&xpub)
+    checkpoint.to_sign(&xpub.0)
 }
 
 pub fn query_change_rates(

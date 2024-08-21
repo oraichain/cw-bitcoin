@@ -178,6 +178,8 @@ async fn relay_recovery(
 #[tokio::test]
 async fn test_full_flow_happy_case_bitcoin() {
     // Set up app
+
+    use crate::adapter::WrappedBinary;
     let owner = Addr::unchecked("perfogic");
     let threshold = SIGSET_THRESHOLD;
     let mut app = MockApp::new(&[]);
@@ -351,7 +353,9 @@ async fn test_full_flow_happy_case_bitcoin() {
             app.execute(
                 sender,
                 bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::SetSignatoryKey { xpub },
+                &msg::ExecuteMsg::SetSignatoryKey {
+                    xpub: WrappedBinary(xpub),
+                },
                 &[],
             )
         };
@@ -376,7 +380,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             .query_wasm_smart(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningTxsAtCheckpointIndex {
-                    xpub: Xpub::new(xpub),
+                    xpub: WrappedBinary(Xpub::new(xpub)),
                     checkpoint_index: cp_index,
                 },
             )
@@ -386,7 +390,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             sender,
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::SubmitCheckpointSignature {
-                xpub: Xpub::new(xpub),
+                xpub: WrappedBinary(Xpub::new(xpub)),
                 sigs,
                 checkpoint_index: cp_index,
                 btc_height,
@@ -406,7 +410,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             .query_wasm_smart(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningRecoveryTxs {
-                    xpub: Xpub::new(xpub),
+                    xpub: WrappedBinary(Xpub::new(xpub)),
                 },
             )
             .unwrap();
@@ -415,7 +419,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             sender,
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::SubmitRecoverySignature {
-                xpub: Xpub::new(xpub),
+                xpub: WrappedBinary(Xpub::new(xpub)),
                 sigs,
             },
             &[],
@@ -1004,6 +1008,8 @@ async fn test_full_flow_happy_case_bitcoin() {
 #[serial_test::serial]
 async fn test_deposit_with_token_fee() {
     // Set up app
+
+    use crate::adapter::WrappedBinary;
     let owner = Addr::unchecked("perfogic");
     let threshold = SIGSET_THRESHOLD;
     let mut app = MockApp::new(&[]);
@@ -1164,7 +1170,9 @@ async fn test_deposit_with_token_fee() {
             app.execute(
                 sender,
                 bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::SetSignatoryKey { xpub },
+                &msg::ExecuteMsg::SetSignatoryKey {
+                    xpub: WrappedBinary(xpub),
+                },
                 &[],
             )
         };
@@ -1189,7 +1197,7 @@ async fn test_deposit_with_token_fee() {
             .query_wasm_smart(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningTxsAtCheckpointIndex {
-                    xpub: Xpub::new(xpub),
+                    xpub: WrappedBinary(Xpub::new(xpub)),
                     checkpoint_index: cp_index,
                 },
             )
@@ -1199,7 +1207,7 @@ async fn test_deposit_with_token_fee() {
             sender,
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::SubmitCheckpointSignature {
-                xpub: Xpub::new(xpub),
+                xpub: WrappedBinary(Xpub::new(xpub)),
                 sigs,
                 checkpoint_index: cp_index,
                 btc_height,
