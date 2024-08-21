@@ -1,5 +1,3 @@
-// #![feature(trait_alias)]
-
 mod app;
 mod checkpoint;
 mod constants;

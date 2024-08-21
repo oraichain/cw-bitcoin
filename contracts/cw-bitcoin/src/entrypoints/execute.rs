@@ -148,8 +148,8 @@ pub fn withdraw_to_bitcoin(
     let mut cosmos_msgs = vec![];
 
     let config = CONFIG.load(store)?;
+    let denom = get_full_btc_denom(config.token_factory_addr.as_str());
     for fund in info.funds {
-        let denom = get_full_btc_denom(store)?;
         if fund.denom == denom {
             let amount = fund.amount;
             btc.add_withdrawal(store, script_pubkey.clone(), amount)?;
@@ -159,7 +159,7 @@ pub fn withdraw_to_bitcoin(
                 contract_addr: config.token_factory_addr.clone().into_string(),
                 msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::BurnTokens {
                     amount,
-                    denom,
+                    denom: fund.denom,
                     burn_from_address: env.contract.address.to_string(),
                 })?,
                 funds: vec![],
@@ -252,9 +252,9 @@ pub fn register_denom(
     subdenom: String,
     metadata: Option<Metadata>,
 ) -> ContractResult<Response> {
-    assert_eq!(info.sender, CONFIG.load(store)?.owner);
-
     let config = CONFIG.load(store)?;
+    assert_eq!(info.sender, config.owner);
+
     let msg = wasm_execute(
         config.token_factory_addr,
         &tokenfactory::msg::ExecuteMsg::CreateDenom { subdenom, metadata },
@@ -272,13 +272,14 @@ pub fn change_btc_admin(
     info: MessageInfo,
     new_admin: String,
 ) -> ContractResult<Response> {
-    assert_eq!(info.sender, CONFIG.load(store)?.owner);
-
     let config = CONFIG.load(store)?;
+    assert_eq!(info.sender, config.owner);
+
+    let denom = get_full_btc_denom(config.token_factory_addr.as_str());
     let msg = wasm_execute(
         config.token_factory_addr,
         &tokenfactory::msg::ExecuteMsg::ChangeAdmin {
-            denom: get_full_btc_denom(store)?,
+            denom,
             new_admin_address: new_admin,
         },
         info.funds,

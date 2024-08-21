@@ -3,7 +3,7 @@ use crate::checkpoint::Checkpoint;
 use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
-    get_full_btc_denom, get_validators, BITCOIN_CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    get_full_btc_denom, get_validators, BITCOIN_CONFIG, CONFIG, CONFIRMED_INDEX, FEE_POOL,
     FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, SIG_KEYS, VALIDATORS, XPUBS,
 };
 use crate::threshold_sig;
@@ -305,7 +305,7 @@ impl Bitcoin {
 
         // note: we only mint nbtc when it is send to destination
         let mint_amount = (output.value * config.units_per_sat).into();
-        let denom = get_full_btc_denom(store)?;
+        let denom = get_full_btc_denom(CONFIG.load(store)?.token_factory_addr.as_str());
         let mut nbtc = Coin {
             denom,
             amount: mint_amount,

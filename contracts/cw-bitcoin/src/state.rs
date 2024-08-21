@@ -97,8 +97,6 @@ pub fn header_height(store: &dyn Storage) -> ContractResult<u32> {
     }
 }
 
-pub fn get_full_btc_denom(store: &dyn Storage) -> ContractResult<String> {
-    let config = CONFIG.load(store)?;
-    let token_factory_addr = config.token_factory_addr;
-    Ok(format!("factory/{}/{}", token_factory_addr, BTC_NATIVE_TOKEN_DENOM).to_string())
+pub fn get_full_btc_denom(token_factory_addr: &str) -> String {
+    format!("factory/{}/{}", token_factory_addr, BTC_NATIVE_TOKEN_DENOM)
 }
