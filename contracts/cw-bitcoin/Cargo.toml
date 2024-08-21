@@ -43,7 +43,6 @@ tokenfactory = { workspace = true, features = ["library"] }
 bitcoincore-rpc-async = { workspace = true }
 bitcoind = { workspace = true }
 cosmwasm-testing-util = { workspace = true }
-futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

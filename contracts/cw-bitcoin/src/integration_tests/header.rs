@@ -14,9 +14,8 @@ where
     Ok(serde_json::to_value(val).unwrap())
 }
 
-#[tokio::test]
-#[serial_test::serial]
-async fn reorg() {
+#[test]
+fn reorg() {
     // Set up app
     let owner = Addr::unchecked("perfogic");
     let mut app = MockApp::new(&[]);
@@ -163,9 +162,8 @@ async fn reorg() {
     assert_eq!(header_height, 16);
 }
 
-#[tokio::test]
-#[serial_test::serial]
-async fn reorg_competing_chain_similar() {
+#[test]
+fn reorg_competing_chain_similar() {
     // Set up app
     let owner = Addr::unchecked("perfogic");
     let mut app = MockApp::new(&[]);
