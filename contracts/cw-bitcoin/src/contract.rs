@@ -227,6 +227,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::ChangeRates { interval } => {
             to_json_binary(&query_change_rates(deps.storage, _env, interval)?)
         }
+        QueryMsg::ValueLocked {} => to_json_binary(&query_value_locked(deps.storage)?),
     }
 }
 

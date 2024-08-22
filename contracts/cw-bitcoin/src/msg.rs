@@ -158,6 +158,8 @@ pub enum QueryMsg {
     // End query index
     #[returns(crate::interface::ChangeRates)]
     ChangeRates { interval: u64 },
+    #[returns(u64)]
+    ValueLocked {},
 }
 
 #[cw_serde]

@@ -224,3 +224,9 @@ pub fn query_change_rates(
     let change_rates = btc.change_rates(store, interval, now.seconds())?;
     Ok(change_rates)
 }
+
+pub fn query_value_locked(store: &dyn Storage) -> ContractResult<u64> {
+    let checkpoints = CheckpointQueue::default();
+    let last_completed = checkpoints.last_completed(store)?;
+    Ok(last_completed.reserve_output()?.unwrap().value)
+}
