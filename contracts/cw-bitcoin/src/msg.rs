@@ -69,7 +69,7 @@ pub enum ExecuteMsg {
         cp_index: u32,
     },
     WithdrawToBitcoin {
-        script_pubkey: Adapter<Script>,
+        btc_address: String,
     },
     SubmitCheckpointSignature {
         xpub: WrappedBinary<Xpub>,

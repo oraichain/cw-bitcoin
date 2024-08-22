@@ -337,13 +337,15 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     let withdraw_to_bitcoin = |app: &mut MockApp,
                                sender: Addr,
-                               script_pubkey: Adapter<Script>,
+                               btc_address: Address,
                                coin: Coin|
      -> Result<AppResponse, _> {
         app.execute(
             sender,
             bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::WithdrawToBitcoin { script_pubkey },
+            &msg::ExecuteMsg::WithdrawToBitcoin {
+                btc_address: btc_address.to_string(),
+            },
             &[coin],
         )
     };
@@ -745,7 +747,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     withdraw_to_bitcoin(
         &mut app,
         receiver.clone(),
-        Adapter::from(withdraw_address.script_pubkey()),
+        withdraw_address,
         Coin {
             denom: btc_bridge_denom.clone(),
             amount: (bitcoin::Amount::from_btc(0.5).unwrap().to_sat() * 1000000).into(),

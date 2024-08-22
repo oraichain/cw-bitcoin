@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{
     adapter::{Adapter, WrappedBinary},
     app::{Bitcoin, ConsensusKey},
@@ -141,7 +143,7 @@ pub fn withdraw_to_bitcoin(
     store: &mut dyn Storage,
     info: MessageInfo,
     env: Env,
-    script_pubkey: Adapter<bitcoin::Script>,
+    btc_address: String,
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
 
@@ -149,10 +151,13 @@ pub fn withdraw_to_bitcoin(
 
     let config = CONFIG.load(store)?;
     let denom = get_full_btc_denom(config.token_factory_addr.as_str());
+    let script_pubkey = bitcoin::Address::from_str(btc_address.as_str())
+        .map_err(|err| crate::error::ContractError::App(err.to_string()))?
+        .script_pubkey();
     for fund in info.funds {
         if fund.denom == denom {
             let amount = fund.amount;
-            btc.add_withdrawal(store, script_pubkey.clone(), amount)?;
+            btc.add_withdrawal(store, Adapter::new(script_pubkey.clone()), amount)?;
 
             // burn here
             cosmos_msgs.push(WasmMsg::Execute {

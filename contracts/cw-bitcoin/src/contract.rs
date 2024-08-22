@@ -111,8 +111,8 @@ pub fn execute(
             btc_proof,
             cp_index,
         } => relay_checkpoint(deps.storage, btc_height, btc_proof, cp_index),
-        ExecuteMsg::WithdrawToBitcoin { script_pubkey } => {
-            withdraw_to_bitcoin(deps.storage, info, env, script_pubkey)
+        ExecuteMsg::WithdrawToBitcoin { btc_address } => {
+            withdraw_to_bitcoin(deps.storage, info, env, btc_address)
         }
         ExecuteMsg::RelayHeaders { headers } => relay_headers(deps.storage, headers),
         ExecuteMsg::UpdateHeaderConfig { config } => {
