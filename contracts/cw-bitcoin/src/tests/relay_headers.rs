@@ -7,7 +7,7 @@ use bitcoin::hashes::hex::FromHex;
 use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
 use chrono::{TimeZone, Utc};
 use cosmwasm_std::{coins, Addr, Uint128};
-use cosmwasm_testing_util::{MockApp as TestingMockApp, MockTokenExtensions};
+use cosmwasm_testing_util::{MockAppExtensions, MockTokenExtensions};
 use oraiswap::asset::AssetInfo;
 
 #[test]

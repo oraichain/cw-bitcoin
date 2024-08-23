@@ -25,7 +25,7 @@ use bitcoind::{BitcoinD, Conf};
 use cosmwasm_std::coins;
 use cosmwasm_std::{Addr, Binary, Coin, Uint128};
 use cosmwasm_testing_util::AppResponse;
-use cosmwasm_testing_util::{MockApp as TestingMockApp, MockTokenExtensions};
+use cosmwasm_testing_util::{MockAppExtensions, MockTokenExtensions};
 use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
 use tokio::time::sleep;

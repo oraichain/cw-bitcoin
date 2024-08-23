@@ -2,7 +2,7 @@ use crate::checkpoint::{BitcoinTx, Output};
 use crate::msg::{self};
 use cosmwasm_std::{testing::mock_env, Env, Timestamp};
 use cosmwasm_std::{Addr, Coin};
-use cosmwasm_testing_util::{MockApp as TestingMockApp, MockResult};
+use cosmwasm_testing_util::{MockAppExtensions, MockResult, TestMockApp};
 
 use crate::{error::ContractResult, threshold_sig::Signature};
 use bitcoin::secp256k1::{Message, Secp256k1};
@@ -46,11 +46,6 @@ pub fn set_time(seconds: u64) -> Env {
     env.block.time = Timestamp::from_seconds(seconds);
     env
 }
-
-#[cfg(feature = "test-tube")]
-pub type TestMockApp = cosmwasm_testing_util::TestTubeMockApp;
-#[cfg(not(feature = "test-tube"))]
-pub type TestMockApp = cosmwasm_testing_util::MultiTestMockApp;
 
 #[derive(Deref, DerefMut)]
 pub struct MockApp {

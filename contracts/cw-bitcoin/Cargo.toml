@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 default = []
 library = []
 mainnet = []
-test-tube = []
+test-tube = ["cosmwasm-testing-util/test-tube"]
 
 [dependencies]
 arrayref = "0.3"

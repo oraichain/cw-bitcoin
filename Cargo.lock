@@ -760,7 +760,7 @@ dependencies = [
 [[package]]
 name = "cosmwasm-testing-util"
 version = "0.1.0"
-source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=3ed0397#3ed03974960122fcda17fd6beb1a657334fe425a"
+source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=6ab8fe5#6ab8fe566b474adfd05886b1fa46b521ede7e354"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -1011,7 +1011,7 @@ dependencies = [
  "chrono",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=3ed0397)",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=6ab8fe5)",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
  "cw20 1.1.2",

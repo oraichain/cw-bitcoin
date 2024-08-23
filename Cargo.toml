@@ -39,7 +39,7 @@ serde_json = "1.0.74"
 sha2 = "0.10.6"
 skip = { git = "https://github.com/oraichain/osor-api-contracts.git", rev = "14d852c" }
 thiserror = "1.0.26"
-cosmwasm-testing-util = { git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "3ed0397" }
+cosmwasm-testing-util = { git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "6ab8fe5" }
 token-bindings = { git = "https://github.com/oraichain/token-bindings.git", rev = "9796c74" }
 tokenfactory = { git = "https://github.com/oraichain/token-bindings.git", rev = "9796c74", features = [
   "library",
