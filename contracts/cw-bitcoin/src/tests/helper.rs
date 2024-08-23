@@ -1,10 +1,8 @@
-use cosmwasm_std::{testing::mock_env, Env, Timestamp};
-use cosmwasm_std::{Addr, Coin};
-
-use cosmwasm_testing_util::{ContractWrapper, MockResult};
-
 use crate::checkpoint::{BitcoinTx, Output};
 use crate::msg::{self};
+use cosmwasm_std::{testing::mock_env, Env, Timestamp};
+use cosmwasm_std::{Addr, Coin};
+use cosmwasm_testing_util::{MockApp as TestingMockApp, MockResult};
 
 use crate::{error::ContractResult, threshold_sig::Signature};
 use bitcoin::secp256k1::{Message, Secp256k1};
@@ -49,29 +47,42 @@ pub fn set_time(seconds: u64) -> Env {
     env
 }
 
+#[cfg(feature = "test-tube")]
+pub type TestMockApp = cosmwasm_testing_util::TestTubeMockApp;
+#[cfg(not(feature = "test-tube"))]
+pub type TestMockApp = cosmwasm_testing_util::MultiTestMockApp;
+
 #[derive(Deref, DerefMut)]
 pub struct MockApp {
     #[deref]
     #[deref_mut]
-    app: cosmwasm_testing_util::MockApp,
+    app: TestMockApp,
     bridge_id: u64,
 }
 
 #[allow(dead_code)]
 impl MockApp {
-    pub fn new(init_balances: &[(&str, &[Coin])]) -> Self {
-        let mut app = cosmwasm_testing_util::MockApp::new(init_balances);
+    pub fn new(init_balances: &[(&str, &[Coin])]) -> (Self, Vec<String>) {
+        let (mut app, accounts) = TestMockApp::new(init_balances);
+        let bridge_id;
+        #[cfg(feature = "test-tube")]
+        {
+            static CW_BYTES: &[u8] = include_bytes!("./testdata/cw-bitcoin.wasm");
+            bridge_id = app.upload(CW_BYTES);
+        }
+        #[cfg(not(feature = "test-tube"))]
+        {
+            bridge_id = app.upload(Box::new(
+                cosmwasm_testing_util::ContractWrapper::new_with_empty(
+                    crate::contract::execute,
+                    crate::contract::instantiate,
+                    crate::contract::query,
+                )
+                .with_sudo_empty(crate::contract::sudo),
+            ));
+        }
 
-        let bridge_id = app.upload(Box::new(
-            ContractWrapper::new_with_empty(
-                crate::contract::execute,
-                crate::contract::instantiate,
-                crate::contract::query,
-            )
-            .with_sudo_empty(crate::contract::sudo),
-        ));
-
-        Self { app, bridge_id }
+        (Self { app, bridge_id }, accounts)
     }
 
     /// external method

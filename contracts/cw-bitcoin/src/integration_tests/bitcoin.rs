@@ -5,6 +5,7 @@ use super::utils::{
     get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
 };
 use crate::adapter::Adapter;
+use crate::adapter::WrappedBinary;
 use crate::checkpoint::{Checkpoint, CheckpointStatus};
 use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
 use crate::header::WrappedHeader;
@@ -17,12 +18,14 @@ use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
 use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::{Address, BlockHeader, Script, Transaction};
+use bitcoin::{Address, BlockHeader, Transaction};
 use bitcoincore_rpc_async::{Client, RpcApi as AsyncRpcApi};
 use bitcoind::bitcoincore_rpc::RpcApi;
 use bitcoind::{BitcoinD, Conf};
+use cosmwasm_std::coins;
 use cosmwasm_std::{Addr, Binary, Coin, Uint128};
 use cosmwasm_testing_util::AppResponse;
+use cosmwasm_testing_util::{MockApp as TestingMockApp, MockTokenExtensions};
 use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
 use tokio::time::sleep;
@@ -67,8 +70,7 @@ async fn relay_checkpoint(
     checkpoint_index: u32,
 ) -> () {
     let completed_cps: Vec<Adapter<Transaction>> = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CompletedCheckpointTxs { limit: 10 },
         )
@@ -127,8 +129,7 @@ async fn relay_recovery(
     bitcoin_bridge_addr: Addr,
 ) -> () {
     let recovery_txs: Vec<SignedRecoveryTx> = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::SignedRecoveryTxs {},
         )
@@ -178,11 +179,19 @@ async fn relay_recovery(
 #[tokio::test]
 async fn test_full_flow_happy_case_bitcoin() {
     // Set up app
-
-    use crate::adapter::WrappedBinary;
-    let owner = Addr::unchecked("perfogic");
     let threshold = SIGSET_THRESHOLD;
-    let mut app = MockApp::new(&[]);
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000, "orai")),
+        ("alice", &coins(100_000_000_000, "orai")),
+        ("bob", &coins(100_000_000_000, "orai")),
+        ("dave", &coins(100_000_000_000, "orai")),
+        ("jayce", &coins(100_000_000_000, "orai")),
+    ]);
+    let owner = Addr::unchecked(&accounts[0]);
+    let validator_1 = Addr::unchecked(&accounts[1]);
+    let validator_2 = Addr::unchecked(&accounts[2]);
+    let validator_3 = Addr::unchecked(&accounts[3]);
+    let validator_4 = Addr::unchecked(&accounts[4]);
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
     let btc_bridge_denom = format!(
         "factory/{}/{}",
@@ -233,7 +242,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             owner.clone(),
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
-            &[],
+            &coins(10_000_000, "orai"),
         )
     };
 
@@ -378,8 +387,7 @@ async fn test_full_flow_happy_case_bitcoin() {
      -> Result<AppResponse, _> {
         let secp = Secp256k1::signing_only();
         let to_signs: Vec<([u8; 32], u32)> = app
-            .as_querier()
-            .query_wasm_smart(
+            .query(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningTxsAtCheckpointIndex {
                     xpub: WrappedBinary(Xpub::new(xpub)),
@@ -408,8 +416,7 @@ async fn test_full_flow_happy_case_bitcoin() {
      -> Result<AppResponse, _> {
         let secp = Secp256k1::signing_only();
         let to_signs: Vec<([u8; 32], u32)> = app
-            .as_querier()
-            .query_wasm_smart(
+            .query(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningRecoveryTxs {
                     xpub: WrappedBinary(Xpub::new(xpub)),
@@ -435,8 +442,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     register_denom(&mut app, BTC_NATIVE_TOKEN_DENOM.to_string(), None).unwrap();
 
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1000);
 
@@ -451,8 +457,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     )
     .await;
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1020);
 
@@ -472,10 +477,7 @@ async fn test_full_flow_happy_case_bitcoin() {
         ExtendedPubKey::from_priv(&secp, &xprivs[3]),
     ];
     let consensus_keys = vec![[0; 32], [1; 32], [2; 32], [3; 32]];
-    let validator_1 = Addr::unchecked("orai1Alice");
-    let validator_2 = Addr::unchecked("orai1Bob");
-    let validator_3 = Addr::unchecked("orai1Dave");
-    let validator_4 = Addr::unchecked("orai1Jayce");
+
     add_validators(
         &mut app,
         vec![
@@ -510,8 +512,7 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // Fetching checkpoint and creating deposit address
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -584,8 +585,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     )
     .await;
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1022);
 
@@ -609,8 +609,7 @@ async fn test_full_flow_happy_case_bitcoin() {
             .txn;
 
     let deposit_fee: u64 = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::DepositFees { index: None },
         )
@@ -629,8 +628,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     // Increase block and current Building checkpoint changed to Signing
     increase_block(&mut app, Binary::from([1; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -643,8 +641,7 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // Increase block and current Signing checkpoint changed to Complete
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -653,8 +650,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     assert_eq!(checkpoint.pending.len(), 1);
     increase_block(&mut app, Binary::from([2; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -664,17 +660,15 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // Validate balance
     let balance = app
-        .as_querier()
-        .query_balance(&receiver, btc_bridge_denom.clone())
+        .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
     assert_eq!(
-        balance.amount.u128(),
+        balance.u128(),
         (deposit_amount.to_sat() * 1000000 - deposit_fee) as u128
     );
     increase_block(&mut app, Binary::from([3; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -692,13 +686,11 @@ async fn test_full_flow_happy_case_bitcoin() {
     )
     .await;
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1023);
     let confirmed_cp_index: u32 = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::ConfirmedIndex {},
         )
@@ -707,8 +699,7 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // Make sure checkpoint one have 4 validators
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 1 },
         )
@@ -765,8 +756,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     )
     .await;
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1025);
     let tx_proof = btc_client
@@ -791,8 +781,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     // Increase block and current Building checkpoint changed to Signing
     increase_block(&mut app, Binary::from([4; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 1 },
         )
@@ -806,8 +795,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     // Increase block and current Signing checkpoint changed to Complete
     increase_block(&mut app, Binary::from([5; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 1 },
         )
@@ -817,10 +805,9 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // Check balance
     let balance = app
-        .as_querier()
-        .query_balance(&receiver, btc_bridge_denom.clone())
+        .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.amount.u128(), 189894417000000 as u128);
+    assert_eq!(balance.u128(), 189894417000000 as u128);
 
     let mut trusted_balance = 0;
     match wallet.get_balances() {
@@ -849,8 +836,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     }
 
     let confirmed_cp_index: u32 = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::ConfirmedIndex {},
         )
@@ -884,12 +870,10 @@ async fn test_full_flow_happy_case_bitcoin() {
     .await;
     increase_block(&mut app, Binary::from([6; 32])).unwrap(); // should increase number of hash to be unique
     let current_header: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 2 },
         )
@@ -925,8 +909,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     // Increase block and current Signing checkpoint changed to Complete
     increase_block(&mut app, Binary::from([7; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 2 },
         )
@@ -936,10 +919,9 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // Check balance
     let balance = app
-        .as_querier()
-        .query_balance(&receiver, btc_bridge_denom.clone())
+        .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.amount.u128(), 309846837000000 as u128);
+    assert_eq!(balance.u128(), 309846837000000 as u128);
 
     relay_checkpoint(
         &btc_client,
@@ -952,8 +934,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     .await;
 
     let confirmed_cp_index: u32 = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::ConfirmedIndex {},
         )
@@ -963,8 +944,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     // [TESTCASE] check validator 4 is punished, validate the changing in signatures length
     increase_block(&mut app, Binary::from([8; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -974,8 +954,7 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // Here validator 3 is added
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 1 },
         )
@@ -984,8 +963,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     assert_eq!(checkpoint.sigset.present_vp, 51);
 
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 2 },
         )
@@ -994,8 +972,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     assert_eq!(checkpoint.sigset.present_vp, 51);
 
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 3 },
         )
@@ -1011,10 +988,16 @@ async fn test_full_flow_happy_case_bitcoin() {
 async fn test_deposit_with_token_fee() {
     // Set up app
 
-    use crate::adapter::WrappedBinary;
-    let owner = Addr::unchecked("perfogic");
     let threshold = SIGSET_THRESHOLD;
-    let mut app = MockApp::new(&[]);
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000, "orai")),
+        ("alice", &coins(100_000_000_000, "orai")),
+        ("bob", &coins(100_000_000_000, "orai")),
+    ]);
+    let owner = Addr::unchecked(&accounts[0]);
+    let validator_1 = Addr::unchecked(&accounts[1]);
+    let validator_2 = Addr::unchecked(&accounts[2]);
+
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
     let btc_bridge_denom = format!(
         "factory/{}/{}",
@@ -1065,7 +1048,7 @@ async fn test_deposit_with_token_fee() {
             owner.clone(),
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
-            &[],
+            &coins(10_000_000, "orai"),
         )
     };
 
@@ -1195,8 +1178,7 @@ async fn test_deposit_with_token_fee() {
      -> Result<AppResponse, _> {
         let secp = Secp256k1::signing_only();
         let to_signs: Vec<([u8; 32], u32)> = app
-            .as_querier()
-            .query_wasm_smart(
+            .query(
                 bitcoin_bridge_addr.clone(),
                 &msg::QueryMsg::SigningTxsAtCheckpointIndex {
                     xpub: WrappedBinary(Xpub::new(xpub)),
@@ -1244,8 +1226,7 @@ async fn test_deposit_with_token_fee() {
     register_denom(&mut app, BTC_NATIVE_TOKEN_DENOM.to_string(), None).unwrap();
 
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1000);
 
@@ -1260,8 +1241,7 @@ async fn test_deposit_with_token_fee() {
     )
     .await;
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1020);
 
@@ -1277,8 +1257,7 @@ async fn test_deposit_with_token_fee() {
         ExtendedPubKey::from_priv(&secp, &xprivs[1]),
     ];
     let consensus_keys = vec![[0; 32], [1; 32]];
-    let validator_1 = Addr::unchecked("orai1Alice");
-    let validator_2 = Addr::unchecked("orai1Bob");
+
     add_validators(
         &mut app,
         vec![
@@ -1296,8 +1275,7 @@ async fn test_deposit_with_token_fee() {
 
     // Fetching checkpoint and creating deposit address
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -1348,8 +1326,7 @@ async fn test_deposit_with_token_fee() {
     )
     .await;
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1022);
 
@@ -1376,8 +1353,7 @@ async fn test_deposit_with_token_fee() {
     // Increase block and current Building checkpoint changed to Signing
     increase_block(&mut app, Binary::from([1; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -1390,8 +1366,7 @@ async fn test_deposit_with_token_fee() {
 
     // Increase block and current Signing checkpoint changed to Complete
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -1400,8 +1375,7 @@ async fn test_deposit_with_token_fee() {
     assert_eq!(checkpoint.pending.len(), 1);
     increase_block(&mut app, Binary::from([2; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -1411,20 +1385,17 @@ async fn test_deposit_with_token_fee() {
 
     // Validate balance
     let balance = app
-        .as_querier()
-        .query_balance(&receiver, btc_bridge_denom.clone())
+        .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
     // Check fee receiver balance
-    assert_eq!(balance.amount.u128(), 118765157940000 as u128);
+    assert_eq!(balance.u128(), 118765157940000 as u128);
     let balance = app
-        .as_querier()
-        .query_balance(&Addr::unchecked("fee_receiver"), btc_bridge_denom.clone())
+        .query_balance(Addr::unchecked("fee_receiver"), btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.amount.u128(), 1199648060000 as u128);
+    assert_eq!(balance.u128(), 1199648060000 as u128);
     increase_block(&mut app, Binary::from([3; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
@@ -1442,13 +1413,11 @@ async fn test_deposit_with_token_fee() {
     )
     .await;
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 1023);
     let confirmed_cp_index: u32 = app
-        .as_querier()
-        .query_wasm_smart(
+        .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::ConfirmedIndex {},
         )

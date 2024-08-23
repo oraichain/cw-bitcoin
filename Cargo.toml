@@ -18,32 +18,33 @@ repository = "https://github.com/oraichain/bitcoin-bridge-cw.git"
 version = "0.1.0"
 
 [workspace.dependencies]
-bitcoin = {version = "0.29.2"}
-bitcoin-script = {git = "https://github.com/oraichain/rust-bitcoin-script.git"}
-bitcoincore-rpc-async = {package = "bitcoincore-rpc-async2", version = "4.0.2"}
-bitcoind = {version = "0.27.0", features = ["22_0"]}
-cosmwasm-schema = {version = "1.5"}
-cosmwasm-std = {version = "1.5", features = ["stargate"]}
-cosmwasm-storage = {version = "1.5"}
-cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "c9ca30d"}
-cw-storage-plus = {version = "1.0.1"}
-cw2 = {version = "1.0.1"}
-cw20 = {version = "1.0.1"}
-cw20-base = {version = "1.0.1"}
+bitcoin = { version = "0.29.2" }
+bitcoin-script = { git = "https://github.com/oraichain/rust-bitcoin-script.git" }
+bitcoincore-rpc-async = { package = "bitcoincore-rpc-async2", version = "4.0.2" }
+bitcoind = { version = "0.27.0", features = ["22_0"] }
+cosmwasm-schema = { version = "1.5" }
+cosmwasm-std = { version = "1.5", features = ["stargate"] }
+cosmwasm-storage = { version = "1.5" }
+
+cw-storage-plus = { version = "1.0.1" }
+cw2 = { version = "1.0.1" }
+cw20 = { version = "1.0.1" }
+cw20-base = { version = "1.0.1" }
 derive_more = "0.99.17"
-ibc-proto = {version = "0.32.1", default-features = false}
-oraiswap = {git = "https://github.com/oraichain/oraiswap.git", rev = "c5fd186"}
+ibc-proto = { version = "0.32.1", default-features = false }
+oraiswap = { git = "https://github.com/oraichain/oraiswap.git", rev = "c5fd186" }
 prost = "0.11"
 serde = "1.0.133"
 serde_json = "1.0.74"
 sha2 = "0.10.6"
-skip = {git = "https://github.com/oraichain/osor-api-contracts.git", rev = "14d852c"}
+skip = { git = "https://github.com/oraichain/osor-api-contracts.git", rev = "14d852c" }
 thiserror = "1.0.26"
-token-bindings = {git = "https://github.com/oraichain/token-bindings.git", rev = "a783854"}
-tokenfactory = {git = "https://github.com/oraichain/token-bindings.git", rev = "a783854", features = [
+cosmwasm-testing-util = { git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "3ed0397" }
+token-bindings = { git = "https://github.com/oraichain/token-bindings.git", rev = "9796c74" }
+tokenfactory = { git = "https://github.com/oraichain/token-bindings.git", rev = "9796c74", features = [
   "library",
-]}
-tokio = {version = "1.14.0", features = ["full"]}
+] }
+tokio = { version = "1.14.0", features = ["full"] }
 
 [profile.release]
 codegen-units = 1

@@ -1,7 +1,6 @@
 use super::helper::sign;
 use adapter::Adapter;
 use app::Bitcoin;
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::util::merkleblock::PartialMerkleTree;
@@ -22,7 +21,6 @@ use state::{
     FIRST_UNHANDLED_CONFIRMED_INDEX, HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS,
 };
 use std::cell::RefCell;
-use std::str::FromStr;
 use tests::helper::set_time;
 
 use crate::interface::IbcDest;

@@ -1,11 +1,11 @@
-use bitcoincore_rpc_async::jsonrpc::error::RpcError;
-use bitcoind::{bitcoincore_rpc::RpcApi, BitcoinD, Conf, P2P};
-use cosmwasm_std::{Addr, Uint128};
-use oraiswap::asset::AssetInfo;
-
 use crate::{
     adapter::Adapter, header::WrappedHeader, interface::HeaderConfig, msg, tests::helper::MockApp,
 };
+use bitcoincore_rpc_async::jsonrpc::error::RpcError;
+use bitcoind::{bitcoincore_rpc::RpcApi, BitcoinD, Conf, P2P};
+use cosmwasm_std::{coins, Addr, Uint128};
+use cosmwasm_testing_util::{MockApp as TestingMockApp, MockTokenExtensions};
+use oraiswap::asset::AssetInfo;
 
 fn into_json<T>(val: T) -> Result<bitcoind::bitcoincore_rpc::jsonrpc::serde_json::Value, RpcError>
 where
@@ -17,8 +17,9 @@ where
 #[test]
 fn reorg() {
     // Set up app
-    let owner = Addr::unchecked("perfogic");
-    let mut app = MockApp::new(&[]);
+
+    let (mut app, accounts) = MockApp::new(&[("perfogic", &coins(100_000_000_000, "orai"))]);
+    let owner = Addr::unchecked(&accounts[0]);
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
     let bitcoin_bridge_addr = app
         .create_bridge(
@@ -156,8 +157,7 @@ fn reorg() {
     .unwrap();
 
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 16);
 }
@@ -165,8 +165,8 @@ fn reorg() {
 #[test]
 fn reorg_competing_chain_similar() {
     // Set up app
-    let owner = Addr::unchecked("perfogic");
-    let mut app = MockApp::new(&[]);
+    let (mut app, accounts) = MockApp::new(&[("perfogic", &coins(100_000_000_000, "orai"))]);
+    let owner = Addr::unchecked(&accounts[0]);
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
     let bitcoin_bridge_addr = app
         .create_bridge(
@@ -306,8 +306,7 @@ fn reorg_competing_chain_similar() {
     .unwrap();
 
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 13);
 }
@@ -315,8 +314,8 @@ fn reorg_competing_chain_similar() {
 #[test]
 fn reorg_deep() {
     // Set up app
-    let owner = Addr::unchecked("perfogic");
-    let mut app = MockApp::new(&[]);
+    let (mut app, accounts) = MockApp::new(&[("perfogic", &coins(100_000_000_000, "orai"))]);
+    let owner = Addr::unchecked(&accounts[0]);
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
     let bitcoin_bridge_addr = app
         .create_bridge(
@@ -456,8 +455,7 @@ fn reorg_deep() {
     .unwrap();
 
     let header_height: u32 = app
-        .as_querier()
-        .query_wasm_smart(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
+        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
         .unwrap();
     assert_eq!(header_height, 36);
 }

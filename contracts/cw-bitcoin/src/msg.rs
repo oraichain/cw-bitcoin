@@ -1,4 +1,4 @@
-use bitcoin::{util::merkleblock::PartialMerkleTree, Script, Transaction};
+use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary, Coin, Uint128};
 use oraiswap::asset::AssetInfo;

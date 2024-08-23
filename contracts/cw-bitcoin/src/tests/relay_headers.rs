@@ -6,18 +6,18 @@ use crate::msg;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
 use chrono::{TimeZone, Utc};
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{coins, Addr, Uint128};
+use cosmwasm_testing_util::{MockApp as TestingMockApp, MockTokenExtensions};
 use oraiswap::asset::AssetInfo;
 
 #[test]
 fn test_relay_headers() {
-    let mut app = MockApp::new(&[]);
-    let token_factory_addr = app
-        .create_tokenfactory(Addr::unchecked("obtc_minter"))
-        .unwrap();
+    let (mut app, accounts) = MockApp::new(&[("perfogic", &coins(100_000_000_000, "orai"))]);
+    let obtc_minter = Addr::unchecked(&accounts[0]);
+    let token_factory_addr = app.create_tokenfactory(obtc_minter.clone()).unwrap();
     let bridge_addr = app
         .create_bridge(
-            Addr::unchecked("alice"),
+            obtc_minter.clone(),
             &msg::InstantiateMsg {
                 token_factory_addr,
                 relayer_fee: Uint128::from(0 as u16),
@@ -61,7 +61,7 @@ fn test_relay_headers() {
 
     let _res = app
         .execute(
-            Addr::unchecked("alice"),
+            obtc_minter.clone(),
             bridge_addr.clone(),
             &msg::ExecuteMsg::UpdateHeaderConfig {
                 config: header_config,
@@ -128,7 +128,7 @@ fn test_relay_headers() {
     ];
     let _res = app
         .execute(
-            Addr::unchecked("alice"),
+            obtc_minter.clone(),
             bridge_addr.clone(),
             &msg::ExecuteMsg::RelayHeaders {
                 headers: header_list,
@@ -140,13 +140,12 @@ fn test_relay_headers() {
 
 #[test]
 fn test_relay_headers_2() {
-    let mut app = MockApp::new(&[]);
-    let token_factory_addr = app
-        .create_tokenfactory(Addr::unchecked("obtc_minter"))
-        .unwrap();
+    let (mut app, accounts) = MockApp::new(&[("perfogic", &coins(100_000_000_000, "orai"))]);
+    let obtc_minter = Addr::unchecked(&accounts[0]);
+    let token_factory_addr = app.create_tokenfactory(obtc_minter.clone()).unwrap();
     let bridge_addr = app
         .create_bridge(
-            Addr::unchecked("alice"),
+            obtc_minter.clone(),
             &msg::InstantiateMsg {
                 token_factory_addr,
                 relayer_fee: Uint128::from(0 as u16),
@@ -191,7 +190,7 @@ fn test_relay_headers_2() {
 
     let _res = app
         .execute(
-            Addr::unchecked("alice"),
+            obtc_minter.clone(),
             bridge_addr.clone(),
             &msg::ExecuteMsg::UpdateHeaderConfig {
                 config: header_config,
@@ -282,7 +281,7 @@ fn test_relay_headers_2() {
 
     let _res = app
         .execute(
-            Addr::unchecked("alice"),
+            obtc_minter,
             bridge_addr.clone(),
             &msg::ExecuteMsg::RelayHeaders {
                 headers: header_list,
