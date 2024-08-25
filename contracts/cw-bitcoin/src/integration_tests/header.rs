@@ -4,7 +4,7 @@ use crate::{
 use bitcoincore_rpc_async::jsonrpc::error::RpcError;
 use bitcoind::{bitcoincore_rpc::RpcApi, BitcoinD, Conf, P2P};
 use cosmwasm_std::{coins, Addr, Uint128};
-use cosmwasm_testing_util::{MockAppExtensions, MockTokenExtensions};
+
 use oraiswap::asset::AssetInfo;
 
 fn into_json<T>(val: T) -> Result<bitcoind::bitcoincore_rpc::jsonrpc::serde_json::Value, RpcError>
