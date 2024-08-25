@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 # use library feature to disable all instantiate/execute/query exports
-default = []
+default = ['mainnet']
 library = []
 mainnet = []
 test-tube = []
