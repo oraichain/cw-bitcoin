@@ -9,13 +9,30 @@ use crate::{
     error::{ContractError, ContractResult},
     header::HeaderQueue,
     interface::{BitcoinConfig, ChangeRates, CheckpointConfig, HeaderConfig, Xpub},
+    msg::{Config, ConfigResponse},
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
     state::{
-        header_height, BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, HEADER_CONFIG, OUTPOINTS,
-        SIGNERS, SIG_KEYS,
+        header_height, BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG,
+        OUTPOINTS, SIGNERS, SIG_KEYS, TOKEN_FEE_RATIO,
     },
 };
+
+pub fn query_config(store: &dyn Storage) -> ContractResult<ConfigResponse> {
+    let config = CONFIG.load(store)?;
+    let token_fee = TOKEN_FEE_RATIO.load(store)?;
+    Ok(ConfigResponse {
+        token_factory_addr: config.token_factory_addr,
+        owner: config.owner,
+        relayer_fee_token: config.relayer_fee_token,
+        token_fee,
+        relayer_fee: config.relayer_fee,
+        token_fee_receiver: config.token_fee_receiver,
+        relayer_fee_receiver: config.relayer_fee_receiver,
+        swap_router_contract: config.swap_router_contract,
+        osor_entry_point_contract: config.osor_entry_point_contract,
+    })
+}
 
 pub fn query_bitcoin_config(store: &dyn Storage) -> ContractResult<BitcoinConfig> {
     let bitcoin_config = BITCOIN_CONFIG.load(store)?;

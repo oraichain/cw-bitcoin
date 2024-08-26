@@ -5,8 +5,8 @@ use crate::{
     entrypoints::*,
     error::ContractError,
     header::HeaderQueue,
-    interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
-    msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
+    interface::{BitcoinConfig, CheckpointConfig, HeaderConfig},
+    msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
         FIRST_UNHANDLED_CONFIRMED_INDEX,
@@ -161,6 +161,7 @@ pub fn execute(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
+        QueryMsg::Config {} => to_json_binary(&query_config(deps.storage)?),
         QueryMsg::BitcoinConfig {} => to_json_binary(&query_bitcoin_config(deps.storage)?),
         QueryMsg::CheckpointConfig {} => to_json_binary(&query_checkpoint_config(deps.storage)?),
         QueryMsg::HeaderConfig {} => to_json_binary(&query_header_config(deps.storage)?),

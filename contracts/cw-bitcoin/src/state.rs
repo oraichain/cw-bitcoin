@@ -10,9 +10,8 @@ use crate::{
     constants::BTC_NATIVE_TOKEN_DENOM,
     error::ContractResult,
     header::WorkHeader,
-    interface::{
-        BitcoinConfig, CheckpointConfig, Config, DequeExtension, HeaderConfig, Validator, Xpub,
-    },
+    interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Validator, Xpub},
+    msg::Config,
     recovery::RecoveryTx,
 };
 

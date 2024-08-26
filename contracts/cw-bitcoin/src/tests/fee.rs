@@ -11,7 +11,7 @@ fn test_fee_collected() -> ContractResult<()> {
     let mut deps = mock_dependencies();
     CONFIG.save(
         deps.as_mut().storage,
-        &crate::interface::Config {
+        &crate::msg::Config {
             owner: Addr::unchecked("owner"),
             token_factory_addr: Addr::unchecked("token_factory_addr"),
             relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),

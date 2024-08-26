@@ -586,18 +586,6 @@ pub struct ChangeRates {
     pub sigset_change: u16,
 }
 
-#[cw_serde]
-pub struct Config {
-    pub token_factory_addr: Addr,
-    pub owner: Addr,
-    pub relayer_fee_token: AssetInfo,
-    pub relayer_fee: Uint128, // This fee depends on the network type, not token type decimals of relayer fee should always be 10^6
-    pub token_fee_receiver: Addr,
-    pub relayer_fee_receiver: Addr,
-    pub swap_router_contract: Option<Addr>,
-    pub osor_entry_point_contract: Option<Addr>,
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "cosmwasm_schema::serde")]
 pub struct MintTokens {

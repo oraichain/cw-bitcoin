@@ -32,6 +32,31 @@ pub struct InstantiateMsg {
 }
 
 #[cw_serde]
+pub struct Config {
+    pub token_factory_addr: Addr,
+    pub owner: Addr,
+    pub relayer_fee_token: AssetInfo,
+    pub relayer_fee: Uint128, // This fee depends on the network type, not token type decimals of relayer fee should always be 10^6
+    pub token_fee_receiver: Addr,
+    pub relayer_fee_receiver: Addr,
+    pub swap_router_contract: Option<Addr>,
+    pub osor_entry_point_contract: Option<Addr>,
+}
+
+#[cw_serde]
+pub struct ConfigResponse {
+    pub token_factory_addr: Addr,
+    pub owner: Addr,
+    pub relayer_fee_token: AssetInfo,
+    pub token_fee: Ratio,
+    pub relayer_fee: Uint128, // This fee depends on the network type, not token type decimals of relayer fee should always be 10^6
+    pub token_fee_receiver: Addr,
+    pub relayer_fee_receiver: Addr,
+    pub swap_router_contract: Option<Addr>,
+    pub osor_entry_point_contract: Option<Addr>,
+}
+
+#[cw_serde]
 pub enum ExecuteMsg {
     UpdateConfig {
         relayer_fee_token: Option<AssetInfo>,
@@ -104,6 +129,8 @@ pub enum ExecuteMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(ConfigResponse)]
+    Config {},
     #[returns(BitcoinConfig)]
     BitcoinConfig {},
     #[returns(CheckpointConfig)]
