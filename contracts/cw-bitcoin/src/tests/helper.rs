@@ -76,8 +76,7 @@ impl MockApp {
                     crate::contract::execute,
                     crate::contract::instantiate,
                     crate::contract::query,
-                )
-                .with_sudo_empty(crate::contract::sudo),
+                ),
             ));
         }
 

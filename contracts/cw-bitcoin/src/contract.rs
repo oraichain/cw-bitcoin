@@ -6,7 +6,7 @@ use crate::{
     error::ContractError,
     header::HeaderQueue,
     interface::{BitcoinConfig, CheckpointConfig, Config, HeaderConfig},
-    msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
+    msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
         FIRST_UNHANDLED_CONFIRMED_INDEX,
@@ -153,15 +153,6 @@ pub fn execute(
             change_btc_denom_owner(deps.storage, info, new_owner)
         }
         ExecuteMsg::TriggerBeginBlock { hash } => {
-            clock_end_block(&env, deps.storage, &deps.querier, deps.api, hash)
-        }
-    }
-}
-
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
-    match msg {
-        SudoMsg::ClockEndBlock { hash } => {
             clock_end_block(&env, deps.storage, &deps.querier, deps.api, hash)
         }
     }

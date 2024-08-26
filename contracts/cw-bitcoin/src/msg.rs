@@ -102,11 +102,6 @@ pub enum ExecuteMsg {
 }
 
 #[cw_serde]
-pub enum SudoMsg {
-    ClockEndBlock { hash: Binary },
-}
-
-#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     #[returns(BitcoinConfig)]
