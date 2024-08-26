@@ -126,7 +126,7 @@ pub fn relay_deposit(
     let mut btc = Bitcoin::default();
     let response = Response::new().add_attribute("action", "relay_deposit");
     btc.relay_deposit(
-        env.clone(),
+        &env,
         store,
         btc_tx,
         btc_height,

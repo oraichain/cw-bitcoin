@@ -185,7 +185,7 @@ impl Bitcoin {
     /// signed.
     pub fn relay_deposit(
         &mut self,
-        env: Env,
+        env: &Env,
         store: &mut dyn Storage,
         btc_tx: Adapter<Transaction>,
         btc_height: u32,

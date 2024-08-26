@@ -79,7 +79,7 @@ fn relay_height_validity() -> ContractResult<()> {
         let env = mock_env();
 
         btc.relay_deposit(
-            env,
+            &env,
             deps.as_mut().storage,
             Adapter::new(btc_tx),
             height,
