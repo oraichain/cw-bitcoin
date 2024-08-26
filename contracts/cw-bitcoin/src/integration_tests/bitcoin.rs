@@ -186,12 +186,19 @@ async fn test_full_flow_happy_case_bitcoin() {
         ("bob", &coins(100_000_000_000, "orai")),
         ("dave", &coins(100_000_000_000, "orai")),
         ("jayce", &coins(100_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("receiver", &coins(100_000_000_000, "orai")),
     ]);
     let owner = Addr::unchecked(&accounts[0]);
     let validator_1 = Addr::unchecked(&accounts[1]);
     let validator_2 = Addr::unchecked(&accounts[2]);
     let validator_3 = Addr::unchecked(&accounts[3]);
     let validator_4 = Addr::unchecked(&accounts[4]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[5]);
+    let token_fee_receiver = Addr::unchecked(&accounts[6]);
+    let receiver = Addr::unchecked(&accounts[7]);
+
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
     let btc_bridge_denom = format!(
         "factory/{}/{}",
@@ -204,11 +211,11 @@ async fn test_full_flow_happy_case_bitcoin() {
             &msg::InstantiateMsg {
                 token_factory_addr: token_factory_addr.clone(),
                 relayer_fee: Uint128::from(0 as u16),
-                relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
                 relayer_fee_token: AssetInfo::NativeToken {
                     denom: "orai".to_string(),
                 },
-                token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+                token_fee_receiver: token_fee_receiver.clone(),
                 swap_router_contract: None,
                 osor_entry_point_contract: None,
             },
@@ -372,9 +379,15 @@ async fn test_full_flow_happy_case_bitcoin() {
         };
 
     let increase_block = |app: &mut MockApp, hash: Binary| -> Result<AppResponse, _> {
-        app.sudo(
+        // app.sudo(
+        //     bitcoin_bridge_addr.clone(),
+        //     &msg::SudoMsg::ClockEndBlock { hash },
+        // )
+        app.execute(
+            owner.clone(),
             bitcoin_bridge_addr.clone(),
-            &msg::SudoMsg::ClockEndBlock { hash },
+            &msg::ExecuteMsg::TriggerBeginBlock { hash },
+            &[],
         )
     };
 
@@ -522,7 +535,6 @@ async fn test_full_flow_happy_case_bitcoin() {
     let sigset = checkpoint.sigset;
 
     // [TESTCASE] Bridge one transaction and try to submit tx with proof when not enough confirmations
-    let receiver = Addr::unchecked("receiver");
     let dest = Dest::Address(receiver.clone());
     let script = sigset
         .output_script(&dest.commitment_bytes().unwrap(), threshold)
@@ -987,16 +999,21 @@ async fn test_full_flow_happy_case_bitcoin() {
 #[serial_test::serial]
 async fn test_deposit_with_token_fee() {
     // Set up app
-
     let threshold = SIGSET_THRESHOLD;
     let (mut app, accounts) = MockApp::new(&[
         ("perfogic", &coins(100_000_000_000, "orai")),
         ("alice", &coins(100_000_000_000, "orai")),
         ("bob", &coins(100_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("receiver", &coins(100_000_000_000, "orai")),
     ]);
     let owner = Addr::unchecked(&accounts[0]);
     let validator_1 = Addr::unchecked(&accounts[1]);
     let validator_2 = Addr::unchecked(&accounts[2]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[3]);
+    let token_fee_receiver = Addr::unchecked(&accounts[4]);
+    let receiver = Addr::unchecked(&accounts[5]);
 
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
     let btc_bridge_denom = format!(
@@ -1010,11 +1027,11 @@ async fn test_deposit_with_token_fee() {
             &msg::InstantiateMsg {
                 token_factory_addr: token_factory_addr.clone(),
                 relayer_fee: Uint128::from(0 as u16),
-                relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
                 relayer_fee_token: AssetInfo::NativeToken {
                     denom: "orai".to_string(),
                 },
-                token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+                token_fee_receiver: token_fee_receiver.clone(),
                 swap_router_contract: None,
                 osor_entry_point_contract: None,
             },
@@ -1163,9 +1180,11 @@ async fn test_deposit_with_token_fee() {
         };
 
     let increase_block = |app: &mut MockApp, hash: Binary| -> Result<AppResponse, _> {
-        app.sudo(
+        app.execute(
+            owner.clone(),
             bitcoin_bridge_addr.clone(),
-            &msg::SudoMsg::ClockEndBlock { hash },
+            &msg::ExecuteMsg::TriggerBeginBlock { hash },
+            &[],
         )
     };
 
@@ -1206,7 +1225,7 @@ async fn test_deposit_with_token_fee() {
         bitcoin_bridge_addr.clone(),
         &msg::ExecuteMsg::UpdateConfig {
             relayer_fee_token: None,
-            token_fee_receiver: Some(Addr::unchecked("fee_receiver")),
+            token_fee_receiver: Some(token_fee_receiver.clone()),
             relayer_fee_receiver: None,
             relayer_fee: None,
             swap_router_contract: None,
@@ -1285,7 +1304,6 @@ async fn test_deposit_with_token_fee() {
     let sigset = checkpoint.sigset;
 
     // [TESTCASE] Bridge one transaction
-    let receiver = Addr::unchecked("receiver");
     let dest = Dest::Address(receiver.clone());
     let script = sigset
         .output_script(&dest.commitment_bytes().unwrap(), threshold)
@@ -1390,7 +1408,7 @@ async fn test_deposit_with_token_fee() {
     // Check fee receiver balance
     assert_eq!(balance.u128(), 118765157940000 as u128);
     let balance = app
-        .query_balance(Addr::unchecked("fee_receiver"), btc_bridge_denom.clone())
+        .query_balance(token_fee_receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
     assert_eq!(balance.u128(), 1199648060000 as u128);
     increase_block(&mut app, Binary::from([3; 32])).unwrap(); // should increase number of hash to be unique
