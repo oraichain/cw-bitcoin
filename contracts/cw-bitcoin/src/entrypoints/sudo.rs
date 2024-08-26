@@ -1,6 +1,6 @@
 use crate::{
     app::Bitcoin,
-    error::ContractResult,
+    error::{ContractError, ContractResult},
     fee::process_deduct_fee,
     state::{BLOCK_HASHES, CONFIG, VALIDATORS},
 };
@@ -16,8 +16,9 @@ pub fn clock_end_block(
     api: &dyn Api,
     hash: Binary,
 ) -> ContractResult<Response> {
-    let loaded_hash = BLOCK_HASHES.may_load(storage, hash.to_base64())?;
-    assert_eq!(loaded_hash.is_none(), true, "Blockhash already exists");
+    if BLOCK_HASHES.has(storage, &hash) {
+        return Err(ContractError::App("Blockhash already exists".to_string()));
+    }
 
     let mut btc = Bitcoin::default();
 
@@ -75,7 +76,7 @@ pub fn clock_end_block(
         let (_, address) = VALIDATORS.load(storage, cons_key)?;
         btc.punish_validator(storage, cons_key, address)?;
     }
-    BLOCK_HASHES.save(storage, hash.to_base64(), &()).unwrap();
+    BLOCK_HASHES.save(storage, &hash, &()).unwrap();
 
     Ok(Response::new().add_messages(msgs))
 }
