@@ -1,5 +1,4 @@
 use std::str::FromStr;
-use std::time::Duration;
 
 use super::utils::{
     get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
@@ -28,7 +27,6 @@ use cosmwasm_testing_util::AppResponse;
 
 use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
-use tokio::time::sleep;
 
 async fn mine_and_relay_headers(
     btc_client: &Client,
@@ -855,8 +853,10 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // [TESTCASE] test recovery
     init_bitcoin_config(&mut app, 45);
-    println!("Waiting 10 seconds to make the deposit expired!");
-    sleep(Duration::from_secs(10)).await;
+
+    println!("Waiting 10 seconds to make the deposit expired!",);
+    app.increase_time(10);
+
     relay_deposit(
         &mut app,
         Adapter::from(expired_btc_tx),
