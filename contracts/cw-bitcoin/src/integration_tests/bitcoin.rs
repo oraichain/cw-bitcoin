@@ -379,10 +379,6 @@ async fn test_full_flow_happy_case_bitcoin() {
         };
 
     let increase_block = |app: &mut MockApp, hash: Binary| -> Result<AppResponse, _> {
-        // app.sudo(
-        //     bitcoin_bridge_addr.clone(),
-        //     &msg::SudoMsg::ClockEndBlock { hash },
-        // )
         app.execute(
             owner.clone(),
             bitcoin_bridge_addr.clone(),
@@ -449,7 +445,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     };
 
     // Start testing
-    init_bitcoin_config(&mut app, 45);
+    init_bitcoin_config(&mut app, 180);
     init_checkpoint_config(&mut app);
     init_headers(&mut app, 1000, trusted_header);
     register_denom(&mut app, BTC_NATIVE_TOKEN_DENOM.to_string(), None).unwrap();
@@ -724,8 +720,19 @@ async fn test_full_flow_happy_case_bitcoin() {
         .sigset
         .output_script(&dest.commitment_bytes().unwrap(), threshold)
         .unwrap();
-    let deposit_addr = bitcoin::Address::from_script(&script, bitcoin::Network::Regtest).unwrap();
+    withdraw_to_bitcoin(
+        &mut app,
+        receiver.clone(),
+        withdraw_address,
+        Coin {
+            denom: btc_bridge_denom.clone(),
+            amount: (bitcoin::Amount::from_btc(0.5).unwrap().to_sat() * 1000000).into(),
+        },
+    )
+    .unwrap();
 
+    // deposit
+    let deposit_addr = bitcoin::Address::from_script(&script, bitcoin::Network::Regtest).unwrap();
     let btc_txid = wallet
         .send_to_address(
             &deposit_addr,
@@ -747,16 +754,6 @@ async fn test_full_flow_happy_case_bitcoin() {
         .iter()
         .position(|o| o.value == deposit_amount.to_sat())
         .unwrap();
-    withdraw_to_bitcoin(
-        &mut app,
-        receiver.clone(),
-        withdraw_address,
-        Coin {
-            denom: btc_bridge_denom.clone(),
-            amount: (bitcoin::Amount::from_btc(0.5).unwrap().to_sat() * 1000000).into(),
-        },
-    )
-    .unwrap();
 
     let headers = mine_and_relay_headers(
         &btc_client,
@@ -792,6 +789,7 @@ async fn test_full_flow_happy_case_bitcoin() {
 
     // Increase block and current Building checkpoint changed to Signing
     increase_block(&mut app, Binary::from([4; 32])).unwrap(); // should increase number of hash to be unique
+
     let checkpoint: Checkpoint = app
         .query(
             bitcoin_bridge_addr.clone(),
@@ -856,6 +854,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     assert_eq!(confirmed_cp_index, 1);
 
     // [TESTCASE] test recovery
+    init_bitcoin_config(&mut app, 45);
     println!("Waiting 10 seconds to make the deposit expired!");
     sleep(Duration::from_secs(10)).await;
     relay_deposit(
