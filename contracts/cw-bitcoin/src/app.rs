@@ -566,7 +566,7 @@ impl Bitcoin {
     /// Can add to clock module
     pub fn begin_block_step(
         &mut self,
-        env: Env,
+        env: &Env,
         store: &mut dyn Storage,
         timestamping_commitment: Vec<u8>,
     ) -> ContractResult<Vec<ConsensusKey>> {

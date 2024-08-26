@@ -70,7 +70,7 @@ pub fn clock_end_block(
             }
         }
     }
-    let offline_signers = btc.begin_block_step(env.clone(), storage, hash.to_vec())?;
+    let offline_signers = btc.begin_block_step(env, storage, hash.to_vec())?;
     for cons_key in &offline_signers {
         let (_, address) = VALIDATORS.load(storage, cons_key)?;
         btc.punish_validator(storage, cons_key, address)?;

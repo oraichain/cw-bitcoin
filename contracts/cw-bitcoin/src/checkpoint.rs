@@ -1177,7 +1177,7 @@ impl CheckpointQueue {
     #[allow(clippy::too_many_arguments)]
     pub fn maybe_step(
         &mut self,
-        env: Env,
+        env: &Env,
         store: &mut dyn Storage,
         btc_height: u32,
         should_allow_deposits: bool,
@@ -1185,14 +1185,13 @@ impl CheckpointQueue {
         // fee_pool: &mut i64,
         parent_config: &BitcoinConfig,
     ) -> ContractResult<bool> {
-        let is_should_push =
-            self.should_push(env.clone(), store, &timestamping_commitment, btc_height)?;
+        let is_should_push = self.should_push(env, store, &timestamping_commitment, btc_height)?;
         if !is_should_push {
             return Ok(false);
         }
 
         let is_not_maybe_push = self
-            .maybe_push(env.clone(), store, should_allow_deposits)?
+            .maybe_push(env, store, should_allow_deposits)?
             .is_none();
         if is_not_maybe_push {
             return Ok(false);
@@ -1313,7 +1312,7 @@ impl CheckpointQueue {
 
     pub fn should_push(
         &mut self,
-        env: Env,
+        env: &Env,
         store: &dyn Storage,
         timestamping_commitment: &[u8],
         btc_height: u32,
@@ -1450,7 +1449,7 @@ impl CheckpointQueue {
 
     pub fn maybe_push(
         &mut self,
-        env: Env,
+        env: &Env,
         store: &mut dyn Storage,
         deposits_enabled: bool,
     ) -> ContractResult<Option<BuildingCheckpoint>> {
