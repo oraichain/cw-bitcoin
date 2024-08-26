@@ -2,7 +2,7 @@ use crate::{
     app::Bitcoin,
     error::ContractResult,
     fee::process_deduct_fee,
-    state::{CONFIG, VALIDATORS},
+    state::{BLOCK_HASHES, CONFIG, VALIDATORS},
 };
 use cosmwasm_std::{
     to_json_binary, Api, Binary, Coin, CosmosMsg, Env, QuerierWrapper, Response, Storage, Uint128,
@@ -16,6 +16,9 @@ pub fn clock_end_block(
     api: &dyn Api,
     hash: Binary,
 ) -> ContractResult<Response> {
+    let loaded_hash = BLOCK_HASHES.may_load(storage, hash.to_base64())?;
+    assert_eq!(loaded_hash.is_none(), true, "Blockhash already exists");
+
     let mut btc = Bitcoin::default();
 
     let pending_nbtc_transfers = btc.take_pending_completed(storage)?;
@@ -67,13 +70,12 @@ pub fn clock_end_block(
             }
         }
     }
-
     let offline_signers = btc.begin_block_step(env.clone(), storage, hash.to_vec())?;
-
     for cons_key in &offline_signers {
         let (_, address) = VALIDATORS.load(storage, cons_key)?;
         btc.punish_validator(storage, cons_key, address)?;
     }
+    BLOCK_HASHES.save(storage, hash.to_base64(), &()).unwrap();
 
     Ok(Response::new().add_messages(msgs))
 }

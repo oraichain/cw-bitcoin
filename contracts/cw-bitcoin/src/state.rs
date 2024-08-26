@@ -80,7 +80,7 @@ pub const CURRENT_WORK: Item<Adapter<Uint256>> = Item::new("current_work");
 pub const TOKEN_FEE_RATIO: Item<Ratio> = Item::new("token_fee_ratio");
 
 /// End block hash mapping, this is just unique hash string
-pub const BLOCK_HASHES: Map<&[u8], ()> = Map::new("block_hashes");
+pub const BLOCK_HASHES: Map<String, ()> = Map::new("block_hashes");
 
 pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
     VALIDATORS
