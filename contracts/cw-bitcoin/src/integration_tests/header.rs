@@ -2,7 +2,6 @@ use crate::{
     adapter::Adapter, header::WrappedHeader, interface::HeaderConfig, msg, tests::helper::MockApp,
 };
 use bitcoincore_rpc_async::jsonrpc::error::RpcError;
-use bitcoincore_rpc_async::{Auth, Client as BitcoinRpcClient};
 use bitcoind::bitcoincore_rpc::RpcApi;
 use bitcoind::{BitcoinD, Conf, P2P};
 use cosmwasm_std::{coins, Addr, Uint128};
@@ -22,11 +21,8 @@ async fn test_relay_bulk_headers() {
     use std::str::FromStr;
 
     use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
-    use bitcoincore_rpc_async::RpcApi;
-
-    use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
     // Set up app
-    let threshold = SIGSET_THRESHOLD;
+
     let (mut app, accounts) = MockApp::new(&[
         ("perfogic", &coins(100_000_000_000_000, "orai")),
         ("alice", &coins(100_000_000_000_000, "orai")),
@@ -36,18 +32,10 @@ async fn test_relay_bulk_headers() {
         ("receiver", &coins(100_000_000_000_000, "orai")),
     ]);
     let owner = Addr::unchecked(&accounts[0]);
-    let validator_1 = Addr::unchecked(&accounts[1]);
-    let validator_2 = Addr::unchecked(&accounts[2]);
     let relayer_fee_receiver = Addr::unchecked(&accounts[3]);
     let token_fee_receiver = Addr::unchecked(&accounts[4]);
-    let receiver = Addr::unchecked(&accounts[5]);
 
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
-    let btc_bridge_denom = format!(
-        "factory/{}/{}",
-        token_factory_addr.clone().to_string(),
-        BTC_NATIVE_TOKEN_DENOM
-    );
     let bitcoin_bridge_addr = app
         .create_bridge(
             owner.clone(),
