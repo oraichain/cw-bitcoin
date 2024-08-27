@@ -186,3 +186,8 @@ pub enum QueryMsg {
 
 #[cw_serde]
 pub struct MigrateMsg {}
+
+#[cw_serde]
+pub enum SudoMsg {
+    ClockEndBlock { hash: Binary },
+}

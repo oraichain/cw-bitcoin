@@ -9,7 +9,7 @@ use crate::{
     error::{ContractError, ContractResult},
     header::HeaderQueue,
     interface::{BitcoinConfig, ChangeRates, CheckpointConfig, HeaderConfig, Xpub},
-    msg::{Config, ConfigResponse},
+    msg::ConfigResponse,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
     state::{

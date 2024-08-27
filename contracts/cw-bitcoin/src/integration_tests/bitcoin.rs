@@ -377,11 +377,9 @@ async fn test_full_flow_happy_case_bitcoin() {
         };
 
     let increase_block = |app: &mut MockApp, hash: Binary| -> Result<AppResponse, _> {
-        app.execute(
-            owner.clone(),
+        app.sudo(
             bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::TriggerBeginBlock { hash },
-            &[],
+            &msg::SudoMsg::ClockEndBlock { hash },
         )
     };
 
@@ -1179,11 +1177,9 @@ async fn test_deposit_with_token_fee() {
         };
 
     let increase_block = |app: &mut MockApp, hash: Binary| -> Result<AppResponse, _> {
-        app.execute(
-            owner.clone(),
+        app.sudo(
             bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::TriggerBeginBlock { hash },
-            &[],
+            &msg::SudoMsg::ClockEndBlock { hash },
         )
     };
 

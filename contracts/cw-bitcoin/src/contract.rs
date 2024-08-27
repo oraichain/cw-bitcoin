@@ -6,7 +6,7 @@ use crate::{
     error::ContractError,
     header::HeaderQueue,
     interface::{BitcoinConfig, CheckpointConfig, HeaderConfig},
-    msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
+    msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
         FIRST_UNHANDLED_CONFIRMED_INDEX,
@@ -228,4 +228,13 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
     let original_version =
         cw2::ensure_from_older_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     Ok(Response::new().add_attribute("new_version", original_version.to_string()))
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
+    match msg {
+        SudoMsg::ClockEndBlock { hash } => {
+            clock_end_block(&env, deps.storage, &deps.querier, deps.api, hash)
+        }
+    }
 }

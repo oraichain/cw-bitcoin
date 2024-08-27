@@ -12,12 +12,9 @@ use cosmwasm_std::{
 };
 use cw_storage_plus::Deque;
 use derive_more::{Deref, DerefMut};
-use oraiswap::{
-    asset::AssetInfo,
-    universal_swap_memo::{
-        memo::{IbcTransfer, PostAction},
-        Memo,
-    },
+use oraiswap::universal_swap_memo::{
+    memo::{IbcTransfer, PostAction},
+    Memo,
 };
 use sha2::{Digest, Sha256};
 

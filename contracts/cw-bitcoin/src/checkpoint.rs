@@ -1456,8 +1456,10 @@ impl CheckpointQueue {
         // Increment the index. For the first checkpoint, leave the index at
         // zero.
         let mut index = self.index(store);
+        // update index
         if !CHECKPOINTS.is_empty(store)? {
             index += 1;
+            BUILDING_INDEX.save(store, &index)?;
         }
 
         // Build the signatory set for the new checkpoint based on the current
@@ -1474,7 +1476,6 @@ impl CheckpointQueue {
             return Ok(None);
         }
 
-        BUILDING_INDEX.save(store, &index)?;
         CHECKPOINTS.push_back(store, &Checkpoint::new(sigset)?)?;
 
         let mut building = self.building(store)?;
