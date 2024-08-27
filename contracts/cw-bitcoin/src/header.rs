@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::adapter::Adapter;
 use crate::constants::MAX_HEADERS_RELAY_ONE_TIME;
 use crate::error::ContractError;
@@ -312,16 +314,22 @@ impl HeaderQueue {
             ));
         }
 
+        // get header right before first header of headers (which are going to be relayed)
         let prev_header = [self
             .get_by_height(store, first_height - 1)?
             .ok_or_else(|| ContractError::Header("Headers not connect to chain".into()))?
             .header];
 
+        // create tupple of headers
+        // [prev_header, headers[0], headers[1], ...]
+        // [headers[0], headers[1], headers[2]...]
         let headers = prev_header.iter().chain(headers.iter()).zip(headers.iter());
 
         let mut work = Uint256::default();
 
+        let mut cache_headers_map: HashMap<u32, WrappedHeader> = HashMap::new();
         for (prev_header, header) in headers {
+            // prove: prev_header and header are adjacent
             if header.height() != prev_header.height() + 1 {
                 return Err(ContractError::Header(
                     "Non-consecutive headers passed".into(),
@@ -340,11 +348,13 @@ impl HeaderQueue {
                 ));
             }
 
+            // make sure header is <= median timestamp of last 11 headers
             if HEADERS.len(store)? >= 11 {
                 self.validate_time(store, header)?;
             }
 
-            let target = self.get_next_target(store, header, prev_header)?;
+            let target =
+                self.get_next_target(store, header, prev_header, &mut cache_headers_map)?;
             header.validate_pow(&target)?;
 
             let header_work = header.work();
@@ -367,6 +377,7 @@ impl HeaderQueue {
         store: &dyn Storage,
         header: &WrappedHeader,
         previous_header: &WrappedHeader,
+        cache_headers_map: &mut HashMap<u32, WrappedHeader>,
     ) -> ContractResult<Uint256> {
         let config = self.config(store)?;
         if header.height() % config.retarget_interval == 0 {
@@ -391,12 +402,17 @@ impl HeaderQueue {
         {
             current_header_index -= 1;
 
-            current_header = match self.get_by_height(store, current_header_index)? {
-                Some(inner) => inner.header,
-                None => {
-                    return Err(ContractError::Header("No previous header exists".into()));
-                }
-            };
+            if cache_headers_map.contains_key(&current_header_index) {
+                current_header = cache_headers_map[&current_header_index].clone();
+            } else {
+                current_header = match self.get_by_height(store, current_header_index)? {
+                    Some(inner) => inner.header,
+                    None => {
+                        return Err(ContractError::Header("No previous header exists".into()));
+                    }
+                };
+                cache_headers_map.insert(current_header_index, current_header.clone());
+            }
         }
         Ok(WrappedHeader::u256_from_compact(current_header.bits()))
     }
@@ -410,6 +426,7 @@ impl HeaderQueue {
         first_reorg_height: u32,
     ) -> ContractResult<Uint256> {
         let config = self.config(store)?;
+
         if !config.retargeting {
             return Ok(WrappedHeader::u256_from_compact(header.bits()));
         }

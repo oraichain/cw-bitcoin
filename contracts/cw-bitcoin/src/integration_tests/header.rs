@@ -94,7 +94,7 @@ async fn test_relay_bulk_headers() {
 
     let headers: Vec<WrappedHeader> = serde_json::from_slice(JSON).unwrap();
 
-    let num = 1;
+    let num = 12;
     for i in 0..num {
         let res = app
             .execute(
