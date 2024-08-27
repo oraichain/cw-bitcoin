@@ -90,47 +90,24 @@ async fn test_relay_bulk_headers() {
     .unwrap();
 
     // write me a code that load headers from json
-    let current_dir = std::env::current_dir().unwrap();
-    let current_dir_str = current_dir.to_str().unwrap();
-    let json = std::fs::read_to_string(format!(
-        "{}/src/integration_tests/testdata/headers.json",
-        current_dir_str
-    ))
-    .unwrap();
-    let headers: Vec<WrappedHeader> = serde_json::from_str(&json).unwrap();
+    static JSON: &[u8] = include_bytes!("testdata/headers.json");
 
-    for i in 0..11 {
-        let mut new_headers = Vec::with_capacity(250);
-        for j in 0..250 {
-            new_headers.push(headers.get(j + 250 * i).unwrap().clone());
-        }
-        app.execute(
-            owner.clone(),
-            bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::RelayHeaders {
-                headers: new_headers,
-            },
-            &[],
-        )
-        .unwrap();
+    let headers: Vec<WrappedHeader> = serde_json::from_slice(JSON).unwrap();
+
+    let num = 1;
+    for i in 0..num {
+        let res = app
+            .execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::RelayHeaders {
+                    headers: headers[250 * i..250 * (i + 1)].to_vec(),
+                },
+                &[],
+            )
+            .unwrap();
+        println!("gas used: {:?}", res.gas_info.gas_used);
     }
-
-    let mut new_headers = Vec::with_capacity(250);
-    for i in 0..250 {
-        new_headers.push(headers.get(i + 250 * 11).unwrap().clone());
-    }
-    let res = app
-        .execute(
-            owner.clone(),
-            bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::RelayHeaders {
-                headers: new_headers,
-            },
-            &[],
-        )
-        .unwrap();
-
-    println!("gas used: {:?}", res.gas_info.gas_used);
 }
 
 #[test]
