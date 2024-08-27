@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use super::utils::{
     get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
 };
@@ -23,7 +21,8 @@ use bitcoind::bitcoincore_rpc::RpcApi;
 use bitcoind::{BitcoinD, Conf};
 use cosmwasm_std::coins;
 use cosmwasm_std::{Addr, Binary, Coin, Uint128};
-use cosmwasm_testing_util::AppResponse;
+use cosmwasm_testing_util::MockResult;
+use std::str::FromStr;
 
 use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
@@ -46,15 +45,18 @@ async fn mine_and_relay_headers(
         let result = get_wrapped_header_from_block_hash(&btc_client, h).await;
         headers.push(result);
     }
-    app.execute(
-        sender,
-        bitcoin_bridge_addr,
-        &msg::ExecuteMsg::RelayHeaders {
-            headers: headers.clone(),
-        },
-        &[],
-    )
-    .unwrap();
+    let res = app
+        .execute(
+            sender,
+            bitcoin_bridge_addr,
+            &msg::ExecuteMsg::RelayHeaders {
+                headers: headers.clone(),
+            },
+            &[],
+        )
+        .unwrap();
+
+    println!("gas used {}", res.gas_info.gas_used);
 
     headers
 }
@@ -239,17 +241,15 @@ async fn test_full_flow_happy_case_bitcoin() {
     let block_data = populate_bitcoin_block(&btc_client).await;
     let trusted_header = block_data.block_header;
 
-    let register_denom = |app: &mut MockApp,
-                          subdenom: String,
-                          metadata: Option<Metadata>|
-     -> Result<AppResponse, _> {
-        app.execute(
-            owner.clone(),
-            bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
-            &coins(10_000_000, "orai"),
-        )
-    };
+    let register_denom =
+        |app: &mut MockApp, subdenom: String, metadata: Option<Metadata>| -> MockResult<_> {
+            app.execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
+                &coins(10_000_000, "orai"),
+            )
+        };
 
     let init_bitcoin_config = |app: &mut MockApp, max_deposit_age: u32| -> () {
         let mut bitcoin_config = BitcoinConfig::default();
@@ -316,7 +316,7 @@ async fn test_full_flow_happy_case_bitcoin() {
                          btc_vout: u32,
                          sigset_index: u32,
                          dest: Dest|
-     -> Result<AppResponse, _> {
+     -> MockResult<_> {
         app.execute(
             owner.clone(),
             bitcoin_bridge_addr.clone(),
@@ -336,7 +336,7 @@ async fn test_full_flow_happy_case_bitcoin() {
                           addrs: Vec<String>,
                           voting_powers: Vec<u64>,
                           consensus_keys: Vec<[u8; 32]>|
-     -> Result<AppResponse, _> {
+     -> MockResult<_> {
         app.execute(
             owner.clone(),
             bitcoin_bridge_addr.clone(),
@@ -349,34 +349,30 @@ async fn test_full_flow_happy_case_bitcoin() {
         )
     };
 
-    let withdraw_to_bitcoin = |app: &mut MockApp,
-                               sender: Addr,
-                               btc_address: Address,
-                               coin: Coin|
-     -> Result<AppResponse, _> {
-        app.execute(
-            sender,
-            bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::WithdrawToBitcoin {
-                btc_address: btc_address.to_string(),
-            },
-            &[coin],
-        )
-    };
-
-    let set_signatory_key =
-        |app: &mut MockApp, sender: Addr, xpub: Xpub| -> Result<AppResponse, _> {
+    let withdraw_to_bitcoin =
+        |app: &mut MockApp, sender: Addr, btc_address: Address, coin: Coin| -> MockResult<_> {
             app.execute(
                 sender,
                 bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::SetSignatoryKey {
-                    xpub: WrappedBinary(xpub),
+                &msg::ExecuteMsg::WithdrawToBitcoin {
+                    btc_address: btc_address.to_string(),
                 },
-                &[],
+                &[coin],
             )
         };
 
-    let increase_block = |app: &mut MockApp, hash: Binary| -> Result<AppResponse, _> {
+    let set_signatory_key = |app: &mut MockApp, sender: Addr, xpub: Xpub| -> MockResult<_> {
+        app.execute(
+            sender,
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::SetSignatoryKey {
+                xpub: WrappedBinary(xpub),
+            },
+            &[],
+        )
+    };
+
+    let increase_block = |app: &mut MockApp, hash: Binary| -> MockResult<_> {
         app.sudo(
             bitcoin_bridge_addr.clone(),
             &msg::SudoMsg::ClockEndBlock { hash },
@@ -389,7 +385,7 @@ async fn test_full_flow_happy_case_bitcoin() {
                    xpub: ExtendedPubKey,
                    cp_index: u32,
                    btc_height: u32|
-     -> Result<AppResponse, _> {
+     -> MockResult<_> {
         let secp = Secp256k1::signing_only();
         let to_signs: Vec<([u8; 32], u32)> = app
             .query(
@@ -418,7 +414,7 @@ async fn test_full_flow_happy_case_bitcoin() {
                          sender: Addr,
                          xpriv: &ExtendedPrivKey,
                          xpub: ExtendedPubKey|
-     -> Result<AppResponse, _> {
+     -> MockResult<_> {
         let secp = Secp256k1::signing_only();
         let to_signs: Vec<([u8; 32], u32)> = app
             .query(
@@ -1054,17 +1050,15 @@ async fn test_deposit_with_token_fee() {
     let block_data = populate_bitcoin_block(&btc_client).await;
     let trusted_header = block_data.block_header;
 
-    let register_denom = |app: &mut MockApp,
-                          subdenom: String,
-                          metadata: Option<Metadata>|
-     -> Result<AppResponse, _> {
-        app.execute(
-            owner.clone(),
-            bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
-            &coins(10_000_000, "orai"),
-        )
-    };
+    let register_denom =
+        |app: &mut MockApp, subdenom: String, metadata: Option<Metadata>| -> MockResult<_> {
+            app.execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
+                &coins(10_000_000, "orai"),
+            )
+        };
 
     let init_bitcoin_config = |app: &mut MockApp, max_deposit_age: u32| -> () {
         let mut bitcoin_config = BitcoinConfig::default();
@@ -1131,7 +1125,7 @@ async fn test_deposit_with_token_fee() {
                          btc_vout: u32,
                          sigset_index: u32,
                          dest: Dest|
-     -> Result<AppResponse, _> {
+     -> MockResult<_> {
         app.execute(
             owner.clone(),
             bitcoin_bridge_addr.clone(),
@@ -1151,7 +1145,7 @@ async fn test_deposit_with_token_fee() {
                           addrs: Vec<String>,
                           voting_powers: Vec<u64>,
                           consensus_keys: Vec<[u8; 32]>|
-     -> Result<AppResponse, _> {
+     -> MockResult<_> {
         app.execute(
             owner.clone(),
             bitcoin_bridge_addr.clone(),
@@ -1164,19 +1158,18 @@ async fn test_deposit_with_token_fee() {
         )
     };
 
-    let set_signatory_key =
-        |app: &mut MockApp, sender: Addr, xpub: Xpub| -> Result<AppResponse, _> {
-            app.execute(
-                sender,
-                bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::SetSignatoryKey {
-                    xpub: WrappedBinary(xpub),
-                },
-                &[],
-            )
-        };
+    let set_signatory_key = |app: &mut MockApp, sender: Addr, xpub: Xpub| -> MockResult<_> {
+        app.execute(
+            sender,
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::SetSignatoryKey {
+                xpub: WrappedBinary(xpub),
+            },
+            &[],
+        )
+    };
 
-    let increase_block = |app: &mut MockApp, hash: Binary| -> Result<AppResponse, _> {
+    let increase_block = |app: &mut MockApp, hash: Binary| -> MockResult<_> {
         app.sudo(
             bitcoin_bridge_addr.clone(),
             &msg::SudoMsg::ClockEndBlock { hash },
@@ -1189,7 +1182,7 @@ async fn test_deposit_with_token_fee() {
                    xpub: ExtendedPubKey,
                    cp_index: u32,
                    btc_height: u32|
-     -> Result<AppResponse, _> {
+     -> MockResult<_> {
         let secp = Secp256k1::signing_only();
         let to_signs: Vec<([u8; 32], u32)> = app
             .query(
