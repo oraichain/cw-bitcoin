@@ -392,7 +392,7 @@ impl HeaderQueue {
             current_header_index -= 1;
 
             current_header = match self.get_by_height(store, current_header_index)? {
-                Some(inner) => inner.header.clone(),
+                Some(inner) => inner.header,
                 None => {
                     return Err(ContractError::Header("No previous header exists".into()));
                 }
