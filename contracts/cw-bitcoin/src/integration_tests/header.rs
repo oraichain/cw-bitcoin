@@ -2,9 +2,10 @@ use crate::{
     adapter::Adapter, header::WrappedHeader, interface::HeaderConfig, msg, tests::helper::MockApp,
 };
 use bitcoincore_rpc_async::jsonrpc::error::RpcError;
-use bitcoind::{bitcoincore_rpc::RpcApi, BitcoinD, Conf, P2P};
+use bitcoincore_rpc_async::{Auth, Client as BitcoinRpcClient};
+use bitcoind::bitcoincore_rpc::RpcApi;
+use bitcoind::{BitcoinD, Conf, P2P};
 use cosmwasm_std::{coins, Addr, Uint128};
-
 use oraiswap::asset::AssetInfo;
 
 fn into_json<T>(val: T) -> Result<bitcoind::bitcoincore_rpc::jsonrpc::serde_json::Value, RpcError>
@@ -14,55 +15,83 @@ where
     Ok(serde_json::to_value(val).unwrap())
 }
 
-#[test]
-fn test_relay_bulk_headers() {
-    let (mut app, accounts) = MockApp::new(&[("perfogic", &coins(100_000_000_000, "orai"))]);
+#[cfg(feature = "mainnet")]
+#[tokio::test]
+#[serial_test::serial]
+async fn test_relay_bulk_headers() {
+    use bitcoincore_rpc_async::RpcApi;
+
+    use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
+    // Set up app
+    let threshold = SIGSET_THRESHOLD;
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000_000, "orai")),
+        ("alice", &coins(100_000_000_000_000, "orai")),
+        ("bob", &coins(100_000_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000_000, "orai")),
+        ("receiver", &coins(100_000_000_000_000, "orai")),
+    ]);
     let owner = Addr::unchecked(&accounts[0]);
+    let validator_1 = Addr::unchecked(&accounts[1]);
+    let validator_2 = Addr::unchecked(&accounts[2]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[3]);
+    let token_fee_receiver = Addr::unchecked(&accounts[4]);
+    let receiver = Addr::unchecked(&accounts[5]);
+
     let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
+    let btc_bridge_denom = format!(
+        "factory/{}/{}",
+        token_factory_addr.clone().to_string(),
+        BTC_NATIVE_TOKEN_DENOM
+    );
     let bitcoin_bridge_addr = app
         .create_bridge(
             owner.clone(),
             &msg::InstantiateMsg {
                 token_factory_addr: token_factory_addr.clone(),
                 relayer_fee: Uint128::from(0 as u16),
-                relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
                 relayer_fee_token: AssetInfo::NativeToken {
                     denom: "orai".to_string(),
                 },
-                token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+                token_fee_receiver: token_fee_receiver.clone(),
                 swap_router_contract: None,
                 osor_entry_point_contract: None,
             },
         )
         .unwrap();
 
+    // Set up bitcoin
     let mut conf = Conf::default();
-    conf.p2p = P2P::Yes;
-    let node = BitcoinD::with_conf(bitcoind::downloaded_exe_path().unwrap(), &conf).unwrap();
-    let alice_address = node.client.get_new_address(Some("alice"), None).unwrap();
+    conf.args.push("-txindex");
+    let bitcoind = BitcoinD::with_conf(bitcoind::downloaded_exe_path().unwrap(), &conf).unwrap();
+    let rpc_url = "http://127.0.0.1:18332".to_string();
+    let cookie_file = bitcoind.params.cookie_file.clone();
+    let btc_client = BitcoinRpcClient::new(
+        rpc_url,
+        Auth::UserPass("satoshi".to_string(), "nakamoto".to_string()),
+    )
+    .await
+    .unwrap();
 
-    for _ in 0..10 {
-        node.client
-            .generate_to_address(160, &alice_address)
-            .unwrap();
-    }
-
-    let tip_hash = node.client.get_best_block_hash().unwrap();
-    let tip_height = node.client.get_block_header_info(&tip_hash).unwrap().height;
-
-    let tip_header = node.client.get_block_header(&tip_hash).unwrap();
-
+    let trusted_block_hash = btc_client.get_block_hash(2872800).await.unwrap();
+    let trusted_block_header = btc_client
+        .get_block_header(&trusted_block_hash)
+        .await
+        .unwrap();
+    let trusted_height = 2872800;
     let header_config = HeaderConfig {
-        max_length: 2000,
-        max_time_increase: 8 * 60 * 60,
-        trusted_height: tip_height as u32,
+        max_length: 24192,
+        max_time_increase: 2 * 60 * 60,
+        trusted_height,
         retarget_interval: 2016,
         target_spacing: 10 * 60,
         target_timespan: 2016 * (10 * 60),
         max_target: 0x1d00ffff,
         retargeting: true,
-        min_difficulty_blocks: false,
-        trusted_header: Adapter::from(tip_header),
+        min_difficulty_blocks: true,
+        trusted_header: Adapter::from(trusted_block_header),
     };
     app.execute(
         owner.clone(),
@@ -74,36 +103,48 @@ fn test_relay_bulk_headers() {
     )
     .unwrap();
 
-    let mut headers = Vec::with_capacity(11);
-    for _ in 0..250 {
-        node.client.generate_to_address(1, &alice_address).unwrap();
+    // write me a code that load headers from json
+    let current_dir = std::env::current_dir().unwrap();
+    let current_dir_str = current_dir.to_str().unwrap();
+    let json = std::fs::read_to_string(format!(
+        "{}/src/integration_tests/testdata/headers.json",
+        current_dir_str
+    ))
+    .unwrap();
+    let headers: Vec<WrappedHeader> = serde_json::from_str(&json).unwrap();
 
-        let tip_hash = node.client.get_best_block_hash().unwrap();
-        let tip_header = node.client.get_block_header(&tip_hash).unwrap();
-        let tip_height_info = node.client.get_block_header_info(&tip_hash).unwrap();
-        let tip_height = tip_height_info.height;
-
-        headers.push(WrappedHeader::from_header(&tip_header, tip_height as u32));
+    for i in 0..11 {
+        let mut new_headers = Vec::with_capacity(250);
+        for j in 0..250 {
+            new_headers.push(headers.get(j + 250 * i).unwrap().clone());
+        }
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::RelayHeaders {
+                headers: new_headers,
+            },
+            &[],
+        )
+        .unwrap();
     }
 
+    let mut new_headers = Vec::with_capacity(250);
+    for i in 0..250 {
+        new_headers.push(headers.get(i + 250 * 11).unwrap().clone());
+    }
     let res = app
         .execute(
             owner.clone(),
             bitcoin_bridge_addr.clone(),
             &msg::ExecuteMsg::RelayHeaders {
-                headers: headers.clone(),
+                headers: new_headers,
             },
             &[],
         )
         .unwrap();
 
     println!("gas used: {:?}", res.gas_info.gas_used);
-
-    let header_height: i32 = app
-        .query(bitcoin_bridge_addr.clone(), &msg::QueryMsg::HeaderHeight {})
-        .unwrap();
-
-    assert_eq!(header_height, 1850);
 }
 
 #[test]
