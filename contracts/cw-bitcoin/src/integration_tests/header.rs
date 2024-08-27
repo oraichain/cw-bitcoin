@@ -19,6 +19,9 @@ where
 #[tokio::test]
 #[serial_test::serial]
 async fn test_relay_bulk_headers() {
+    use std::str::FromStr;
+
+    use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
     use bitcoincore_rpc_async::RpcApi;
 
     use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
@@ -62,24 +65,6 @@ async fn test_relay_bulk_headers() {
         )
         .unwrap();
 
-    // Set up bitcoin
-    let mut conf = Conf::default();
-    conf.args.push("-txindex");
-    let bitcoind = BitcoinD::with_conf(bitcoind::downloaded_exe_path().unwrap(), &conf).unwrap();
-    let rpc_url = "http://127.0.0.1:18332".to_string();
-    let cookie_file = bitcoind.params.cookie_file.clone();
-    let btc_client = BitcoinRpcClient::new(
-        rpc_url,
-        Auth::UserPass("satoshi".to_string(), "nakamoto".to_string()),
-    )
-    .await
-    .unwrap();
-
-    let trusted_block_hash = btc_client.get_block_hash(2872800).await.unwrap();
-    let trusted_block_header = btc_client
-        .get_block_header(&trusted_block_hash)
-        .await
-        .unwrap();
     let trusted_height = 2872800;
     let header_config = HeaderConfig {
         max_length: 24192,
@@ -91,7 +76,20 @@ async fn test_relay_bulk_headers() {
         max_target: 0x1d00ffff,
         retargeting: true,
         min_difficulty_blocks: true,
-        trusted_header: Adapter::from(trusted_block_header),
+        trusted_header: Adapter::from(BlockHeader {
+            bits: 420466436,
+            nonce: 732839121,
+            time: 1723142223,
+            merkle_root: TxMerkleNode::from_str(
+                "7f718cbfe30ad75f698ac6fdacb0a5c53aae8dfab2c5642a657fb8e03c766880",
+            )
+            .unwrap(),
+            prev_blockhash: BlockHash::from_str(
+                "000000000000000591b541ed7088c4ce52fd10a0b99a4b5db377a3c1ab198756",
+            )
+            .unwrap(),
+            version: 654221312,
+        }),
     };
     app.execute(
         owner.clone(),
