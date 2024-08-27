@@ -1480,7 +1480,6 @@ impl CheckpointQueue {
         let mut building = self.building(store)?;
         building.deposits_enabled = deposits_enabled;
 
-        let index = self.index(store);
         self.set(store, index, &building)?;
 
         Ok(Some(building))
