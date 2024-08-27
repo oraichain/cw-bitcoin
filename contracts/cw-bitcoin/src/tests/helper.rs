@@ -91,7 +91,11 @@ impl MockApp {
         init_msg: &msg::InstantiateMsg,
     ) -> MockResult<Addr> {
         let code_id = self.bridge_id;
-        let addr = self.instantiate(code_id, sender, init_msg, &[], "cw-bitcoin-bridge")?;
+        let addr = self.instantiate(code_id, sender.clone(), init_msg, &[], "cw-bitcoin-bridge")?;
+        #[cfg(feature = "test-tube")]
+        {
+            self.app.set_gasless(&sender, &addr)?;
+        }
         Ok(addr)
     }
 }
