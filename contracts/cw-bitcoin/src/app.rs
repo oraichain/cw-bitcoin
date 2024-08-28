@@ -199,7 +199,7 @@ impl Bitcoin {
 
         let btc_header = self
             .headers
-            .get_by_height(store, btc_height)?
+            .get_by_height(store, btc_height, None)?
             .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
 
         if self.headers.height(store)? - btc_height < config.min_confirmations {
@@ -362,7 +362,7 @@ impl Bitcoin {
 
         let btc_header = self
             .headers
-            .get_by_height(store, btc_height)?
+            .get_by_height(store, btc_height, None)?
             .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
 
         if self.headers.height(store)? - btc_height < config.min_checkpoint_confirmations {

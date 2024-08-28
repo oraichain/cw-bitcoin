@@ -260,7 +260,7 @@ impl HeaderQueue {
         let mut removed_work = Uint256::default();
         if first.height <= current_height {
             let first_replaced = self
-                .get_by_height(store, first.height)?
+                .get_by_height(store, first.height, None)?
                 .ok_or_else(|| ContractError::Header("Header not found".into()))?;
 
             if first_replaced.block_hash() == first.block_hash() {
@@ -316,7 +316,7 @@ impl HeaderQueue {
 
         // get header right before first header of headers (which are going to be relayed)
         let prev_header = [self
-            .get_by_height(store, first_height - 1)?
+            .get_by_height(store, first_height - 1, None)?
             .ok_or_else(|| ContractError::Header("Headers not connect to chain".into()))?
             .header];
 
@@ -327,7 +327,7 @@ impl HeaderQueue {
 
         let mut work = Uint256::default();
 
-        let mut cache_headers_map: HashMap<u32, WrappedHeader> = HashMap::new();
+        let mut cache_headers_map = HashMap::new();
         for (prev_header, header) in headers {
             // prove: prev_header and header are adjacent
             if header.height() != prev_header.height() + 1 {
@@ -353,8 +353,15 @@ impl HeaderQueue {
                 self.validate_time(store, header)?;
             }
 
-            let target =
-                self.get_next_target(store, header, prev_header, &mut cache_headers_map)?;
+            let initial_height = self.get_initial_height(store)?;
+
+            let target = self.get_next_target(
+                store,
+                header,
+                prev_header,
+                initial_height,
+                &mut cache_headers_map,
+            )?;
             header.validate_pow(&target)?;
 
             let header_work = header.work();
@@ -377,7 +384,8 @@ impl HeaderQueue {
         store: &dyn Storage,
         header: &WrappedHeader,
         previous_header: &WrappedHeader,
-        cache_headers_map: &mut HashMap<u32, WrappedHeader>,
+        initial_height: u32,
+        cache_headers_map: &mut HashMap<u32, u32>,
     ) -> ContractResult<Uint256> {
         let config = self.config(store)?;
         if header.height() % config.retarget_interval == 0 {
@@ -393,26 +401,28 @@ impl HeaderQueue {
             return Ok(WrappedHeader::u256_from_compact(config.max_target));
         }
 
-        let mut current_header_index = previous_header.height();
-        let mut current_header = previous_header.clone();
+        let mut current_header_height = previous_header.height();
+        let mut current_bits = previous_header.bits();
 
-        while current_header_index > 0
-            && current_header_index % config.retarget_interval != 0
-            && current_header.bits() == config.max_target
+        while current_header_height > 0
+            && current_header_height % config.retarget_interval != 0
+            && current_bits == config.max_target
         {
-            current_header_index -= 1;
+            current_header_height -= 1;
 
-            current_header = match cache_headers_map.get(&current_header_index) {
-                Some(val) => val.clone(),
+            current_bits = match cache_headers_map.get(&current_header_height) {
+                Some(val) => *val,
                 None => {
-                    cache_headers_map.insert(current_header_index, current_header);
-                    self.get_by_height(store, current_header_index)?
+                    cache_headers_map.insert(current_header_height, current_bits);
+                    HEADERS
+                        .get(store, current_header_height - initial_height)?
                         .ok_or_else(|| ContractError::Header("No previous header exists".into()))?
                         .header
+                        .bits()
                 }
             }
         }
-        Ok(WrappedHeader::u256_from_compact(current_header.bits()))
+        Ok(WrappedHeader::u256_from_compact(current_bits))
     }
 
     /// Calculate the expected next target based on the passed header and the
@@ -433,7 +443,7 @@ impl HeaderQueue {
             return Err(ContractError::Header("Invalid trusted header. Trusted header have height which is a multiple of the retarget interval".into()));
         }
 
-        let prev_retarget = match self.get_by_height(store, first_reorg_height)? {
+        let prev_retarget = match self.get_by_height(store, first_reorg_height, None)? {
             Some(inner) => inner.time(),
             None => {
                 return Err(ContractError::Header(
@@ -489,11 +499,11 @@ impl HeaderQueue {
         current_header: &WrappedHeader,
     ) -> ContractResult<()> {
         let mut prev_stamps: Vec<u32> = Vec::with_capacity(11);
-
+        let initial_height = self.get_initial_height(store)?;
         for i in 0..11 {
             let index = self.height(store)? - i;
 
-            let current_item = match self.get_by_height(store, index)? {
+            let current_item = match self.get_by_height(store, index, Some(initial_height))? {
                 Some(inner) => inner,
                 None => {
                     return Err(ContractError::Header(
@@ -563,6 +573,17 @@ impl HeaderQueue {
         Ok(self.len(store)? == 0)
     }
 
+    pub fn get_initial_height(&self, store: &dyn Storage) -> ContractResult<u32> {
+        match HEADERS.front(store)? {
+            Some(inner) => Ok(inner.height()),
+            None => {
+                return Err(ContractError::Header(
+                    "Queue does not contain any headers".into(),
+                ))
+            }
+        }
+    }
+
     /// Get a header from the header queue by its height.
     ///
     /// If the header queue does not contain a header at the passed height,
@@ -574,14 +595,11 @@ impl HeaderQueue {
         &self,
         store: &dyn Storage,
         height: u32,
+        initial_height: Option<u32>,
     ) -> ContractResult<Option<WorkHeader>> {
-        let initial_height = match HEADERS.front(store)? {
-            Some(inner) => inner.height(),
-            None => {
-                return Err(ContractError::Header(
-                    "Queue does not contain any headers".into(),
-                ))
-            }
+        let initial_height = match initial_height {
+            Some(val) => val,
+            None => self.get_initial_height(store)?,
         };
 
         if height < initial_height {
