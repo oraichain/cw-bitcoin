@@ -13,13 +13,13 @@ use crate::{
 };
 
 pub fn process_deduct_fee(
-    storage: &dyn Storage,
+    store: &dyn Storage,
     querier: &QuerierWrapper,
     api: &dyn Api,
     local_amount: Coin, // local amount
 ) -> StdResult<FeeData> {
     let local_denom = local_amount.denom.clone();
-    let (deducted_amount, token_fee) = deduct_token_fee(storage, local_amount.amount)?;
+    let (deducted_amount, token_fee) = deduct_token_fee(store, local_amount.amount)?;
 
     let mut fee_data = FeeData {
         deducted_amount,
@@ -40,7 +40,7 @@ pub fn process_deduct_fee(
 
     // simulate for relayer fee
     let ask_asset_info = denom_to_asset_info(api, &local_amount.denom);
-    let relayer_fee = deduct_relayer_fee(storage, querier, ask_asset_info)?;
+    let relayer_fee = deduct_relayer_fee(store, querier, ask_asset_info)?;
 
     fee_data.deducted_amount = deducted_amount.checked_sub(relayer_fee).unwrap_or_default();
     fee_data.relayer_fee = Coin {
@@ -59,11 +59,11 @@ pub fn process_deduct_fee(
 }
 
 pub fn deduct_relayer_fee(
-    storage: &dyn Storage,
+    store: &dyn Storage,
     querier: &QuerierWrapper,
     ask_asset_info: AssetInfo,
 ) -> StdResult<Uint128> {
-    let config = CONFIG.load(storage)?;
+    let config = CONFIG.load(store)?;
 
     // no need to deduct fee if no fee is found in the mapping
     if config.relayer_fee.is_zero() {
@@ -85,8 +85,8 @@ pub fn deduct_relayer_fee(
     Ok(relayer_fee)
 }
 
-pub fn deduct_token_fee(storage: &dyn Storage, amount: Uint128) -> StdResult<(Uint128, Uint128)> {
-    let token_fee = TOKEN_FEE_RATIO.may_load(storage)?;
+pub fn deduct_token_fee(store: &dyn Storage, amount: Uint128) -> StdResult<(Uint128, Uint128)> {
+    let token_fee = TOKEN_FEE_RATIO.may_load(store)?;
     if let Some(token_fee) = token_fee {
         let fee = deduct_fee(token_fee, amount);
         let new_deducted_amount = amount.checked_sub(fee)?;

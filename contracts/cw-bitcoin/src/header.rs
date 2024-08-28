@@ -12,6 +12,7 @@ use crate::state::HEADER_CONFIG;
 use bitcoin::blockdata::block::BlockHeader;
 
 use bitcoin::util::uint::Uint256;
+use bitcoin::util::BitArray;
 use bitcoin::BlockHash;
 use bitcoin::TxMerkleNode;
 use cosmwasm_schema::schemars::JsonSchema;
@@ -279,6 +280,7 @@ impl HeaderQueue {
 
         // Prune the header queue if it has grown too large.
         let mut queue_len = self.len(store)?;
+        let mut current_work = *CURRENT_WORK.load(store)?;
         while queue_len > config.max_length {
             let header = match HEADERS.pop_front(store)? {
                 Some(inner) => inner,
@@ -289,11 +291,9 @@ impl HeaderQueue {
             queue_len -= 1;
 
             // TODO: do we really want to subtract work when pruning?
-            let current_work = *self.current_work(store)? - header.work();
-            // self.current_work = Adapter::new(current_work);
-            CURRENT_WORK.save(store, &Adapter::new(current_work))?;
+            current_work = current_work - header.work();
         }
-
+        CURRENT_WORK.save(store, &Adapter::new(current_work))?;
         Ok(())
     }
 
@@ -308,6 +308,7 @@ impl HeaderQueue {
             .first()
             .ok_or_else(|| ContractError::Header("Passed header list is empty".into()))?
             .height;
+
         if first_height == 0 {
             return Err(ContractError::Header(
                 "Headers must start after height 0".into(),
@@ -325,7 +326,7 @@ impl HeaderQueue {
         // [headers[0], headers[1], headers[2]...]
         let headers = prev_header.iter().chain(headers.iter()).zip(headers.iter());
 
-        let mut work = Uint256::default();
+        let mut work = Uint256::zero();
 
         let mut cache_headers_map = HashMap::new();
         for (prev_header, header) in headers {
@@ -452,15 +453,8 @@ impl HeaderQueue {
             }
         };
 
-        let mut timespan = header.time() - prev_retarget;
-
-        if timespan < config.target_timespan / 4 {
-            timespan = config.target_timespan / 4;
-        }
-
-        if timespan > config.target_timespan * 4 {
-            timespan = config.target_timespan * 4;
-        }
+        let timespan = (header.time() - prev_retarget)
+            .clamp(config.target_timespan / 4, config.target_timespan * 4);
 
         let target_timespan = WrappedHeader::u32_to_u256(config.target_timespan);
         let timespan = WrappedHeader::u32_to_u256(timespan);
@@ -469,11 +463,7 @@ impl HeaderQueue {
         let target_u32 = BlockHeader::compact_target_from_u256(&target);
         let target = WrappedHeader::u256_from_compact(target_u32);
 
-        if target > WrappedHeader::u256_from_compact(config.max_target) {
-            Ok(WrappedHeader::u256_from_compact(config.max_target))
-        } else {
-            Ok(target)
-        }
+        Ok(target.min(WrappedHeader::u256_from_compact(config.max_target)))
     }
 
     /// Remove headers from the header queue until the height of the last header
@@ -500,18 +490,17 @@ impl HeaderQueue {
     ) -> ContractResult<()> {
         let mut prev_stamps: Vec<u32> = Vec::with_capacity(11);
         let initial_height = self.get_initial_height(store)?;
-        for i in 0..11 {
-            let index = self.height(store)? - i;
-
-            let current_item = match self.get_by_height(store, index, Some(initial_height))? {
-                Some(inner) => inner,
+        let height = self.height(store)?;
+        for prev_height in height - 10..=height {
+            let current_item = match self.get_by_height(store, prev_height, Some(initial_height))? {
+                Some(inner) => inner.time(),
                 None => {
                     return Err(ContractError::Header(
                         "Deque does not contain any elements".into(),
                     ))
                 }
             };
-            prev_stamps.push(current_item.time());
+            prev_stamps.push(current_item);
         }
 
         prev_stamps.sort_unstable();
@@ -629,7 +618,8 @@ impl HeaderQueue {
     ) -> ContractResult<()> {
         HEADERS.clear(store)?;
         let wrapped_header = WrappedHeader::new(config.trusted_header, config.trusted_height);
-        let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
+        let work = wrapped_header.work();
+        let work_header = WorkHeader::new(wrapped_header, work);
 
         // self.current_work = work_header.chain_work;
         CURRENT_WORK.save(store, &work_header.chain_work)?;
