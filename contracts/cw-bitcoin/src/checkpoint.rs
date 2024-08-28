@@ -1606,13 +1606,12 @@ impl CheckpointQueue {
     }
 
     pub fn unhandled_confirmed(&self, store: &dyn Storage) -> ContractResult<Vec<u32>> {
-        if self.confirmed_index(store).is_none() {
+        let Some(confirmed_index) = self.confirmed_index(store) else {
             return Ok(vec![]);
-        }
+        };
 
         let mut out = vec![];
-        for i in self.first_unhandled_confirmed_index(store)..=self.confirmed_index(store).unwrap()
-        {
+        for i in self.first_unhandled_confirmed_index(store)..=confirmed_index {
             let cp = self.get(store, i)?;
             if !matches!(cp.status, CheckpointStatus::Complete) {
                 #[cfg(debug_assertions)]
