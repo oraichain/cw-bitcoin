@@ -394,7 +394,7 @@ impl HeaderQueue {
         }
 
         let mut current_header_index = previous_header.height();
-        let mut current_header = previous_header.to_owned();
+        let mut current_header = previous_header.clone();
 
         while current_header_index > 0
             && current_header_index % config.retarget_interval != 0
@@ -402,16 +402,14 @@ impl HeaderQueue {
         {
             current_header_index -= 1;
 
-            if cache_headers_map.contains_key(&current_header_index) {
-                current_header = cache_headers_map[&current_header_index].clone();
-            } else {
-                current_header = match self.get_by_height(store, current_header_index)? {
-                    Some(inner) => inner.header,
-                    None => {
-                        return Err(ContractError::Header("No previous header exists".into()));
-                    }
-                };
-                cache_headers_map.insert(current_header_index, current_header.clone());
+            current_header = match cache_headers_map.get(&current_header_index) {
+                Some(val) => val.clone(),
+                None => {
+                    cache_headers_map.insert(current_header_index, current_header);
+                    self.get_by_height(store, current_header_index)?
+                        .ok_or_else(|| ContractError::Header("No previous header exists".into()))?
+                        .header
+                }
             }
         }
         Ok(WrappedHeader::u256_from_compact(current_header.bits()))
