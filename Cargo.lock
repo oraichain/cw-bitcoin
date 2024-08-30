@@ -760,7 +760,7 @@ dependencies = [
 [[package]]
 name = "cosmwasm-testing-util"
 version = "0.1.0"
-source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=e68faf6#e68faf6d5e1cec3ea5a90e1e878138bf6bbc850c"
+source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=5647be1#5647be14632c52168d822a11576f5e962565407e"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -1011,7 +1011,7 @@ dependencies = [
  "chrono",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=e68faf6)",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=5647be1)",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
  "cw20 1.1.2",
@@ -2714,7 +2714,7 @@ dependencies = [
 [[package]]
 name = "osmosis-test-tube"
 version = "19.2.0"
-source = "git+https://github.com/oraichain/test-tube.git?rev=a5d4aa1#a5d4aa10abfb0b1883918826fa2e0e46099636c6"
+source = "git+https://github.com/oraichain/test-tube.git?rev=2b7c2aa#2b7c2aa07af266c9b2e30a4c1241aabe4492bdd9"
 dependencies = [
  "base64 0.13.1",
  "bindgen",
@@ -4089,7 +4089,7 @@ dependencies = [
 [[package]]
 name = "test-tube"
 version = "0.1.7"
-source = "git+https://github.com/oraichain/test-tube.git?rev=a5d4aa1#a5d4aa10abfb0b1883918826fa2e0e46099636c6"
+source = "git+https://github.com/oraichain/test-tube.git?rev=2b7c2aa#2b7c2aa07af266c9b2e30a4c1241aabe4492bdd9"
 dependencies = [
  "base64 0.13.1",
  "cosmrs",
