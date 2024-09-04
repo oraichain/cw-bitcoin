@@ -741,26 +741,7 @@ dependencies = [
 [[package]]
 name = "cosmwasm-testing-util"
 version = "0.1.0"
-source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=1b9c412#1b9c4126e8b5e19dc547f992a1a5cd9dde3d1b0d"
-dependencies = [
- "anyhow",
- "bech32 0.9.1",
- "cosmwasm-crypto",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cosmwasm-vm",
- "cw-multi-test 1.2.0",
- "cw20 1.1.2",
- "cw20-base",
- "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
- "token-bindings-test 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
- "tokenfactory 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
-]
-
-[[package]]
-name = "cosmwasm-testing-util"
-version = "0.1.0"
-source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=5647be1#5647be14632c52168d822a11576f5e962565407e"
+source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=143348c#143348c91727ea286480a8b987e09c7e66eb9f74"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -775,6 +756,25 @@ dependencies = [
  "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=9796c74)",
  "token-bindings-test 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=9796c74)",
  "tokenfactory 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=9796c74)",
+]
+
+[[package]]
+name = "cosmwasm-testing-util"
+version = "0.1.0"
+source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=1b9c412#1b9c4126e8b5e19dc547f992a1a5cd9dde3d1b0d"
+dependencies = [
+ "anyhow",
+ "bech32 0.9.1",
+ "cosmwasm-crypto",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cosmwasm-vm",
+ "cw-multi-test 1.2.0",
+ "cw20 1.1.2",
+ "cw20-base",
+ "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
+ "token-bindings-test 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
+ "tokenfactory 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
 ]
 
 [[package]]
@@ -1011,7 +1011,7 @@ dependencies = [
  "chrono",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=5647be1)",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=143348c)",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
  "cw20 1.1.2",
