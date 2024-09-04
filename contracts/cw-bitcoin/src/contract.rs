@@ -161,6 +161,9 @@ pub fn execute(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
+        QueryMsg::StakingValidator { addr } => {
+            to_json_binary(&query_staking_validator(deps.querier, addr)?)
+        }
         QueryMsg::Config {} => to_json_binary(&query_config(deps.storage)?),
         QueryMsg::BitcoinConfig {} => to_json_binary(&query_bitcoin_config(deps.storage)?),
         QueryMsg::CheckpointConfig {} => to_json_binary(&query_checkpoint_config(deps.storage)?),

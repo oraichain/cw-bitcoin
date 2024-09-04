@@ -15,10 +15,9 @@ mod outpoint_set;
 mod recovery;
 mod signatory;
 mod state;
-mod threshold_sig;
-
 #[cfg(test)]
 mod tests;
+mod threshold_sig;
 
 #[cfg(test)]
 pub mod integration_tests;
