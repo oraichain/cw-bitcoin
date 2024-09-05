@@ -5,13 +5,14 @@ use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
 
 use crate::{
-    adapter::{Adapter, WrappedBinary},
     app::ConsensusKey,
     header::WrappedHeader,
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
     state::Ratio,
     threshold_sig::Signature,
 };
+use common_bitcoin::adapter::{Adapter, WrappedBinary};
+use common_bitcoin::xpub::Xpub;
 
 #[cw_serde]
 pub struct FeeData {
@@ -182,8 +183,6 @@ pub enum QueryMsg {
     ChangeRates { interval: u64 },
     #[returns(u64)]
     ValueLocked {},
-    #[returns(String)]
-    StakingValidator { addr: String },
 }
 
 #[cw_serde]

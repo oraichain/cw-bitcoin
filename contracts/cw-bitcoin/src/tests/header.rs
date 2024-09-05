@@ -6,10 +6,10 @@ use bitcoin::{hash_types::TxMerkleNode, BlockHeader};
 use chrono::{TimeZone, Utc};
 use cosmwasm_std::{from_json, testing::mock_dependencies, to_json_binary, Binary};
 
-use crate::adapter::Adapter;
 use crate::header::{HeaderQueue, WrappedHeader};
 use crate::interface::HeaderConfig;
 use crate::state::{HEADERS, HEADER_CONFIG};
+use common_bitcoin::adapter::Adapter;
 
 #[test]
 fn primitive_adapter_encode_decode() {

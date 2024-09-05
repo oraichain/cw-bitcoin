@@ -3,13 +3,11 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::Signature,
 };
-use crate::{
-    adapter::Adapter,
-    error::{ContractError, ContractResult},
-    interface::{Dest, Xpub},
-    state::RECOVERY_TXS,
-};
+use crate::{interface::Dest, state::RECOVERY_TXS};
 use bitcoin::{OutPoint, Transaction, TxOut};
+use common_bitcoin::adapter::Adapter;
+use common_bitcoin::error::{ContractError, ContractResult};
+use common_bitcoin::xpub::Xpub;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Api, Storage};
 

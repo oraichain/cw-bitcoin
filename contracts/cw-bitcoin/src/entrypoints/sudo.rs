@@ -1,9 +1,9 @@
 use crate::{
     app::Bitcoin,
-    error::{ContractError, ContractResult},
     fee::process_deduct_fee,
     state::{BLOCK_HASHES, CONFIG, VALIDATORS},
 };
+use common_bitcoin::error::{ContractError, ContractResult};
 use cosmwasm_std::{
     to_json_binary, Api, Binary, Coin, CosmosMsg, Env, QuerierWrapper, Response, Storage, Uint128,
     WasmMsg,

@@ -1,15 +1,14 @@
-use std::collections::HashMap;
-
-use crate::adapter::Adapter;
 use crate::constants::MAX_HEADERS_RELAY_ONE_TIME;
-use crate::error::ContractError;
-use crate::error::ContractResult;
 use crate::interface::HeaderConfig;
 use crate::state::header_height;
 use crate::state::CURRENT_WORK;
 use crate::state::HEADERS;
 use crate::state::HEADER_CONFIG;
 use bitcoin::blockdata::block::BlockHeader;
+use common_bitcoin::adapter::Adapter;
+use common_bitcoin::error::ContractError;
+use common_bitcoin::error::ContractResult;
+use std::collections::HashMap;
 
 use bitcoin::util::uint::Uint256;
 use bitcoin::util::BitArray;

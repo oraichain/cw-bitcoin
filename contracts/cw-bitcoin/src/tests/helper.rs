@@ -4,9 +4,10 @@ use cosmwasm_std::{testing::mock_env, Env, Timestamp};
 use cosmwasm_std::{Addr, Coin};
 use cosmwasm_testing_util::MockResult;
 
-use crate::{error::ContractResult, threshold_sig::Signature};
+use crate::threshold_sig::Signature;
 use bitcoin::secp256k1::{Message, Secp256k1};
 use bitcoin::util::bip32::{ChildNumber, ExtendedPrivKey};
+use common_bitcoin::error::ContractResult;
 
 use derive_more::{Deref, DerefMut};
 

@@ -1,8 +1,8 @@
 use crate::{
-    error::ContractResult,
     fee::process_deduct_fee,
     state::{Ratio, CONFIG, TOKEN_FEE_RATIO},
 };
+use common_bitcoin::error::ContractResult;
 use cosmwasm_std::{testing::mock_dependencies, Addr, Coin, Uint128};
 use oraiswap::asset::AssetInfo;
 

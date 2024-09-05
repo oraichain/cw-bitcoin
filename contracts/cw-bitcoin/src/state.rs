@@ -1,19 +1,19 @@
-use bitcoin::util::uint::Uint256;
-use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Order, Storage};
-use cw_storage_plus::{Item, Map};
-
 use crate::{
-    adapter::Adapter,
     app::ConsensusKey,
     checkpoint::Checkpoint,
     constants::BTC_NATIVE_TOKEN_DENOM,
-    error::ContractResult,
     header::WorkHeader,
-    interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Validator, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Validator},
     msg::Config,
     recovery::RecoveryTx,
 };
+use bitcoin::util::uint::Uint256;
+use common_bitcoin::adapter::Adapter;
+use common_bitcoin::error::ContractResult;
+use common_bitcoin::xpub::Xpub;
+use cosmwasm_schema::cw_serde;
+use cosmwasm_std::{Order, Storage};
+use cw_storage_plus::{Item, Map};
 
 #[cw_serde]
 pub struct Ratio {

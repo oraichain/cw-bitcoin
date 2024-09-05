@@ -3,13 +3,13 @@ use cosmwasm_std::{testing::mock_dependencies, Storage};
 use crate::{
     checkpoint::{adjust_fee_rate, BitcoinTx, Checkpoint, CheckpointQueue, CheckpointStatus},
     constants::DEFAULT_FEE_RATE,
-    error::ContractResult,
     interface::CheckpointConfig,
     signatory::{Signatory, SignatorySet},
     state::{BUILDING_INDEX, CHECKPOINTS, CONFIRMED_INDEX},
     tests::helper::push_bitcoin_tx_output,
     threshold_sig::Pubkey,
 };
+use common_bitcoin::error::ContractResult;
 
 #[test]
 fn deduct_fee() {

@@ -3,7 +3,6 @@ use cosmwasm_std::entry_point;
 
 use crate::{
     entrypoints::*,
-    error::ContractError,
     header::HeaderQueue,
     interface::{BitcoinConfig, CheckpointConfig, HeaderConfig},
     msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
@@ -12,7 +11,7 @@ use crate::{
         FIRST_UNHANDLED_CONFIRMED_INDEX,
     },
 };
-
+use common_bitcoin::error::ContractError;
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 
@@ -161,9 +160,6 @@ pub fn execute(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::StakingValidator { addr } => {
-            to_json_binary(&query_staking_validator(deps.querier, addr)?)
-        }
         QueryMsg::Config {} => to_json_binary(&query_config(deps.storage)?),
         QueryMsg::BitcoinConfig {} => to_json_binary(&query_bitcoin_config(deps.storage)?),
         QueryMsg::CheckpointConfig {} => to_json_binary(&query_checkpoint_config(deps.storage)?),

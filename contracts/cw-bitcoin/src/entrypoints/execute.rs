@@ -1,11 +1,7 @@
-use std::str::FromStr;
-
 use crate::{
-    adapter::{Adapter, WrappedBinary},
     app::{Bitcoin, ConsensusKey},
-    error::ContractResult,
     header::{HeaderList, HeaderQueue, WrappedHeader},
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
     state::{
         get_full_btc_denom, Ratio, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS,
         TOKEN_FEE_RATIO, VALIDATORS,
@@ -13,6 +9,10 @@ use crate::{
     threshold_sig::Signature,
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use common_bitcoin::adapter::{Adapter, WrappedBinary};
+use common_bitcoin::error::ContractResult;
+use common_bitcoin::xpub::Xpub;
+use std::str::FromStr;
 
 use cosmwasm_std::{
     to_json_binary, wasm_execute, Addr, Api, Env, MessageInfo, Response, Storage, Uint128, WasmMsg,
@@ -152,7 +152,7 @@ pub fn withdraw_to_bitcoin(
     let config = CONFIG.load(store)?;
     let denom = get_full_btc_denom(config.token_factory_addr.as_str());
     let script_pubkey = bitcoin::Address::from_str(btc_address.as_str())
-        .map_err(|err| crate::error::ContractError::App(err.to_string()))?
+        .map_err(|err| common_bitcoin::error::ContractError::App(err.to_string()))?
         .script_pubkey();
     for fund in info.funds {
         if fund.denom == denom {

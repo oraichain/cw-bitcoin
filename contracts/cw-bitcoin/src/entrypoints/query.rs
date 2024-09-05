@@ -1,16 +1,8 @@
-use bitcoin::{BlockHash, Transaction};
-use cosmwasm_std::{Addr, Binary, Env, QuerierWrapper, QueryRequest, StakingQuery, Storage};
-use ibc_proto::cosmos::staking::v1beta1::{QueryValidatorRequest, QueryValidatorResponse};
-use prost::Message;
-use std::str::FromStr;
-
 use crate::{
-    adapter::{Adapter, WrappedBinary},
     app::{Bitcoin, ConsensusKey},
     checkpoint::{Checkpoint, CheckpointQueue, CheckpointStatus},
-    error::{ContractError, ContractResult},
     header::HeaderQueue,
-    interface::{BitcoinConfig, ChangeRates, CheckpointConfig, HeaderConfig, Xpub},
+    interface::{BitcoinConfig, ChangeRates, CheckpointConfig, HeaderConfig},
     msg::ConfigResponse,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
@@ -19,23 +11,12 @@ use crate::{
         OUTPOINTS, SIGNERS, SIG_KEYS, TOKEN_FEE_RATIO,
     },
 };
-
-pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractResult<String> {
-    let query_validator_request = QueryValidatorRequest {
-        validator_addr: addr,
-    };
-    let encode_query_validator_request =
-        QueryValidatorRequest::encode_to_vec(&query_validator_request);
-    let query_validator_request_binary = Binary::from(encode_query_validator_request);
-    let query_validator_response: Binary = api.query(&QueryRequest::Stargate {
-        path: "/cosmos.staking.v1beta1.QueryValidatorRequest".to_string(),
-        data: query_validator_request_binary,
-    })?;
-    let validator_response =
-        QueryValidatorResponse::decode(query_validator_response.as_slice()).unwrap();
-    let validator = validator_response.validator.unwrap();
-    Ok(validator.tokens)
-}
+use bitcoin::{BlockHash, Transaction};
+use common_bitcoin::adapter::{Adapter, WrappedBinary};
+use common_bitcoin::error::{ContractError, ContractResult};
+use common_bitcoin::xpub::Xpub;
+use cosmwasm_std::{Addr, Env, QuerierWrapper, Storage};
+use std::str::FromStr;
 
 pub fn query_config(store: &dyn Storage) -> ContractResult<ConfigResponse> {
     let config = CONFIG.load(store)?;

@@ -1,6 +1,5 @@
-use crate::adapter::Adapter;
 use crate::checkpoint::Checkpoint;
-use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator, Xpub};
+use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
     get_full_btc_denom, get_validators, BITCOIN_CONFIG, CONFIG, CONFIRMED_INDEX, FEE_POOL,
@@ -13,10 +12,12 @@ use super::recovery::{RecoveryTxInput, RecoveryTxs};
 
 use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
-use super::error::{ContractError, ContractResult};
 use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use common_bitcoin::adapter::Adapter;
+use common_bitcoin::error::{ContractError, ContractResult};
+use common_bitcoin::xpub::Xpub;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
 

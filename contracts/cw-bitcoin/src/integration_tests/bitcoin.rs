@@ -1,12 +1,10 @@
 use super::utils::{
     get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
 };
-use crate::adapter::Adapter;
-use crate::adapter::WrappedBinary;
 use crate::checkpoint::{Checkpoint, CheckpointStatus};
 use crate::constants::{BTC_NATIVE_TOKEN_DENOM, SIGSET_THRESHOLD};
 use crate::header::WrappedHeader;
-use crate::interface::{BitcoinConfig, CheckpointConfig, Dest, Xpub};
+use crate::interface::{BitcoinConfig, CheckpointConfig, Dest};
 use crate::recovery::SignedRecoveryTx;
 use crate::state::Ratio;
 use crate::tests::helper::{sign, MockApp};
@@ -19,6 +17,9 @@ use bitcoin::{Address, BlockHeader, Transaction};
 use bitcoincore_rpc_async::{Client, RpcApi as AsyncRpcApi};
 use bitcoind::bitcoincore_rpc::RpcApi;
 use bitcoind::{BitcoinD, Conf};
+use common_bitcoin::adapter::Adapter;
+use common_bitcoin::adapter::WrappedBinary;
+use common_bitcoin::xpub::Xpub;
 use cosmwasm_std::coins;
 use cosmwasm_std::{Addr, Binary, Coin, Uint128};
 use cosmwasm_testing_util::MockResult;

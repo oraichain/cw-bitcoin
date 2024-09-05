@@ -1,5 +1,4 @@
 use super::helper::sign;
-use adapter::Adapter;
 use app::Bitcoin;
 use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::ExtendedPubKey;
@@ -11,11 +10,13 @@ use bitcoin::{
 };
 use bitcoin::{Script, Transaction};
 use checkpoint::{BatchType, Input};
+use common_bitcoin::adapter::Adapter;
+use common_bitcoin::error::ContractResult;
+use common_bitcoin::xpub::Xpub;
 use constants::BTC_NATIVE_TOKEN_DENOM;
 use cosmwasm_std::testing::{mock_dependencies, mock_env};
 use cosmwasm_std::{Addr, Api, Coin, DepsMut, Env, Storage, Uint128};
-use error::ContractResult;
-use interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig, Xpub};
+use interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig};
 use state::{
     BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
     FIRST_UNHANDLED_CONFIRMED_INDEX, HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS,
@@ -29,6 +30,17 @@ use crate::{
     header::{WorkHeader, WrappedHeader},
     *,
 };
+
+#[test]
+fn test_account() {
+    let mut deps = mock_dependencies();
+    let canonicalized_addr = deps
+        .api
+        .addr_canonicalize("orai1ehmhqcn8erf3dgavrca69zgp4rtxj5kqgtcnyd")
+        .unwrap();
+    let addr = deps.api.addr_humanize(&canonicalized_addr);
+    // deps.api.
+}
 
 #[test]
 fn relay_height_validity() -> ContractResult<()> {

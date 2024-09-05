@@ -1,11 +1,11 @@
 use super::helper::MockApp;
-use crate::adapter::Adapter;
 use crate::header::WrappedHeader;
 use crate::interface::HeaderConfig;
 use crate::msg;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::{BlockHash, BlockHeader, TxMerkleNode};
 use chrono::{TimeZone, Utc};
+use common_bitcoin::adapter::Adapter;
 use cosmwasm_std::{coins, Addr, Uint128};
 use oraiswap::asset::AssetInfo;
 

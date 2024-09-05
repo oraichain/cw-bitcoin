@@ -1,10 +1,10 @@
 use bitcoin::{hashes::hex::FromHex, Script};
 
 use crate::{
-    error::ContractResult,
     signatory::{Signatory, SignatorySet},
     threshold_sig::Pubkey,
 };
+use common_bitcoin::error::ContractResult;
 
 fn mock_signatory_set() -> SignatorySet {
     let pk = |bytes| Pubkey::new(bytes).unwrap().into();

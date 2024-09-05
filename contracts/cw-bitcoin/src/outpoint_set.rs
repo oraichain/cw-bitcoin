@@ -3,10 +3,8 @@ use std::str::FromStr;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Order, Storage};
 
-use crate::{
-    error::{ContractError, ContractResult},
-    state::{EXPIRATION_QUEUE, OUTPOINTS},
-};
+use crate::state::{EXPIRATION_QUEUE, OUTPOINTS};
+use common_bitcoin::error::{ContractError, ContractResult};
 
 /// A collection to keep track of which deposit outpoints have already been
 /// relayed, in order to ensure that we don't credit the same deposit more than

@@ -1,9 +1,8 @@
-use crate::{
-    adapter::Adapter, header::WrappedHeader, interface::HeaderConfig, msg, tests::helper::MockApp,
-};
+use crate::{header::WrappedHeader, interface::HeaderConfig, msg, tests::helper::MockApp};
 use bitcoincore_rpc_async::jsonrpc::error::RpcError;
 use bitcoind::bitcoincore_rpc::RpcApi;
 use bitcoind::{BitcoinD, Conf, P2P};
+use common_bitcoin::adapter::Adapter;
 use cosmwasm_std::{coins, Addr, Uint128};
 use oraiswap::asset::AssetInfo;
 

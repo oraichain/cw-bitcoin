@@ -2,10 +2,9 @@ use super::{
     signatory::SignatorySet,
     threshold_sig::{Signature, ThresholdSig},
 };
-use crate::{adapter::Adapter, interface::Xpub, state::BUILDING_INDEX};
+use crate::state::BUILDING_INDEX;
 use crate::{
     constants::DEFAULT_FEE_RATE,
-    error::{ContractError, ContractResult},
     state::{CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL, FIRST_UNHANDLED_CONFIRMED_INDEX},
 };
 use crate::{
@@ -14,6 +13,9 @@ use crate::{
 };
 use bitcoin::hashes::Hash;
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
+use common_bitcoin::adapter::Adapter;
+use common_bitcoin::error::{ContractError, ContractResult};
+use common_bitcoin::xpub::Xpub;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_schema::{cw_serde, schemars::JsonSchema};
 use cosmwasm_std::{Api, Coin, Env, Storage};

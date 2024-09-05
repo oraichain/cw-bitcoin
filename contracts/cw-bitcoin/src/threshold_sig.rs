@@ -1,12 +1,12 @@
 use super::constants::SIGSET_THRESHOLD;
 use super::signatory::SignatorySet;
-use crate::error::{ContractError, ContractResult};
 use bitcoin::blockdata::transaction::EcdsaSighashType;
 use bitcoin::secp256k1::{
     self,
     constants::{MESSAGE_SIZE, PUBLIC_KEY_SIZE},
     ecdsa, PublicKey,
 };
+use common_bitcoin::error::{ContractError, ContractResult};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
