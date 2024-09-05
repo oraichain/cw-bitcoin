@@ -558,6 +558,7 @@ dependencies = [
  "cosmwasm-std",
  "cw-storage-plus 1.2.0",
  "derive_more",
+ "ibc-proto",
  "libsecp256k1-core",
  "serde",
  "serde_json",
