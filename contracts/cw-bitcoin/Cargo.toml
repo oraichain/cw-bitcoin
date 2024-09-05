@@ -33,7 +33,7 @@ cw20-base = {workspace = true}
 derive_more = {workspace = true}
 libsecp256k1-core = "0.3.0"
 oraiswap = {workspace = true}
-prost = {workspace = true, features = ["prost-derive"]}
+prost = {workspace = true}
 sha2 = {workspace = true}
 skip = {workspace = true}
 thiserror = {workspace = true}
