@@ -1,5 +1,5 @@
 use super::utils::{
-    get_wrapped_header_from_block_hash, populate_bitcoin_block, retry, test_bitcoin_client,
+    get_wrapped_header_from_block_hash, populate_bitcoin_block, test_bitcoin_client,
 };
 use crate::adapter::Adapter;
 use crate::adapter::WrappedBinary;
@@ -229,7 +229,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     let rpc_url = bitcoind.rpc_url();
     let cookie_file = bitcoind.params.cookie_file.clone();
     let btc_client = test_bitcoin_client(rpc_url.clone(), cookie_file.clone()).await;
-    let wallet = retry(|| bitcoind.create_wallet("bridger"), 10).unwrap();
+    let wallet = bitcoind.create_wallet("bridger").unwrap();
     let wallet_address = wallet.get_new_address(None, None).unwrap();
 
     let async_wallet_address =
@@ -1038,7 +1038,7 @@ async fn test_deposit_with_token_fee() {
     let rpc_url = bitcoind.rpc_url();
     let cookie_file = bitcoind.params.cookie_file.clone();
     let btc_client = test_bitcoin_client(rpc_url.clone(), cookie_file.clone()).await;
-    let wallet = retry(|| bitcoind.create_wallet("bridger"), 10).unwrap();
+    let wallet = bitcoind.create_wallet("bridger").unwrap();
     let wallet_address = wallet.get_new_address(None, None).unwrap();
 
     let async_wallet_address =

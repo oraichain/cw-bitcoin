@@ -4,25 +4,6 @@ use crate::{adapter::Adapter, header::WrappedHeader};
 use bitcoin::{BlockHash, BlockHeader};
 use bitcoincore_rpc_async::{Auth, Client as BitcoinRpcClient, RpcApi};
 
-pub fn retry<F, T, E>(f: F, max_retries: u32) -> std::result::Result<T, E>
-where
-    F: Fn() -> std::result::Result<T, E>,
-{
-    let mut retries = 0;
-    loop {
-        match f() {
-            Ok(val) => return Ok(val),
-            Err(e) => {
-                if retries >= max_retries {
-                    return Err(e);
-                }
-                retries += 1;
-                std::thread::sleep(std::time::Duration::from_secs(5));
-            }
-        }
-    }
-}
-
 pub async fn test_bitcoin_client(rpc_url: String, cookie_file: PathBuf) -> BitcoinRpcClient {
     BitcoinRpcClient::new(rpc_url, Auth::CookieFile(cookie_file))
         .await
