@@ -111,6 +111,7 @@ async fn test_relay_bulk_headers() {
 }
 
 #[test]
+#[serial_test::serial]
 fn reorg() {
     // Set up app
 
