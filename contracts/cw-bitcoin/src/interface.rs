@@ -568,10 +568,9 @@ impl HeaderConfig {
     }
 
     pub fn work_header(&self) -> WorkHeader {
-        let decoded_adapter: Adapter<BlockHeader> = self.trusted_header.into();
-        let wrapped_header = WrappedHeader::new(decoded_adapter, self.trusted_height);
-        let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
-        work_header
+        let wrapped_header = WrappedHeader::new(self.trusted_header, self.trusted_height);
+        let chain_work = wrapped_header.work();
+        WorkHeader::new(wrapped_header, chain_work)
     }
 }
 

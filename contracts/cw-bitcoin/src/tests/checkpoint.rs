@@ -20,7 +20,7 @@ fn deduct_fee() {
     bitcoin_tx.deduct_fee(100).unwrap();
 
     assert_eq!(bitcoin_tx.output.len(), 1);
-    assert_eq!(bitcoin_tx.output.get(0).unwrap().value, 9900);
+    assert_eq!(bitcoin_tx.output.first().unwrap().value, 9900);
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn deduct_fee_multi_pass() {
     bitcoin_tx.deduct_fee(30).unwrap();
 
     assert_eq!(bitcoin_tx.output.len(), 1);
-    assert_eq!(bitcoin_tx.output.get(0).unwrap().value, 472);
+    assert_eq!(bitcoin_tx.output.first().unwrap().value, 472);
 }
 
 #[test]

@@ -209,8 +209,8 @@ pub fn newHeaderConfig(height: u32, block_header: JsValue) -> ContractResult<Hea
 
 #[wasm_bindgen]
 pub fn newWorkHeader(header_config: HeaderConfig) -> WorkHeader {
-    let decoded_adapter: Adapter<BlockHeader> = header_config.trusted_header.into();
-    let wrapped_header = WrappedHeader::new(decoded_adapter, header_config.trusted_height);
-    let work_header = WorkHeader::new(wrapped_header.clone(), wrapped_header.work());
-    work_header
+    let wrapped_header =
+        WrappedHeader::new(header_config.trusted_header, header_config.trusted_height);
+    let chain_work = wrapped_header.work();
+    WorkHeader::new(wrapped_header, chain_work)
 }

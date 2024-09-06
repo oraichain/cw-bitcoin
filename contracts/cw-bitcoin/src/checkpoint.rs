@@ -712,7 +712,7 @@ impl Checkpoint {
                     "Cannot get batch checkpoint".into(),
                 ))?;
         let checkpoint_tx = checkpoint_batch
-            .get(0)
+            .first()
             .ok_or(ContractError::Checkpoint("Cannot get checkpoint tx".into()))?;
         for i in 0..(config.max_inputs as usize).min(checkpoint_tx.input.len()) {
             let input = checkpoint_tx.input.get(i).ok_or(ContractError::Checkpoint(
@@ -933,13 +933,11 @@ impl CheckpointQueue {
     }
 
     pub fn first_unhandled_confirmed_index(&self, store: &dyn Storage) -> u32 {
-        let index = FIRST_UNHANDLED_CONFIRMED_INDEX.load(store).unwrap();
-        index
+        FIRST_UNHANDLED_CONFIRMED_INDEX.load(store).unwrap()
     }
 
     pub fn confirmed_index(&self, store: &dyn Storage) -> Option<u32> {
-        let index = CONFIRMED_INDEX.may_load(store).unwrap_or_default();
-        index
+        CONFIRMED_INDEX.may_load(store).unwrap_or_default()
     }
 
     /// Removes all checkpoints from the queue and resets the index to zero.
