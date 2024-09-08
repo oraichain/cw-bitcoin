@@ -1,0 +1,8 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "./contracts/cw-bitcoin/Cargo.toml",
+    "./contracts/light-client-bitcoin/Cargo.toml",
+    "./packages/common-bitcoin/Cargo.toml",
+    "./Cargo.toml"
+  ]
+}

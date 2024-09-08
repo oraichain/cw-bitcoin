@@ -2402,6 +2402,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "light-client-bitcoin"
+version = "0.1.0"
+dependencies = [
+ "bitcoin 0.29.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bitcoincore-rpc-async2",
+ "bitcoind",
+ "chrono",
+ "common-bitcoin",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=e68faf6)",
+ "cw-storage-plus 1.2.0",
+ "cw2 1.1.2",
+ "derive_more",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3000,26 +3022,6 @@ version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70e2d30ab1878b2e72d1e2fc23ff5517799c9929e2cf81a8516f9f4dcf2b9cf3"
 dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "proxy-bitcoin"
-version = "0.1.0"
-dependencies = [
- "bitcoin 0.29.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "common-bitcoin",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=e68faf6)",
- "cw-storage-plus 1.2.0",
- "cw2 1.1.2",
- "derive_more",
- "ibc-proto",
- "libsecp256k1-core",
- "prost 0.11.9",
- "serde",
- "serde_json",
  "thiserror",
 ]
 

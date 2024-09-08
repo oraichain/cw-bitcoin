@@ -3,14 +3,12 @@ use crate::{
     checkpoint::Checkpoint,
     constants::BTC_NATIVE_TOKEN_DENOM,
     header::WorkHeader,
-    interface::{BitcoinConfig, CheckpointConfig, DequeExtension, HeaderConfig, Validator},
+    interface::{BitcoinConfig, CheckpointConfig, HeaderConfig, Validator},
     msg::Config,
     recovery::RecoveryTx,
 };
 use bitcoin::util::uint::Uint256;
-use common_bitcoin::adapter::Adapter;
-use common_bitcoin::error::ContractResult;
-use common_bitcoin::xpub::Xpub;
+use common_bitcoin::{adapter::Adapter, deque::DequeExtension, error::ContractResult, xpub::Xpub};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};

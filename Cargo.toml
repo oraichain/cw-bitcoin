@@ -26,6 +26,7 @@ cosmwasm-schema = {version = "1.5"}
 cosmwasm-std = {version = "1.5", features = ["stargate"]}
 cosmwasm-storage = {version = "1.5"}
 
+chrono = "0.4.19"
 common-bitcoin = {path = "./packages/common-bitcoin"}
 cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "e68faf6"}
 cw-storage-plus = {version = "1.0.1"}

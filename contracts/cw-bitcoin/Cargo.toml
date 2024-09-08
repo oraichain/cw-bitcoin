@@ -43,10 +43,9 @@ tokenfactory = {workspace = true, features = ["library"]}
 [dev-dependencies]
 bitcoincore-rpc-async = {workspace = true}
 bitcoind = {workspace = true}
+chrono = {workspace = true}
 cosmwasm-testing-util = {workspace = true}
 serde = {workspace = true}
 serde_json = {workspace = true}
-tokio = {workspace = true}
-
-chrono = "0.4.19"
 serial_test = "3.1.1"
+tokio = {workspace = true}

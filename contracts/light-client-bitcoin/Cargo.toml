@@ -15,9 +15,12 @@ crate-type = ["cdylib", "rlib"]
 [features]
 # use library feature to disable all instantiate/execute/query exports
 default = []
+library = []
+test-tube = []
 
 [dependencies]
 bitcoin = {workspace = true, features = ["serde"]}
+chrono = {workspace = true}
 common-bitcoin = {workspace = true}
 cosmwasm-schema = {workspace = true}
 cosmwasm-std = {workspace = true}
@@ -27,6 +30,11 @@ derive_more = {workspace = true}
 thiserror = {workspace = true}
 
 [dev-dependencies]
+bitcoincore-rpc-async = {workspace = true}
+bitcoind = {workspace = true}
+chrono = {workspace = true}
 cosmwasm-testing-util = {workspace = true}
 serde = {workspace = true}
 serde_json = {workspace = true}
+serial_test = "3.1.1"
+tokio = {workspace = true}
