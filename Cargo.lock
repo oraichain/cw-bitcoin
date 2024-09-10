@@ -1030,6 +1030,7 @@ dependencies = [
  "bitcoincore-rpc-async2",
  "bitcoind",
  "chrono",
+ "common-bitcoin",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=e68faf6)",
