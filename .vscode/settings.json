@@ -3,7 +3,7 @@
     "./contracts/app-bitcoin/Cargo.toml",
     "./contracts/light-client-bitcoin/Cargo.toml",
     "./packages/common-bitcoin/Cargo.toml",
-    "./packages/light-client/Cargo.toml",
+    "./packages/light-client-bitcoin/Cargo.toml",
     "./Cargo.toml"
   ],
   "terminal.integrated.defaultProfile.linux": "zsh"

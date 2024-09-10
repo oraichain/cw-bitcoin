@@ -36,7 +36,7 @@ cw20 = {version = "1.0.1"}
 cw20-base = {version = "1.0.1"}
 derive_more = "0.99.17"
 ibc-proto = {version = "0.32.1", default-features = false}
-light-client-bitcoin = {path = "./packages/light-client"}
+light-client-bitcoin = {path = "./packages/light-client-bitcoin"}
 oraiswap = {git = "https://github.com/oraichain/oraiswap.git", rev = "c5fd186"}
 prost = {version = "0.11.9"}
 serde = "1.0.133"
