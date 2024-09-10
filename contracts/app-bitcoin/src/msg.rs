@@ -60,6 +60,11 @@ pub struct ConfigResponse {
 }
 
 #[cw_serde]
+pub enum OsorMsg {
+    UniversalSwap { memo: String },
+}
+
+#[cw_serde]
 pub enum ExecuteMsg {
     UpdateConfig {
         owner: Option<Addr>,

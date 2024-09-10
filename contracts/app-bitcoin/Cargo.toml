@@ -36,7 +36,6 @@ light-client-bitcoin = {workspace = true}
 oraiswap = {workspace = true}
 prost = {workspace = true}
 sha2 = {workspace = true}
-skip = {workspace = true}
 thiserror = {workspace = true}
 token-bindings = {workspace = true}
 tokenfactory = {workspace = true, features = ["library"]}

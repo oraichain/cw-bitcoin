@@ -18,6 +18,7 @@ use crate::constants::{
     MAX_CHECKPOINT_AGE, MAX_CHECKPOINT_INTERVAL, MAX_DEPOSIT_AGE, MAX_FEE_RATE, MIN_DEPOSIT_AMOUNT,
     MIN_FEE_RATE, MIN_WITHDRAWAL_AMOUNT, SIGSET_THRESHOLD, TRANSFER_FEE, USER_FEE_FACTOR,
 };
+use crate::msg::OsorMsg::UniversalSwap;
 use common_bitcoin::error::ContractResult;
 use prost::Message;
 
@@ -138,10 +139,7 @@ impl Dest {
                 }));
                 msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: osor_api_contract.unwrap().to_string(),
-                    msg: to_json_binary(&skip::entry_point::ExecuteMsg::UniversalSwap {
-                        memo: str_memo,
-                    })
-                    .unwrap(),
+                    msg: to_json_binary(&UniversalSwap { memo: str_memo }).unwrap(),
                     funds: vec![coin],
                 }));
             }

@@ -53,12 +53,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anybuf"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a03eb4d55fa21466cac727930be07f82581223ee04bcaf61f934e98b7ecb859"
-
-[[package]]
 name = "anyhow"
 version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -75,21 +69,6 @@ name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
-
-[[package]]
-name = "astroport"
-version = "2.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d102b618016b3c1f1ebb5750617a73dbd294a3c941e54b12deabc931d771bc6e"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus 0.15.1",
- "cw-utils 0.15.1",
- "cw20 0.15.1",
- "itertools 0.10.5",
- "uint",
-]
 
 [[package]]
 name = "async-trait"
@@ -178,12 +157,6 @@ name = "base64ct"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
-
-[[package]]
-name = "bech32"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf9ff0bbfd639f15c74af777d81383cf53efb7c93613f6cab67c6c11e05bbf8b"
 
 [[package]]
 name = "bech32"
@@ -640,24 +613,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmos-sdk-proto"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73c9d2043a9e617b0d602fbc0a0ecd621568edbf3a9774890a6d562389bd8e1c"
-dependencies = [
- "prost 0.11.9",
- "prost-types",
- "tendermint-proto 0.32.2",
-]
-
-[[package]]
 name = "cosmos-sdk-proto-althea"
 version = "0.16.0"
 source = "git+https://github.com/oraichain/cosmos-rust.git?rev=061d0ec#061d0ecec94150985cea061e1e4f2779e950299c"
 dependencies = [
  "prost 0.11.9",
  "prost-types",
- "tendermint-proto 0.28.0",
+ "tendermint-proto",
 ]
 
 [[package]]
@@ -769,8 +731,8 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-vm",
- "cw-multi-test 1.2.0",
- "cw20 1.1.2",
+ "cw-multi-test",
+ "cw20",
  "cw20-base",
  "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
  "token-bindings-test 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=7861576)",
@@ -788,8 +750,8 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-vm",
- "cw-multi-test 1.2.0",
- "cw20 1.1.2",
+ "cw-multi-test",
+ "cw20",
  "cw20-base",
  "osmosis-test-tube",
  "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=9796c74)",
@@ -1036,18 +998,17 @@ dependencies = [
  "cw-light-client-bitcoin",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
- "cw20 1.1.2",
+ "cw20",
  "cw20-base",
  "derive_more",
  "libsecp256k1-core",
  "light-client-bitcoin",
- "oraiswap 0.2.0 (git+https://github.com/oraichain/oraiswap.git?rev=c5fd186)",
+ "oraiswap",
  "prost 0.11.9",
  "serde",
  "serde_json",
  "serial_test",
  "sha2 0.10.8",
- "skip",
  "thiserror",
  "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=9796c74)",
  "tokenfactory 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=9796c74)",
@@ -1079,26 +1040,6 @@ dependencies = [
 
 [[package]]
 name = "cw-multi-test"
-version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc392a5cb7e778e3f90adbf7faa43c4db7f35b6623224b08886d796718edb875"
-dependencies = [
- "anyhow",
- "bech32 0.9.1",
- "cosmwasm-std",
- "cw-storage-plus 1.2.0",
- "cw-utils 1.0.3",
- "derivative",
- "itertools 0.12.1",
- "prost 0.12.6",
- "schemars",
- "serde",
- "sha2 0.10.8",
- "thiserror",
-]
-
-[[package]]
-name = "cw-multi-test"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91fc33b1d65c102d72f46548c64dca423c337e528d6747d0c595316aa65f887b"
@@ -1115,17 +1056,6 @@ dependencies = [
  "serde",
  "sha2 0.10.8",
  "thiserror",
-]
-
-[[package]]
-name = "cw-storage-plus"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc6cf70ef7686e2da9ad7b067c5942cd3e88dd9453f7af42f54557f8af300fb0"
-dependencies = [
- "cosmwasm-std",
- "schemars",
- "serde",
 ]
 
 [[package]]
@@ -1148,21 +1078,6 @@ dependencies = [
  "cosmwasm-std",
  "schemars",
  "serde",
-]
-
-[[package]]
-name = "cw-utils"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ae0b69fa7679de78825b4edeeec045066aa2b2c4b6e063d80042e565bb4da5c"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw2 0.15.1",
- "schemars",
- "semver 1.0.23",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -1197,19 +1112,6 @@ dependencies = [
 
 [[package]]
 name = "cw2"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5abb8ecea72e09afff830252963cb60faf945ce6cef2c20a43814516082653da"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus 0.15.1",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cw2"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91398113b806f4d2a8d5f8d05684704a20ffd5968bf87e3473e1973710b884ad"
@@ -1238,19 +1140,6 @@ dependencies = [
 
 [[package]]
 name = "cw20"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6025276fb6e603e974c21f3e4606982cdc646080e8fba3198816605505e1d9a"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-utils 0.15.1",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cw20"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "526e39bb20534e25a1cd0386727f0038f4da294e5e535729ba3ef54055246abd"
@@ -1272,25 +1161,11 @@ dependencies = [
  "cosmwasm-std",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
- "cw20 1.1.2",
+ "cw20",
  "schemars",
  "semver 1.0.23",
  "serde",
  "thiserror",
-]
-
-[[package]]
-name = "cw20-ics20-msg"
-version = "0.0.3"
-source = "git+https://github.com/oraichain/ibc-bridge-wasm.git?rev=2aeedc7f4f21823db6872aed8ca97f4376e597f8#2aeedc7f4f21823db6872aed8ca97f4376e597f8"
-dependencies = [
- "anybuf",
- "bech32 0.8.1",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus 1.2.0",
- "cw20 1.1.2",
- "oraiswap 0.2.0 (git+https://github.com/oraichain/oraiswap.git?rev=87e07012a2b809b10f6103f1183d49e36556179f)",
 ]
 
 [[package]]
@@ -1345,18 +1220,7 @@ name = "decimal"
 version = "0.1.0"
 source = "git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac#7f2b8ac6a239790006d7a662e6f56c175e189be0"
 dependencies = [
- "decimal-core 0.1.0 (git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac)",
- "integer-sqrt",
- "num-traits",
- "uint",
-]
-
-[[package]]
-name = "decimal"
-version = "0.1.0"
-source = "git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac6a239790006d7a662e6f56c175e189be0#7f2b8ac6a239790006d7a662e6f56c175e189be0"
-dependencies = [
- "decimal-core 0.1.0 (git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac6a239790006d7a662e6f56c175e189be0)",
+ "decimal-core",
  "integer-sqrt",
  "num-traits",
  "uint",
@@ -1366,17 +1230,6 @@ dependencies = [
 name = "decimal-core"
 version = "0.1.0"
 source = "git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac#7f2b8ac6a239790006d7a662e6f56c175e189be0"
-dependencies = [
- "proc-macro2",
- "quote",
- "regex",
- "syn 2.0.72",
-]
-
-[[package]]
-name = "decimal-core"
-version = "0.1.0"
-source = "git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac6a239790006d7a662e6f56c175e189be0#7f2b8ac6a239790006d7a662e6f56c175e189be0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2178,34 +2031,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ibc-proto"
-version = "0.32.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11c352715b36685c2543556a77091fb16af5d26257d5ce9c28e6756c1ccd71aa"
-dependencies = [
- "base64 0.21.7",
- "bytes",
- "flex-error",
- "ics23",
- "prost 0.11.9",
- "serde",
- "subtle-encoding",
- "tendermint-proto 0.32.2",
-]
-
-[[package]]
-name = "ics23"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "442d4bab37956e76f739c864f246c825d87c0bb7f9afa65660c57833c91bf6d4"
-dependencies = [
- "anyhow",
- "bytes",
- "hex",
- "prost 0.11.9",
-]
-
-[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2575,19 +2400,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7843ec2de400bcbc6a6328c958dc38e5359da6e93e72e37bc5246bf1ae776389"
 
 [[package]]
-name = "neutron-proto"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "943ccd9f9749e96095237502e1c61abc867fd5cf28668097b359b0d61aa50c96"
-dependencies = [
- "cosmos-sdk-proto",
- "cosmwasm-std",
- "prost 0.11.9",
- "prost-types",
- "tendermint-proto 0.32.2",
-]
-
-[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2653,46 +2465,6 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 [[package]]
 name = "oraiswap"
 version = "0.2.0"
-source = "git+https://github.com/oraichain/oraiswap.git?rev=843b39ca6c02ae8f2de628f4ddd444173d4de3ba#843b39ca6c02ae8f2de628f4ddd444173d4de3ba"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cosmwasm-storage",
- "cw-multi-test 0.20.1",
- "cw-utils 0.16.0",
- "cw20 1.1.2",
- "cw20-base",
- "oraiswap-v3 0.1.0 (git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac6a239790006d7a662e6f56c175e189be0)",
- "prost 0.11.9",
- "protobuf",
- "schemars",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "oraiswap"
-version = "0.2.0"
-source = "git+https://github.com/oraichain/oraiswap.git?rev=87e07012a2b809b10f6103f1183d49e36556179f#87e07012a2b809b10f6103f1183d49e36556179f"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cosmwasm-storage",
- "cw-multi-test 0.20.1",
- "cw-utils 0.16.0",
- "cw20 1.1.2",
- "cw20-base",
- "oraiswap-v3 0.1.0 (git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac6a239790006d7a662e6f56c175e189be0)",
- "prost 0.11.9",
- "protobuf",
- "schemars",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "oraiswap"
-version = "0.2.0"
 source = "git+https://github.com/oraichain/oraiswap.git?rev=c5fd186#c5fd186f23f10e231344168a5a715d729320473c"
 dependencies = [
  "cosmwasm-schema",
@@ -2700,10 +2472,10 @@ dependencies = [
  "cosmwasm-storage",
  "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=1b9c412)",
  "cw-utils 0.16.0",
- "cw20 1.1.2",
+ "cw20",
  "cw20-base",
  "derive_more",
- "oraiswap-v3 0.1.0 (git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac)",
+ "oraiswap-v3",
  "prost 0.11.9",
  "protobuf",
  "schemars",
@@ -2721,24 +2493,8 @@ dependencies = [
  "cosmwasm-storage",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
- "cw20 1.1.2",
- "decimal 0.1.0 (git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac)",
- "derive_more",
- "thiserror",
-]
-
-[[package]]
-name = "oraiswap-v3"
-version = "0.1.0"
-source = "git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac6a239790006d7a662e6f56c175e189be0#7f2b8ac6a239790006d7a662e6f56c175e189be0"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cosmwasm-storage",
- "cw-storage-plus 1.2.0",
- "cw2 1.1.2",
- "cw20 1.1.2",
- "decimal 0.1.0 (git+https://github.com/oraichain/oraiswap-v3.git?rev=7f2b8ac6a239790006d7a662e6f56c175e189be0)",
+ "cw20",
+ "decimal",
  "derive_more",
  "thiserror",
 ]
@@ -2748,34 +2504,6 @@ name = "os_str_bytes"
 version = "6.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2355d85b9a3786f481747ced0e0ff2ba35213a1f9bd406ed906554d7af805a1"
-
-[[package]]
-name = "osmosis-std"
-version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87725a7480b98887167edf878daa52201a13322ad88e34355a7f2ddc663e047e"
-dependencies = [
- "chrono",
- "cosmwasm-std",
- "osmosis-std-derive",
- "prost 0.11.9",
- "prost-types",
- "schemars",
- "serde",
- "serde-cw-value",
-]
-
-[[package]]
-name = "osmosis-std-derive"
-version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4d482a16be198ee04e0f94e10dd9b8d02332dcf33bc5ea4b255e7e25eedc5df"
-dependencies = [
- "itertools 0.10.5",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
 
 [[package]]
 name = "osmosis-test-tube"
@@ -3564,15 +3292,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde-cw-value"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a75d32da6b8ed758b7d850b6c3c08f1d7df51a4df3cb201296e63e34a78e99d4"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde-json-wasm"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3805,26 +3524,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
 
 [[package]]
-name = "skip"
-version = "0.3.0"
-source = "git+https://github.com/oraichain/osor-api-contracts.git?rev=14d852c#14d852cedc0b6adf62a910d889791f2bbfffecb7"
-dependencies = [
- "astroport",
- "cosmos-sdk-proto",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-utils 1.0.3",
- "cw20 1.1.2",
- "cw20-ics20-msg",
- "ibc-proto",
- "neutron-proto",
- "oraiswap 0.2.0 (git+https://github.com/oraichain/oraiswap.git?rev=843b39ca6c02ae8f2de628f4ddd444173d4de3ba)",
- "osmosis-std",
- "thiserror",
- "white-whale-std",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4055,7 +3754,7 @@ dependencies = [
  "signature 1.6.4",
  "subtle",
  "subtle-encoding",
- "tendermint-proto 0.28.0",
+ "tendermint-proto",
  "time 0.3.36",
  "zeroize",
 ]
@@ -4079,24 +3778,6 @@ name = "tendermint-proto"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "890f1fb6dee48900c85f0cdf711ebf130e505ac09ad918cee5c34ed477973b05"
-dependencies = [
- "bytes",
- "flex-error",
- "num-derive",
- "num-traits",
- "prost 0.11.9",
- "prost-types",
- "serde",
- "serde_bytes",
- "subtle-encoding",
- "time 0.3.36",
-]
-
-[[package]]
-name = "tendermint-proto"
-version = "0.32.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0cec054567d16d85e8c3f6a3139963d1a66d9d3051ed545d31562550e9bcc3d"
 dependencies = [
  "bytes",
  "flex-error",
@@ -4316,7 +3997,7 @@ source = "git+https://github.com/oraichain/token-bindings.git?rev=7861576#786157
 dependencies = [
  "anyhow",
  "cosmwasm-std",
- "cw-multi-test 1.2.0",
+ "cw-multi-test",
  "cw-storage-plus 1.2.0",
  "itertools 0.11.0",
  "schemars",
@@ -4332,7 +4013,7 @@ source = "git+https://github.com/oraichain/token-bindings.git?rev=9796c74#9796c7
 dependencies = [
  "anyhow",
  "cosmwasm-std",
- "cw-multi-test 1.2.0",
+ "cw-multi-test",
  "cw-storage-plus 1.2.0",
  "itertools 0.11.0",
  "schemars",
@@ -4934,25 +4615,6 @@ dependencies = [
  "home",
  "once_cell",
  "rustix",
-]
-
-[[package]]
-name = "white-whale-std"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e8a9b86670af680cc07207c24cd2b380e2b185cd489907576ec21f11d0694bd"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw2 1.1.2",
- "cw20 1.1.2",
- "osmosis-std-derive",
- "prost 0.11.9",
- "prost-types",
- "protobuf",
- "schemars",
- "serde",
- "uint",
 ]
 
 [[package]]
