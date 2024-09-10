@@ -5,7 +5,6 @@ use crate::constants::MAX_SIGNATORIES;
 use crate::state::get_validators;
 use crate::state::SIG_KEYS;
 use crate::state::XPUBS;
-use common_bitcoin::xpub::Xpub;
 
 use super::threshold_sig::Pubkey;
 use bitcoin::blockdata::opcodes::all::{
@@ -15,8 +14,10 @@ use bitcoin::blockdata::opcodes::{self, OP_FALSE};
 use bitcoin::blockdata::script::{read_scriptint, Instruction};
 use bitcoin::Script;
 use bitcoin_script::bitcoin_script as script;
-use common_bitcoin::error::ContractError;
-use common_bitcoin::error::ContractResult;
+use common_bitcoin::{
+    error::{ContractError, ContractResult},
+    xpub::Xpub,
+};
 use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::Order;

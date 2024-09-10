@@ -6,8 +6,7 @@ use token_bindings::Metadata;
 
 use crate::{
     app::ConsensusKey,
-    header::WrappedHeader,
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig, Dest},
     state::Ratio,
     threshold_sig::Signature,
 };
@@ -23,36 +22,39 @@ pub struct FeeData {
 
 #[cw_serde]
 pub struct InstantiateMsg {
-    pub token_factory_addr: Addr,
     pub relayer_fee_token: AssetInfo,
     pub relayer_fee: Uint128, // This fee depends on the network type, not token type decimals of relayer fee should always be 10^6
     pub token_fee_receiver: Addr,
     pub relayer_fee_receiver: Addr,
+    pub token_factory_contract: Addr,
+    pub light_client_contract: Addr,
     pub swap_router_contract: Option<Addr>,
     pub osor_entry_point_contract: Option<Addr>,
 }
 
 #[cw_serde]
 pub struct Config {
-    pub token_factory_addr: Addr,
     pub owner: Addr,
     pub relayer_fee_token: AssetInfo,
     pub relayer_fee: Uint128, // This fee depends on the network type, not token type decimals of relayer fee should always be 10^6
     pub token_fee_receiver: Addr,
     pub relayer_fee_receiver: Addr,
+    pub token_factory_contract: Addr,
+    pub light_client_contract: Addr,
     pub swap_router_contract: Option<Addr>,
     pub osor_entry_point_contract: Option<Addr>,
 }
 
 #[cw_serde]
 pub struct ConfigResponse {
-    pub token_factory_addr: Addr,
     pub owner: Addr,
     pub relayer_fee_token: AssetInfo,
     pub token_fee: Ratio,
     pub relayer_fee: Uint128, // This fee depends on the network type, not token type decimals of relayer fee should always be 10^6
     pub token_fee_receiver: Addr,
     pub relayer_fee_receiver: Addr,
+    pub token_factory_contract: Addr,
+    pub light_client_contract: Addr,
     pub swap_router_contract: Option<Addr>,
     pub osor_entry_point_contract: Option<Addr>,
 }
@@ -60,26 +62,22 @@ pub struct ConfigResponse {
 #[cw_serde]
 pub enum ExecuteMsg {
     UpdateConfig {
+        owner: Option<Addr>,
         relayer_fee_token: Option<AssetInfo>,
         token_fee_receiver: Option<Addr>,
         relayer_fee_receiver: Option<Addr>,
         relayer_fee: Option<Uint128>,
-        swap_router_contract: Option<Addr>,
         token_fee: Option<Ratio>,
-        token_factory_addr: Option<Addr>,
-        owner: Option<Addr>,
+        light_client_contract: Option<Addr>,
+        swap_router_contract: Option<Addr>,
+        token_factory_contract: Option<Addr>,
+        osor_entry_point_contract: Option<Addr>,
     },
     UpdateBitcoinConfig {
         config: BitcoinConfig,
     },
     UpdateCheckpointConfig {
         config: CheckpointConfig,
-    },
-    UpdateHeaderConfig {
-        config: HeaderConfig,
-    },
-    RelayHeaders {
-        headers: Vec<WrappedHeader>,
     },
     RelayDeposit {
         btc_tx: Adapter<Transaction>,
@@ -136,12 +134,8 @@ pub enum QueryMsg {
     BitcoinConfig {},
     #[returns(CheckpointConfig)]
     CheckpointConfig {},
-    #[returns(HeaderConfig)]
-    HeaderConfig {},
     #[returns(Option<WrappedBinary<Xpub>>)]
     SignatoryKey { addr: Addr },
-    #[returns(u32)]
-    HeaderHeight {},
     #[returns(u64)]
     DepositFees { index: Option<u32> },
     #[returns(u64)]
@@ -154,8 +148,6 @@ pub enum QueryMsg {
     SignedRecoveryTxs {},
     #[returns(Adapter<Transaction>)]
     CheckpointTx { index: Option<u32> },
-    #[returns(WrappedBinary<bitcoin::BlockHash>)]
-    SidechainBlockHash {},
     #[returns(crate::checkpoint::Checkpoint)]
     CheckpointByIndex { index: u32 },
     #[returns(crate::checkpoint::Checkpoint)]

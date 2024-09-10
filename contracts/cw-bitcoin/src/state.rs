@@ -2,13 +2,11 @@ use crate::{
     app::ConsensusKey,
     checkpoint::Checkpoint,
     constants::BTC_NATIVE_TOKEN_DENOM,
-    header::WorkHeader,
-    interface::{BitcoinConfig, CheckpointConfig, HeaderConfig, Validator},
+    interface::{BitcoinConfig, CheckpointConfig, Validator},
     msg::Config,
     recovery::RecoveryTx,
 };
-use bitcoin::util::uint::Uint256;
-use common_bitcoin::{adapter::Adapter, deque::DequeExtension, error::ContractResult, xpub::Xpub};
+use common_bitcoin::{deque::DequeExtension, error::ContractResult, xpub::Xpub};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Order, Storage};
 use cw_storage_plus::{Item, Map};
@@ -23,7 +21,6 @@ pub const CONFIG: Item<Config> = Item::new("config");
 
 /// TODO: store in smart contract
 pub const CHECKPOINT_CONFIG: Item<CheckpointConfig> = Item::new("checkpoint_config");
-pub const HEADER_CONFIG: Item<HeaderConfig> = Item::new("header");
 pub const BITCOIN_CONFIG: Item<BitcoinConfig> = Item::new("bitcoin_config");
 
 /// Mapping validator ConsensusKey => (power, Address)
@@ -39,19 +36,6 @@ pub const SIG_KEYS: Map<&ConsensusKey, Xpub> = Map::new("sig_keys");
 /// which is used to prevent duplicate keys from being submitted.
 /// xpubs Map<Xpub::encode(), ()>
 pub const XPUBS: Map<&[u8], ()> = Map::new("xpubs");
-
-/// A queue of Bitcoin block headers, along with the total estimated amount of
-/// work (measured in hashes) done in the headers included in the queue.
-///
-/// The header queue is used to validate headers as they are received from the
-/// Bitcoin network, ensuring each header is associated with a valid
-/// proof-of-work and that the chain of headers is valid.
-///
-/// The queue is able to reorg if a new chain of headers is received that
-/// contains more work than the current chain, however it can not process reorgs
-/// that are deeper than the length of the queue (the length will be at the
-/// configured pruning level based on the `max_length` config parameter).
-pub const HEADERS: DequeExtension<WorkHeader> = DequeExtension::new("headers");
 
 pub const RECOVERY_TXS: DequeExtension<RecoveryTx> = DequeExtension::new("recovery_txs");
 
@@ -70,8 +54,6 @@ pub const BUILDING_INDEX: Item<u32> = Item::new("building_index");
 pub const CONFIRMED_INDEX: Item<u32> = Item::new("confirmed_index");
 /// Checkpoint unhandled confirmed index
 pub const FIRST_UNHANDLED_CONFIRMED_INDEX: Item<u32> = Item::new("first_unhandled_confirmed_index");
-/// Header current work
-pub const CURRENT_WORK: Item<Adapter<Uint256>> = Item::new("current_work");
 
 /// Fee
 pub const TOKEN_FEE_RATIO: Item<Ratio> = Item::new("token_fee_ratio");
@@ -87,14 +69,6 @@ pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
             Ok(Validator { power, pubkey: k })
         })
         .collect()
-}
-
-/// The height of the last header in the header queue.    
-pub fn header_height(store: &dyn Storage) -> ContractResult<u32> {
-    match HEADERS.back(store)? {
-        Some(inner) => Ok(inner.height()),
-        None => Ok(0),
-    }
 }
 
 pub fn get_full_btc_denom(token_factory_addr: &str) -> String {

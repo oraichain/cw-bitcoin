@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use crate::header::WrappedHeader;
 use bitcoin::{BlockHash, BlockHeader};
 use bitcoincore_rpc_async::{Auth, Client as BitcoinRpcClient, RpcApi};
 use common_bitcoin::adapter::Adapter;
+use light_client_bitcoin::header::WrappedHeader;
 
 pub fn retry<F, T, E>(f: F, max_retries: u32) -> std::result::Result<T, E>
 where

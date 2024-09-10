@@ -58,6 +58,7 @@ pub struct MockApp {
     #[deref_mut]
     app: TestMockApp,
     bridge_id: u64,
+    light_client_id: u64,
 }
 
 #[allow(dead_code)]
@@ -65,10 +66,15 @@ impl MockApp {
     pub fn new(init_balances: &[(&str, &[Coin])]) -> (Self, Vec<String>) {
         let (mut app, accounts) = TestMockApp::new(init_balances);
         let bridge_id;
+        let light_client_id;
         #[cfg(feature = "test-tube")]
         {
             static CW_BYTES: &[u8] = include_bytes!("./testdata/cw-bitcoin.wasm");
             bridge_id = app.upload(CW_BYTES);
+
+            static LIGHT_CLIENT_BYTES: &[u8] =
+                include_bytes!("./testdata/light-client-bitcoin.wasm");
+            light_client_id = app.upload(LIGHT_CLIENT_BYTES);
         }
         #[cfg(not(feature = "test-tube"))]
         {
@@ -80,9 +86,23 @@ impl MockApp {
                 )
                 .with_sudo_empty(crate::contract::sudo),
             ));
+            light_client_id = app.upload(Box::new(
+                cosmwasm_testing_util::ContractWrapper::new_with_empty(
+                    light_client_bitcoin::contract::execute,
+                    light_client_bitcoin::contract::instantiate,
+                    light_client_bitcoin::contract::query,
+                ),
+            ));
         }
 
-        (Self { app, bridge_id }, accounts)
+        (
+            Self {
+                app,
+                bridge_id,
+                light_client_id,
+            },
+            accounts,
+        )
     }
 
     /// external method
@@ -93,6 +113,22 @@ impl MockApp {
     ) -> MockResult<Addr> {
         let code_id = self.bridge_id;
         let addr = self.instantiate(code_id, sender.clone(), init_msg, &[], "cw-bitcoin-bridge")?;
+        Ok(addr)
+    }
+
+    pub fn create_light_client(
+        &mut self,
+        sender: Addr,
+        init_msg: &light_client_bitcoin::msg::InstantiateMsg,
+    ) -> MockResult<Addr> {
+        let code_id = self.light_client_id;
+        let addr = self.instantiate(
+            code_id,
+            sender.clone(),
+            init_msg,
+            &[],
+            "light-client-bitcoin",
+        )?;
         Ok(addr)
     }
 }

@@ -1,128 +1,85 @@
 use super::helper::sign;
-use app::Bitcoin;
+use crate::app::Bitcoin;
+use crate::checkpoint::{BatchType, Input};
+use crate::constants::BTC_NATIVE_TOKEN_DENOM;
+use crate::interface::{BitcoinConfig, CheckpointConfig, Dest};
+use crate::msg::Config;
+use crate::state::{
+    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, CONFIRMED_INDEX, FEE_POOL,
+    FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, VALIDATORS,
+};
+use crate::tests::helper::set_time;
 use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::ExtendedPubKey;
-use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::util::uint::{self};
-use bitcoin::{
-    secp256k1::Secp256k1, util::bip32::ExtendedPrivKey, BlockHash, BlockHeader, OutPoint,
-    TxMerkleNode, Txid,
-};
-use bitcoin::{Script, Transaction};
-use checkpoint::{BatchType, Input};
+use bitcoin::Script;
+use bitcoin::{secp256k1::Secp256k1, util::bip32::ExtendedPrivKey, OutPoint, Txid};
 use common_bitcoin::adapter::Adapter;
 use common_bitcoin::error::ContractResult;
 use common_bitcoin::xpub::Xpub;
-use constants::BTC_NATIVE_TOKEN_DENOM;
-use cosmwasm_std::testing::{mock_dependencies, mock_env};
-use cosmwasm_std::{Addr, Api, Coin, DepsMut, Env, Storage, Uint128};
-use interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig};
-use state::{
-    BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
-    FIRST_UNHANDLED_CONFIRMED_INDEX, HEADERS, HEADER_CONFIG, SIGNERS, VALIDATORS,
+use cosmwasm_std::testing::{mock_dependencies, MockQuerier};
+use cosmwasm_std::{
+    from_json, to_json_binary, Addr, Api, Coin, DepsMut, Empty, Env, QuerierResult, QuerierWrapper,
+    Storage, SystemError, SystemResult, Uint128, WasmQuery,
 };
+use light_client_bitcoin::msg::QueryMsg::{HeaderHeight, Network};
+use oraiswap::asset::AssetInfo;
 use std::cell::RefCell;
-use tests::helper::set_time;
 
 use crate::interface::IbcDest;
 
-use crate::{
-    header::{WorkHeader, WrappedHeader},
-    *,
-};
-
-#[test]
-fn test_account() {
-    let mut deps = mock_dependencies();
-    let canonicalized_addr = deps
-        .api
-        .addr_canonicalize("orai1ehmhqcn8erf3dgavrca69zgp4rtxj5kqgtcnyd")
-        .unwrap();
-    let addr = deps.api.addr_humanize(&canonicalized_addr);
-    // deps.api.
-}
-
-#[test]
-fn relay_height_validity() -> ContractResult<()> {
-    let mut deps = mock_dependencies();
-    let header_config = HeaderConfig::mainnet()?;
-    let header = header_config.work_header();
-
-    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
-    HEADERS.push_back(deps.as_mut().storage, &header)?;
-
-    let mut btc = Bitcoin::default();
-    BITCOIN_CONFIG.save(deps.as_mut().storage, &btc.config)?;
-
-    for _ in 0..10 {
-        let btc_height = btc.headers.height(deps.as_ref().storage)?;
-        let header = WorkHeader::new(
-            WrappedHeader::new(
-                Adapter::new(BlockHeader {
-                    bits: 0,
-                    merkle_root: TxMerkleNode::all_zeros(),
-                    nonce: 0,
-                    prev_blockhash: BlockHash::all_zeros(),
-                    time: 0,
-                    version: 0,
-                }),
-                btc_height + 1,
-            ),
-            uint::Uint256([0, 0, 0, 0]),
-        );
-
-        HEADERS.push_back(deps.as_mut().storage, &header)?;
-    }
-
-    let h = btc.headers.height(deps.as_ref().storage)?;
-
-    let mut try_relay = |height| {
-        // TODO: make test cases not fail at irrelevant steps in relay_deposit
-        // (either by passing in valid input, or by handling other error paths)
-
-        let btc_tx = Transaction {
-            input: vec![],
-            lock_time: bitcoin::PackedLockTime(0),
-            output: vec![],
-            version: 0,
-        };
-        let btc_proof = PartialMerkleTree::from_txids(&[Txid::all_zeros()], &[true]);
-
-        let env = mock_env();
-
-        btc.relay_deposit(
-            &env,
-            deps.as_mut().storage,
-            Adapter::new(btc_tx),
-            height,
-            Adapter::new(btc_proof),
-            0,
-            0,
-            Dest::Address(Addr::unchecked("")),
-        )
-    };
-
-    assert_eq!(
-        try_relay(h + 100).unwrap_err().to_string(),
-        "App Error: Invalid bitcoin block height",
-    );
-    assert_eq!(
-            try_relay(h - 100).unwrap_err().to_string(),
-            "Passed index is greater than initial height. Referenced header does not exist on the Header Queue",
-        );
-
-    Ok(())
+fn handle_wasm_query(height: u32) -> Box<dyn Fn(&WasmQuery) -> QuerierResult> {
+    // Return a boxed closure that captures the `height` variable
+    Box::new(move |wasm_query: &WasmQuery| -> QuerierResult {
+        match wasm_query {
+            WasmQuery::Smart {
+                contract_addr: _,
+                msg,
+            } => {
+                let query_msg = from_json::<light_client_bitcoin::msg::QueryMsg>(msg).unwrap();
+                match query_msg {
+                    Network {} => SystemResult::Ok(cosmwasm_std::ContractResult::Ok(
+                        to_json_binary(&(bitcoin::Network::Bitcoin).to_string()).unwrap(),
+                    )),
+                    HeaderHeight {} => SystemResult::Ok(cosmwasm_std::ContractResult::Ok(
+                        to_json_binary(&height).unwrap(),
+                    )),
+                    _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                        kind: "QueryMsg".to_string(),
+                    }),
+                }
+            }
+            _ => unreachable!(),
+        }
+    })
 }
 
 #[test]
 fn check_change_rates() -> ContractResult<()> {
     let mut deps = mock_dependencies();
-
-    let header_config = HeaderConfig::mainnet()?;
-    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
-    HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
+    // mock querier
+    let mut mock_query = MockQuerier::<Empty>::new(&[]);
+    mock_query.update_wasm(handle_wasm_query(0));
+    let mock_querier = QuerierWrapper::new(&mock_query);
+    // let block height
+    let mut block_height = 10;
 
     let bitcoin_config = BitcoinConfig::default();
+    CONFIG.save(
+        deps.as_mut().storage,
+        &Config {
+            owner: Addr::unchecked("owner"),
+            relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+            token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+            relayer_fee_token: AssetInfo::NativeToken {
+                denom: "orai".to_string(),
+            },
+            relayer_fee: Uint128::from(0u128),
+            token_factory_contract: Addr::unchecked("token_factory_contract"),
+            light_client_contract: Addr::unchecked("light_client_contract"),
+            swap_router_contract: None,
+            osor_entry_point_contract: None,
+        },
+    )?;
     BITCOIN_CONFIG.save(deps.as_mut().storage, &bitcoin_config)?;
     FEE_POOL.save(deps.as_mut().storage, &0)?;
     CHECKPOINT_CONFIG.save(deps.as_mut().storage, &CheckpointConfig::default())?;
@@ -150,7 +107,7 @@ fn check_change_rates() -> ContractResult<()> {
 
     let btc = RefCell::new(Bitcoin::default());
     let secp = Secp256k1::new();
-    let network = btc.borrow().network();
+    let network = bitcoin::Network::Bitcoin;
     let xpriv = vec![
         ExtendedPrivKey::new_master(network, &[0])?,
         ExtendedPrivKey::new_master(network, &[1])?,
@@ -233,15 +190,21 @@ fn check_change_rates() -> ContractResult<()> {
         }
         Ok(())
     };
-    let maybe_step = |env: Env, store: &mut dyn Storage| -> ContractResult<()> {
-        let mut btc = btc.borrow_mut();
-        btc.begin_block_step(&env, store, vec![1, 2, 3])?;
-        Ok(())
-    };
+    let maybe_step =
+        |env: Env, store: &mut dyn Storage, block_height: &mut u32| -> ContractResult<()> {
+            let mut mock_query = MockQuerier::<Empty>::new(&[]);
+            mock_query.update_wasm(handle_wasm_query(block_height.clone()));
+            let mock_querier = QuerierWrapper::new(&mock_query);
+            *block_height += 1;
+            let mut btc = btc.borrow_mut();
+            btc.begin_block_step(&env, &mock_querier, store, vec![1, 2, 3])?;
+            Ok(())
+        };
 
     let env = set_time(0);
     for i in 0..2 {
         btc.borrow_mut().set_signatory_key(
+            &mock_querier,
             deps.as_mut().storage,
             Addr::unchecked(addr[i]),
             Xpub::new(xpub[i]),
@@ -249,19 +212,18 @@ fn check_change_rates() -> ContractResult<()> {
     }
 
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 0);
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 1);
 
     let env = set_time(1000);
     push_deposit(deps.as_mut().storage)?;
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     sign_cp(deps.as_mut(), 10)?;
-
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 2);
 
     let env = set_time(2000);
     push_deposit(deps.as_mut().storage)?;
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     let change_rates = btc
         .borrow()
         .change_rates(deps.as_mut().storage, 2000, 2100)?;
@@ -280,7 +242,7 @@ fn check_change_rates() -> ContractResult<()> {
 
     let env = set_time(3000);
     push_deposit(deps.as_mut().storage)?;
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     let change_rates = btc
         .borrow()
         .change_rates(deps.as_mut().storage, 3000, 3100)?;
@@ -292,19 +254,18 @@ fn check_change_rates() -> ContractResult<()> {
 
     let env = set_time(4000);
     push_deposit(deps.as_mut().storage)?;
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     let change_rates = btc
         .borrow()
         .change_rates(deps.as_mut().storage, 3000, 4100)?;
     assert_eq!(change_rates.withdrawal, 0);
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 5);
-
     sign_cp(deps.as_mut(), 10)?;
 
     let env = set_time(5000);
     push_deposit(deps.as_mut().storage)?;
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     let change_rates = btc
         .borrow()
         .change_rates(deps.as_mut().storage, 3000, 5100)?;
@@ -315,7 +276,7 @@ fn check_change_rates() -> ContractResult<()> {
 
     let env = set_time(6000);
     push_withdrawal(deps.as_mut().storage)?;
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     let change_rates = btc
         .borrow()
         .change_rates(deps.as_mut().storage, 3000, 5100)?;
@@ -340,11 +301,29 @@ fn check_change_rates() -> ContractResult<()> {
 #[test]
 fn test_take_pending() -> ContractResult<()> {
     let mut deps = mock_dependencies();
-    let header_config = HeaderConfig::mainnet()?;
-    HEADER_CONFIG.save(deps.as_mut().storage, &header_config)?;
-    HEADERS.push_back(deps.as_mut().storage, &header_config.work_header())?;
+    let mut block_height = 10;
+    // mock querier
+    let mut mock_query = MockQuerier::<Empty>::new(&[]);
+    mock_query.update_wasm(handle_wasm_query(block_height));
+    let mock_querier = QuerierWrapper::new(&mock_query);
 
     let bitcoin_config = BitcoinConfig::default();
+    CONFIG.save(
+        deps.as_mut().storage,
+        &Config {
+            owner: Addr::unchecked("owner"),
+            relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
+            token_fee_receiver: Addr::unchecked("token_fee_receiver"),
+            relayer_fee_token: AssetInfo::NativeToken {
+                denom: "orai".to_string(),
+            },
+            relayer_fee: Uint128::from(0u128),
+            token_factory_contract: Addr::unchecked("token_factory_contract"),
+            light_client_contract: Addr::unchecked("light_client_contract"),
+            swap_router_contract: None,
+            osor_entry_point_contract: None,
+        },
+    )?;
     BITCOIN_CONFIG.save(deps.as_mut().storage, &bitcoin_config)?;
     FEE_POOL.save(deps.as_mut().storage, &0)?;
     CHECKPOINT_CONFIG.save(deps.as_mut().storage, &CheckpointConfig::default())?;
@@ -373,7 +352,7 @@ fn test_take_pending() -> ContractResult<()> {
 
     let btc = RefCell::new(Bitcoin::default());
     let secp = Secp256k1::new();
-    let network = btc.borrow().network();
+    let network = bitcoin::Network::Bitcoin;
     let xpriv = vec![
         ExtendedPrivKey::new_master(network, &[0])?,
         ExtendedPrivKey::new_master(network, &[1])?,
@@ -456,17 +435,21 @@ fn test_take_pending() -> ContractResult<()> {
         Ok(pending)
     };
 
-    let maybe_step = |env: Env, store: &mut dyn Storage| -> ContractResult<()> {
-        let mut btc = btc.borrow_mut();
+    let maybe_step =
+        |env: Env, store: &mut dyn Storage, block_height: &mut u32| -> ContractResult<()> {
+            let mut mock_query = MockQuerier::<Empty>::new(&[]);
+            mock_query.update_wasm(handle_wasm_query(block_height.clone()));
+            *block_height += 1;
+            let mut btc = btc.borrow_mut();
+            btc.begin_block_step(&env, &mock_querier, store, vec![1, 2, 3])?;
 
-        btc.begin_block_step(&env, store, vec![1, 2, 3])?;
-
-        Ok(())
-    };
+            Ok(())
+        };
 
     let env = set_time(0);
     for i in 0..2 {
         btc.borrow_mut().set_signatory_key(
+            &mock_querier,
             deps.as_mut().storage,
             Addr::unchecked(addr[i]),
             Xpub::new(xpub[i]),
@@ -474,7 +457,7 @@ fn test_take_pending() -> ContractResult<()> {
     }
 
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 0);
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 1);
     let env = set_time(1000);
 
@@ -507,7 +490,7 @@ fn test_take_pending() -> ContractResult<()> {
             amount: 95_000_000u128.into(),
         },
     )?;
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
 
     // validate current checkpoint is on signing state
     let checkpoint_signing = btc.borrow().checkpoints.signing(deps.as_ref().storage)?;
@@ -534,7 +517,7 @@ fn test_take_pending() -> ContractResult<()> {
             amount: 98_000_000u128.into(),
         },
     )?;
-    maybe_step(env, deps.as_mut().storage)?;
+    maybe_step(env, deps.as_mut().storage, &mut block_height)?;
     sign_cp(deps.as_mut(), 10)?;
     confirm_cp(deps.as_mut().storage, 1);
 

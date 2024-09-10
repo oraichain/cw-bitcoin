@@ -13,9 +13,11 @@ use crate::{
 };
 use bitcoin::hashes::Hash;
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
-use common_bitcoin::adapter::Adapter;
-use common_bitcoin::error::{ContractError, ContractResult};
-use common_bitcoin::xpub::Xpub;
+use common_bitcoin::{
+    adapter::Adapter,
+    error::{ContractError, ContractResult},
+    xpub::Xpub,
+};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_schema::{cw_serde, schemars::JsonSchema};
 use cosmwasm_std::{Api, Coin, Env, Storage};

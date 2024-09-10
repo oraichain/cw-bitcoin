@@ -12,18 +12,21 @@ use super::recovery::{RecoveryTxInput, RecoveryTxs};
 
 use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
-use super::header::HeaderQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use common_bitcoin::adapter::Adapter;
-use common_bitcoin::error::{ContractError, ContractResult};
-use common_bitcoin::xpub::Xpub;
+use common_bitcoin::{
+    adapter::Adapter,
+    error::{ContractError, ContractResult},
+    xpub::Xpub,
+};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Coin, Env, Order, Storage, Uint128};
+use cosmwasm_std::{Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
+use light_client_bitcoin::msg::QueryMsg::{HeaderHeight, Network, VerifyTxWithProof};
 use std::collections::HashMap;
+use std::str::FromStr;
 
 pub const NETWORK: ::bitcoin::Network = ::bitcoin::Network::Bitcoin;
 
@@ -43,10 +46,6 @@ pub fn calc_deposit_fee(_: Uint128) -> u64 {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(crate = "cosmwasm_schema::serde")]
 pub struct Bitcoin {
-    /// A light client of the Bitcoin blockchain, keeping track of the headers
-    /// of the highest-work chain.    
-    pub headers: HeaderQueue, // HEADERS
-
     /// The set of outpoints which have been relayed to the bridge. This is used
     /// to prevent replay attacks of deposits.
     pub processed_outpoints: OutpointSet, // OUTPOINT_SET
@@ -79,7 +78,6 @@ pub type ConsensusKey = [u8; 32];
 impl Bitcoin {
     pub fn default() -> Self {
         Self {
-            headers: HeaderQueue::default(),
             checkpoints: CheckpointQueue::default(),
             processed_outpoints: OutpointSet::default(),
             signatory_keys: SignatoryKeys::default(),
@@ -130,6 +128,7 @@ impl Bitcoin {
     /// which has declared a validator.    
     pub fn set_signatory_key(
         &mut self,
+        querier: &QuerierWrapper,
         store: &mut dyn Storage,
         signer: Addr,
         signatory_key: Xpub,
@@ -138,7 +137,7 @@ impl Bitcoin {
             .load(store, signer.as_str())
             .map_err(|_| ContractError::App("Signer does not have a consensus key".to_string()))?;
 
-        if signatory_key.network != self.network() {
+        if signatory_key.network != self.network(querier, store) {
             return Err(ContractError::App(
                 "Signatory key network does not match network".to_string(),
             ));
@@ -186,6 +185,7 @@ impl Bitcoin {
     /// signed.
     pub fn relay_deposit(
         &mut self,
+        querier: &QuerierWrapper,
         env: &Env,
         store: &mut dyn Storage,
         btc_tx: Adapter<Transaction>,
@@ -194,40 +194,31 @@ impl Bitcoin {
         btc_vout: u32,
         sigset_index: u32,
         dest: Dest,
+        testing_sandbox: bool,
     ) -> ContractResult<()> {
-        let config = self.config(store)?;
+        let bitcoin_config = self.config(store)?;
+        let config = CONFIG.load(store)?;
         let now = env.block.time.seconds();
 
-        let btc_header = self
-            .headers
-            .get_by_height(store, btc_height, None)?
-            .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
+        if !testing_sandbox {
+            let sidechain_btc_height: u32 =
+                querier.query_wasm_smart(config.light_client_contract.clone(), &HeaderHeight {})?;
+            if sidechain_btc_height - btc_height < bitcoin_config.min_confirmations {
+                return Err(ContractError::App(
+                    "Block is not sufficiently confirmed".to_string(),
+                ));
+            }
 
-        if self.headers.height(store)? - btc_height < config.min_confirmations {
-            return Err(ContractError::App(
-                "Block is not sufficiently confirmed".to_string(),
-            ));
-        }
-
-        let mut txids = vec![];
-        let mut block_indexes = vec![];
-        let proof_merkle_root = btc_proof
-            .extract_matches(&mut txids, &mut block_indexes)
-            .map_err(|_| ContractError::BitcoinMerkleBlockError)?;
-        if proof_merkle_root != btc_header.merkle_root() {
-            return Err(ContractError::App(
-                "Bitcoin merkle proof does not match header".to_string(),
-            ))?;
-        }
-        if txids.len() != 1 {
-            return Err(ContractError::App(
-                "Bitcoin merkle proof contains an invalid number of txids".to_string(),
-            ))?;
-        }
-        if txids[0] != btc_tx.txid() {
-            return Err(ContractError::App(
-                "Bitcoin merkle proof does not match transaction".to_string(),
-            ))?;
+            let _: () = querier
+                .query_wasm_smart(
+                    config.light_client_contract.clone(),
+                    &VerifyTxWithProof {
+                        btc_tx: btc_tx.clone(),
+                        btc_height,
+                        btc_proof,
+                    },
+                )
+                .unwrap();
         }
 
         if btc_vout as usize >= btc_tx.output.len() {
@@ -261,7 +252,7 @@ impl Bitcoin {
                 "Output has already been relayed".to_string(),
             ))?;
         }
-        let deposit_timeout = sigset.create_time() + config.max_deposit_age;
+        let deposit_timeout = sigset.create_time() + bitcoin_config.max_deposit_age;
         self.processed_outpoints
             .insert(store, outpoint, deposit_timeout)?;
 
@@ -305,8 +296,8 @@ impl Bitcoin {
         let input_size = input.est_vsize();
 
         // note: we only mint nbtc when it is send to destination
-        let mint_amount = (output.value * config.units_per_sat).into();
-        let denom = get_full_btc_denom(CONFIG.load(store)?.token_factory_addr.as_str());
+        let mint_amount = (output.value * bitcoin_config.units_per_sat).into();
+        let denom = get_full_btc_denom(CONFIG.load(store)?.token_factory_contract.as_str());
         let mut nbtc = Coin {
             denom,
             amount: mint_amount,
@@ -347,12 +338,15 @@ impl Bitcoin {
     /// confirmed into a Bitcoin block.    
     pub fn relay_checkpoint(
         &mut self,
+        querier: &QuerierWrapper,
         store: &mut dyn Storage,
         btc_height: u32,
         btc_proof: Adapter<PartialMerkleTree>,
         cp_index: u32,
+        testing_sandbox: bool,
     ) -> ContractResult<()> {
-        let config = self.config(store)?;
+        let bitcoin_config = self.config(store)?;
+        let config = CONFIG.load(store)?;
         if let Some(conf_index) = self.checkpoints.confirmed_index(store) {
             if cp_index <= conf_index {
                 return Err(ContractError::App(
@@ -361,38 +355,26 @@ impl Bitcoin {
             }
         }
 
-        let btc_header = self
-            .headers
-            .get_by_height(store, btc_height, None)?
-            .ok_or_else(|| ContractError::App("Invalid bitcoin block height".to_string()))?;
+        if !testing_sandbox {
+            let sidechain_btc_height: u32 =
+                querier.query_wasm_smart(config.light_client_contract.clone(), &HeaderHeight {})?;
+            if sidechain_btc_height - btc_height < bitcoin_config.min_checkpoint_confirmations {
+                return Err(ContractError::App(
+                    "Block is not sufficiently confirmed".to_string(),
+                ));
+            }
 
-        if self.headers.height(store)? - btc_height < config.min_checkpoint_confirmations {
-            return Err(ContractError::App(
-                "Block is not sufficiently confirmed".to_string(),
-            ));
-        }
-
-        let mut txids = vec![];
-        let mut block_indexes = vec![];
-        let proof_merkle_root = btc_proof
-            .extract_matches(&mut txids, &mut block_indexes)
-            .map_err(|_| ContractError::BitcoinMerkleBlockError)?;
-        if proof_merkle_root != btc_header.merkle_root() {
-            return Err(ContractError::App(
-                "Bitcoin merkle proof does not match header".to_string(),
-            ))?;
-        }
-        if txids.len() != 1 {
-            return Err(ContractError::App(
-                "Bitcoin merkle proof contains an invalid number of txids".to_string(),
-            ))?;
-        }
-
-        let btc_tx = self.checkpoints.get(store, cp_index)?.checkpoint_tx()?;
-        if txids[0] != btc_tx.txid() {
-            return Err(ContractError::App(
-                "Bitcoin merkle proof does not match transaction".to_string(),
-            ))?;
+            let btc_tx = self.checkpoints.get(store, cp_index)?.checkpoint_tx()?;
+            let _: () = querier
+                .query_wasm_smart(
+                    config.light_client_contract.clone(),
+                    &VerifyTxWithProof {
+                        btc_tx,
+                        btc_height,
+                        btc_proof,
+                    },
+                )
+                .unwrap();
         }
 
         CONFIRMED_INDEX.save(store, &cp_index)?;
@@ -479,8 +461,12 @@ impl Bitcoin {
 
     /// The network (e.g. Bitcoin testnet vs mainnet) which is currently
     /// configured.
-    pub fn network(&self) -> bitcoin::Network {
-        self.headers.network()
+    pub fn network(&self, querier: &QuerierWrapper, store: &dyn Storage) -> bitcoin::Network {
+        let config = CONFIG.load(store).unwrap();
+        let network_str: String = querier
+            .query_wasm_smart(config.light_client_contract.clone(), &Network {})
+            .unwrap();
+        bitcoin::Network::from_str(network_str.as_str()).unwrap()
     }
 
     /// Gets the rate of change of the reserve output and signatory set over the
@@ -568,10 +554,12 @@ impl Bitcoin {
     pub fn begin_block_step(
         &mut self,
         env: &Env,
+        querier: &QuerierWrapper,
         store: &mut dyn Storage,
         timestamping_commitment: Vec<u8>,
     ) -> ContractResult<Vec<ConsensusKey>> {
-        let config = self.config(store)?;
+        let bitcoin_config = self.config(store)?;
+        let config = CONFIG.load(store)?;
         let has_completed_cp =
             if let Err(ContractError::App(err)) = self.checkpoints.last_completed_index(store) {
                 if err == "No completed checkpoints yet" {
@@ -584,12 +572,13 @@ impl Bitcoin {
             };
 
         let reached_capacity_limit = if has_completed_cp {
-            self.value_locked(store)? >= config.capacity_limit
+            self.value_locked(store)? >= bitcoin_config.capacity_limit
         } else {
             false
         };
 
-        let btc_height = self.headers.height(store)?;
+        let btc_height =
+            querier.query_wasm_smart(config.light_client_contract.clone(), &HeaderHeight {})?;
 
         let pushed = self.checkpoints.maybe_step(
             env,
@@ -597,7 +586,7 @@ impl Bitcoin {
             btc_height,
             !reached_capacity_limit,
             timestamping_commitment,
-            &config,
+            &bitcoin_config,
         )?;
 
         // TODO: remove expired outpoints from processed_outpoints

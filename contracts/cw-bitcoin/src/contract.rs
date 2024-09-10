@@ -3,8 +3,7 @@ use cosmwasm_std::entry_point;
 
 use crate::{
     entrypoints::*,
-    header::HeaderQueue,
-    interface::{BitcoinConfig, CheckpointConfig, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig},
     msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
@@ -32,20 +31,16 @@ pub fn instantiate(
         deps.storage,
         &Config {
             owner: info.sender,
-            token_factory_addr: msg.token_factory_addr,
             relayer_fee_receiver: msg.relayer_fee_receiver,
             token_fee_receiver: msg.token_fee_receiver,
             relayer_fee_token: msg.relayer_fee_token,
             relayer_fee: msg.relayer_fee,
+            token_factory_contract: msg.token_factory_contract,
+            light_client_contract: msg.light_client_contract,
             swap_router_contract: msg.swap_router_contract,
             osor_entry_point_contract: msg.osor_entry_point_contract,
         },
     )?;
-
-    // Set up header
-    let header_config = HeaderConfig::mainnet()?;
-    let mut header_queue = HeaderQueue::default();
-    header_queue.configure(deps.storage, header_config.clone())?;
 
     // Set up config
     CHECKPOINT_CONFIG.save(deps.storage, &CheckpointConfig::default())?;
@@ -68,25 +63,29 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::UpdateConfig {
+            owner,
             relayer_fee_token,
             token_fee_receiver,
             relayer_fee_receiver,
             relayer_fee,
-            swap_router_contract,
             token_fee,
-            token_factory_addr,
-            owner,
+            token_factory_contract,
+            light_client_contract,
+            swap_router_contract,
+            osor_entry_point_contract,
         } => update_config(
             deps.storage,
             info,
+            owner,
             relayer_fee_token,
             token_fee_receiver,
             relayer_fee_receiver,
             relayer_fee,
-            swap_router_contract,
             token_fee,
-            token_factory_addr,
-            owner,
+            light_client_contract,
+            token_factory_contract,
+            swap_router_contract,
+            osor_entry_point_contract,
         ),
         ExecuteMsg::RelayDeposit {
             btc_tx,
@@ -96,6 +95,7 @@ pub fn execute(
             sigset_index,
             dest,
         } => relay_deposit(
+            &deps.querier,
             env,
             deps.storage,
             btc_tx,
@@ -109,13 +109,9 @@ pub fn execute(
             btc_height,
             btc_proof,
             cp_index,
-        } => relay_checkpoint(deps.storage, btc_height, btc_proof, cp_index),
+        } => relay_checkpoint(&deps.querier, deps.storage, btc_height, btc_proof, cp_index),
         ExecuteMsg::WithdrawToBitcoin { btc_address } => {
             withdraw_to_bitcoin(deps.storage, info, env, btc_address)
-        }
-        ExecuteMsg::RelayHeaders { headers } => relay_headers(deps.storage, headers),
-        ExecuteMsg::UpdateHeaderConfig { config } => {
-            update_header_config(deps.storage, info, config)
         }
         ExecuteMsg::UpdateBitcoinConfig { config } => {
             update_bitcoin_config(deps.storage, info, config)
@@ -139,7 +135,9 @@ pub fn execute(
         ExecuteMsg::SubmitRecoverySignature { xpub, sigs } => {
             submit_recovery_signature(deps.api, deps.storage, xpub, sigs)
         }
-        ExecuteMsg::SetSignatoryKey { xpub } => set_signatory_key(deps.storage, info, xpub),
+        ExecuteMsg::SetSignatoryKey { xpub } => {
+            set_signatory_key(&deps.querier, deps.storage, info, xpub)
+        }
         ExecuteMsg::AddValidators {
             addrs,
             voting_powers,
@@ -163,7 +161,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Config {} => to_json_binary(&query_config(deps.storage)?),
         QueryMsg::BitcoinConfig {} => to_json_binary(&query_bitcoin_config(deps.storage)?),
         QueryMsg::CheckpointConfig {} => to_json_binary(&query_checkpoint_config(deps.storage)?),
-        QueryMsg::HeaderConfig {} => to_json_binary(&query_header_config(deps.storage)?),
         QueryMsg::SignatoryKey { addr } => {
             to_json_binary(&query_signatory_key(deps.storage, addr)?)
         }
@@ -183,10 +180,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             to_json_binary(&query_checkpoint_tx(deps.storage, index)?)
         }
         QueryMsg::SignedRecoveryTxs {} => to_json_binary(&query_signed_recovery_txs(deps.storage)?),
-        QueryMsg::HeaderHeight {} => to_json_binary(&query_header_height(deps.storage)?),
-        QueryMsg::SidechainBlockHash {} => {
-            to_json_binary(&query_sidechain_block_hash(deps.storage)?)
-        }
         QueryMsg::CheckpointByIndex { index } => {
             to_json_binary(&query_checkpoint_by_index(deps.storage, index)?)
         }

@@ -4,5 +4,6 @@
     "./contracts/light-client-bitcoin/Cargo.toml",
     "./packages/common-bitcoin/Cargo.toml",
     "./Cargo.toml"
-  ]
+  ],
+  "terminal.integrated.defaultProfile.linux": "zsh"
 }

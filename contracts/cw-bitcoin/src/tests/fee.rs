@@ -13,13 +13,14 @@ fn test_fee_collected() -> ContractResult<()> {
         deps.as_mut().storage,
         &crate::msg::Config {
             owner: Addr::unchecked("owner"),
-            token_factory_addr: Addr::unchecked("token_factory_addr"),
             relayer_fee_receiver: Addr::unchecked("relayer_fee_receiver"),
             token_fee_receiver: Addr::unchecked("token_fee_receiver"),
             relayer_fee_token: AssetInfo::NativeToken {
                 denom: "orai".to_string(),
             },
             relayer_fee: Uint128::from(0u128),
+            token_factory_contract: Addr::unchecked("token_factory_contract"),
+            light_client_contract: Addr::unchecked("light_client_contract"),
             swap_router_contract: None,
             osor_entry_point_contract: None,
         },

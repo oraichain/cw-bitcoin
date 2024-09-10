@@ -1,7 +1,6 @@
 use crate::{
     app::{Bitcoin, ConsensusKey},
-    header::{HeaderList, HeaderQueue, WrappedHeader},
-    interface::{BitcoinConfig, CheckpointConfig, Dest, HeaderConfig},
+    interface::{BitcoinConfig, CheckpointConfig, Dest},
     state::{
         get_full_btc_denom, Ratio, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS,
         TOKEN_FEE_RATIO, VALIDATORS,
@@ -9,13 +8,16 @@ use crate::{
     threshold_sig::Signature,
 };
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
-use common_bitcoin::adapter::{Adapter, WrappedBinary};
-use common_bitcoin::error::ContractResult;
-use common_bitcoin::xpub::Xpub;
+use common_bitcoin::{
+    adapter::{Adapter, WrappedBinary},
+    error::{ContractError, ContractResult},
+    xpub::Xpub,
+};
 use std::str::FromStr;
 
 use cosmwasm_std::{
-    to_json_binary, wasm_execute, Addr, Api, Env, MessageInfo, Response, Storage, Uint128, WasmMsg,
+    to_json_binary, wasm_execute, Addr, Api, Env, MessageInfo, QuerierWrapper, Response, Storage,
+    Uint128, WasmMsg,
 };
 use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
@@ -23,17 +25,23 @@ use token_bindings::Metadata;
 pub fn update_config(
     store: &mut dyn Storage,
     info: MessageInfo,
+    owner: Option<Addr>,
     relayer_fee_token: Option<AssetInfo>,
     token_fee_receiver: Option<Addr>,
     relayer_fee_receiver: Option<Addr>,
     relayer_fee: Option<Uint128>,
-    swap_router_contract: Option<Addr>,
     token_fee: Option<Ratio>,
-    token_factory_addr: Option<Addr>,
-    owner: Option<Addr>,
+    light_client_contract: Option<Addr>,
+    swap_router_contract: Option<Addr>,
+    token_factory_contract: Option<Addr>,
+    osor_entry_point_contract: Option<Addr>,
 ) -> ContractResult<Response> {
     let mut config = CONFIG.load(store)?;
     assert_eq!(info.sender, config.owner);
+
+    if let Some(owner) = owner {
+        config.owner = owner;
+    }
 
     if let Some(relayer_fee_token) = relayer_fee_token {
         config.relayer_fee_token = relayer_fee_token;
@@ -51,20 +59,24 @@ pub fn update_config(
         config.relayer_fee = relayer_fee;
     }
 
-    if let Some(swap_router_contract) = swap_router_contract {
-        config.swap_router_contract = Some(swap_router_contract);
-    }
-
     if let Some(token_fee) = token_fee {
         TOKEN_FEE_RATIO.save(store, &token_fee)?;
     }
 
-    if let Some(token_factory_addr) = token_factory_addr {
-        config.token_factory_addr = token_factory_addr;
+    if let Some(token_factory_contract) = token_factory_contract {
+        config.token_factory_contract = token_factory_contract;
     }
 
-    if let Some(owner) = owner {
-        config.owner = owner;
+    if let Some(light_client_contract) = light_client_contract {
+        config.light_client_contract = light_client_contract;
+    }
+
+    if let Some(swap_router_contract) = swap_router_contract {
+        config.swap_router_contract = Some(swap_router_contract);
+    }
+
+    if let Some(osor_entry_point_contract) = osor_entry_point_contract {
+        config.osor_entry_point_contract = Some(osor_entry_point_contract);
     }
 
     CONFIG.save(store, &config)?;
@@ -91,28 +103,8 @@ pub fn update_bitcoin_config(
     Ok(Response::new().add_attribute("action", "update_bitcoin_config"))
 }
 
-pub fn update_header_config(
-    store: &mut dyn Storage,
-    info: MessageInfo,
-    config: HeaderConfig,
-) -> ContractResult<Response> {
-    assert_eq!(info.sender, CONFIG.load(store)?.owner);
-    let mut header_queue = HeaderQueue::default();
-    header_queue.configure(store, config.clone())?;
-    Ok(Response::new().add_attribute("action", "update_header_config"))
-}
-
-pub fn relay_headers(
-    store: &mut dyn Storage,
-    headers: Vec<WrappedHeader>,
-) -> ContractResult<Response> {
-    // let header_config = HEADER_CONFIG.load(store)?;
-    let mut header_queue = HeaderQueue::default();
-    header_queue.add(store, HeaderList::from(headers))?;
-    Ok(Response::new().add_attribute("action", "add_headers"))
-}
-
 pub fn relay_deposit(
+    querier: &QuerierWrapper,
     env: Env,
     store: &mut dyn Storage,
     btc_tx: Adapter<Transaction>,
@@ -126,6 +118,7 @@ pub fn relay_deposit(
     let mut btc = Bitcoin::default();
     let response = Response::new().add_attribute("action", "relay_deposit");
     btc.relay_deposit(
+        querier,
         &env,
         store,
         btc_tx,
@@ -134,6 +127,7 @@ pub fn relay_deposit(
         btc_vout,
         sigset_index,
         dest,
+        false,
     )?;
 
     Ok(response)
@@ -150,9 +144,9 @@ pub fn withdraw_to_bitcoin(
     let mut cosmos_msgs = vec![];
 
     let config = CONFIG.load(store)?;
-    let denom = get_full_btc_denom(config.token_factory_addr.as_str());
+    let denom = get_full_btc_denom(config.token_factory_contract.as_str());
     let script_pubkey = bitcoin::Address::from_str(btc_address.as_str())
-        .map_err(|err| common_bitcoin::error::ContractError::App(err.to_string()))?
+        .map_err(|err| ContractError::App(err.to_string()))?
         .script_pubkey();
     for fund in info.funds {
         if fund.denom == denom {
@@ -161,7 +155,7 @@ pub fn withdraw_to_bitcoin(
 
             // burn here
             cosmos_msgs.push(WasmMsg::Execute {
-                contract_addr: config.token_factory_addr.clone().into_string(),
+                contract_addr: config.token_factory_contract.clone().into_string(),
                 msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::BurnTokens {
                     amount,
                     denom: fund.denom,
@@ -177,6 +171,7 @@ pub fn withdraw_to_bitcoin(
 }
 
 pub fn relay_checkpoint(
+    querier: &QuerierWrapper,
     store: &mut dyn Storage,
     btc_height: u32,
     btc_proof: Adapter<PartialMerkleTree>,
@@ -184,7 +179,7 @@ pub fn relay_checkpoint(
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
     let response = Response::new().add_attribute("action", "relay_checkpoint");
-    btc.relay_checkpoint(store, btc_height, btc_proof, cp_index)?;
+    btc.relay_checkpoint(querier, store, btc_height, btc_proof, cp_index, false)?;
     Ok(response)
 }
 
@@ -217,12 +212,13 @@ pub fn submit_recovery_signature(
 }
 
 pub fn set_signatory_key(
+    querier: &QuerierWrapper,
     store: &mut dyn Storage,
     info: MessageInfo,
     xpub: WrappedBinary<Xpub>,
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
-    btc.set_signatory_key(store, info.sender, xpub.0)?;
+    btc.set_signatory_key(querier, store, info.sender, xpub.0)?;
     let response = Response::new().add_attribute("action", "set_signatory_key");
     Ok(response)
 }
@@ -261,7 +257,7 @@ pub fn register_denom(
 
     let config = CONFIG.load(store)?;
     let msg = wasm_execute(
-        config.token_factory_addr,
+        config.token_factory_contract,
         &tokenfactory::msg::ExecuteMsg::CreateDenom { subdenom, metadata },
         info.funds,
     )?;
@@ -280,9 +276,9 @@ pub fn change_btc_denom_owner(
     let config = CONFIG.load(store)?;
     assert_eq!(info.sender, config.owner);
 
-    let denom = get_full_btc_denom(config.token_factory_addr.as_str());
+    let denom = get_full_btc_denom(config.token_factory_contract.as_str());
     let msg = wasm_execute(
-        config.token_factory_addr,
+        config.token_factory_contract,
         &tokenfactory::msg::ExecuteMsg::ChangeDenomOwner {
             denom,
             new_admin_address: new_owner,

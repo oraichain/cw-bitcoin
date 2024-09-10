@@ -25,7 +25,7 @@ pub fn clock_end_block(
     let pending_nbtc_transfers = btc.take_pending_completed(storage)?;
 
     let config = CONFIG.load(storage)?;
-    let token_factory = config.token_factory_addr;
+    let token_factory = config.token_factory_contract;
     let osor_entry_point_contract = config.osor_entry_point_contract;
 
     let mut msgs = vec![];
@@ -71,7 +71,7 @@ pub fn clock_end_block(
             }
         }
     }
-    let offline_signers = btc.begin_block_step(env, storage, hash.to_vec())?;
+    let offline_signers = btc.begin_block_step(env, querier, storage, hash.to_vec())?;
     for cons_key in &offline_signers {
         let (_, address) = VALIDATORS.load(storage, cons_key)?;
         btc.punish_validator(storage, cons_key, address)?;

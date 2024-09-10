@@ -1,14 +1,15 @@
+pub mod contract;
+pub mod msg;
+
 mod app;
 mod checkpoint;
 mod constants;
-pub mod entrypoints;
-mod header;
-mod interface;
-pub mod msg;
-
-pub mod contract;
+mod entrypoints;
 mod fee;
-pub mod helper;
+mod helper;
+#[cfg(test)]
+mod integration_tests;
+mod interface;
 mod outpoint_set;
 mod recovery;
 mod signatory;
@@ -17,5 +18,7 @@ mod state;
 mod tests;
 mod threshold_sig;
 
-#[cfg(test)]
-pub mod integration_tests;
+mod adapter;
+mod deque;
+mod error;
+mod xpub;

@@ -1,20 +1,21 @@
 use crate::{
     app::{Bitcoin, ConsensusKey},
     checkpoint::{Checkpoint, CheckpointQueue, CheckpointStatus},
-    header::HeaderQueue,
-    interface::{BitcoinConfig, ChangeRates, CheckpointConfig, HeaderConfig},
+    interface::{BitcoinConfig, ChangeRates, CheckpointConfig},
     msg::ConfigResponse,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
     state::{
-        header_height, BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, HEADER_CONFIG,
-        OUTPOINTS, SIGNERS, SIG_KEYS, TOKEN_FEE_RATIO,
+        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, OUTPOINTS, SIGNERS, SIG_KEYS,
+        TOKEN_FEE_RATIO,
     },
 };
-use bitcoin::{BlockHash, Transaction};
-use common_bitcoin::adapter::{Adapter, WrappedBinary};
-use common_bitcoin::error::{ContractError, ContractResult};
-use common_bitcoin::xpub::Xpub;
+use bitcoin::Transaction;
+use common_bitcoin::{
+    adapter::{Adapter, WrappedBinary},
+    error::{ContractError, ContractResult},
+    xpub::Xpub,
+};
 use cosmwasm_std::{Addr, Env, QuerierWrapper, Storage};
 use std::str::FromStr;
 
@@ -22,13 +23,14 @@ pub fn query_config(store: &dyn Storage) -> ContractResult<ConfigResponse> {
     let config = CONFIG.load(store)?;
     let token_fee = TOKEN_FEE_RATIO.load(store)?;
     Ok(ConfigResponse {
-        token_factory_addr: config.token_factory_addr,
         owner: config.owner,
         relayer_fee_token: config.relayer_fee_token,
         token_fee,
         relayer_fee: config.relayer_fee,
         token_fee_receiver: config.token_fee_receiver,
         relayer_fee_receiver: config.relayer_fee_receiver,
+        token_factory_contract: config.token_factory_contract,
+        light_client_contract: config.light_client_contract,
         swap_router_contract: config.swap_router_contract,
         osor_entry_point_contract: config.osor_entry_point_contract,
     })
@@ -44,11 +46,6 @@ pub fn query_checkpoint_config(store: &dyn Storage) -> ContractResult<Checkpoint
     Ok(checkpoint_config)
 }
 
-pub fn query_header_config(store: &dyn Storage) -> ContractResult<HeaderConfig> {
-    let header_config = HEADER_CONFIG.load(store)?;
-    Ok(header_config)
-}
-
 pub fn query_signatory_key(
     store: &dyn Storage,
     addr: Addr,
@@ -60,10 +57,6 @@ pub fn query_signatory_key(
         Err(_) => None,
     };
     Ok(result)
-}
-
-pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
-    header_height(store)
 }
 
 pub fn query_deposit_fees(store: &dyn Storage, index: Option<u32>) -> ContractResult<u64> {
@@ -98,13 +91,6 @@ pub fn query_checkpoint_fees(store: &dyn Storage, index: Option<u32>) -> Contrac
         .calc_fee_checkpoint(store, index.unwrap_or(building_index), &[0])
         .unwrap();
     Ok(checkpoint_fees)
-}
-
-pub fn query_sidechain_block_hash(store: &dyn Storage) -> ContractResult<WrappedBinary<BlockHash>> {
-    // let header_config = HEADER_CONFIG.load(store)?;
-    let headers = HeaderQueue::default();
-    let hash = WrappedBinary(headers.hash(store)?);
-    Ok(hash)
 }
 
 pub fn query_checkpoint_by_index(store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {

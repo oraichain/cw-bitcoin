@@ -5,9 +5,11 @@ use super::{
 };
 use crate::{interface::Dest, state::RECOVERY_TXS};
 use bitcoin::{OutPoint, Transaction, TxOut};
-use common_bitcoin::adapter::Adapter;
-use common_bitcoin::error::{ContractError, ContractResult};
-use common_bitcoin::xpub::Xpub;
+use common_bitcoin::{
+    adapter::Adapter,
+    error::{ContractError, ContractResult},
+    xpub::Xpub,
+};
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Api, Storage};
 
