@@ -16,6 +16,11 @@ pub fn query_header_config(store: &dyn Storage) -> ContractResult<HeaderConfig> 
     Ok(header_config)
 }
 
+pub fn query_network() -> ContractResult<String> {
+    let header_queue = HeaderQueue::default();
+    Ok(header_queue.network().to_string())
+}
+
 pub fn query_header_height(store: &dyn Storage) -> ContractResult<u32> {
     header_height(store)
 }

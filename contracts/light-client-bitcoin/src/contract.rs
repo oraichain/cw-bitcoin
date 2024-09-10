@@ -1,6 +1,6 @@
 use crate::{
     entrypoints::{
-        query_header_config, query_header_height, query_sidechain_block_hash,
+        query_header_config, query_header_height, query_network, query_sidechain_block_hash,
         query_verify_tx_with_proof, relay_headers, update_config, update_header_config,
     },
     header::HeaderQueue,
@@ -55,6 +55,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::HeaderConfig {} => to_json_binary(&query_header_config(deps.storage)?),
         QueryMsg::HeaderHeight {} => to_json_binary(&query_header_height(deps.storage)?),
+        QueryMsg::Network {} => to_json_binary(&query_network()?),
         QueryMsg::SidechainBlockHash {} => {
             to_json_binary(&query_sidechain_block_hash(deps.storage)?)
         }

@@ -26,6 +26,8 @@ pub enum QueryMsg {
     HeaderConfig {},
     #[returns(u32)]
     HeaderHeight {},
+    #[returns(String)]
+    Network {},
     #[returns(WrappedBinary<bitcoin::BlockHash>)]
     SidechainBlockHash {},
     #[returns(())]
