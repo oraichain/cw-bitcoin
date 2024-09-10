@@ -7,9 +7,9 @@ use cosmwasm_std::Storage;
 
 use crate::{
     header::HeaderQueue,
-    interface::HeaderConfig,
     state::{header_height, HEADER_CONFIG},
 };
+use light_client_bitcoin::interface::HeaderConfig;
 
 pub fn query_header_config(store: &dyn Storage) -> ContractResult<HeaderConfig> {
     let header_config = HEADER_CONFIG.load(store)?;

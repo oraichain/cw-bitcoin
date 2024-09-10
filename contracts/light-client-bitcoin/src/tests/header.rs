@@ -7,9 +7,10 @@ use chrono::{TimeZone, Utc};
 use common_bitcoin::adapter::Adapter;
 use cosmwasm_std::{from_json, testing::mock_dependencies, to_json_binary, Binary};
 
-use crate::header::{HeaderQueue, WrappedHeader};
-use crate::interface::HeaderConfig;
+use crate::header::HeaderQueue;
 use crate::state::{HEADERS, HEADER_CONFIG};
+use light_client_bitcoin::header::WrappedHeader;
+use light_client_bitcoin::interface::HeaderConfig;
 
 #[test]
 fn primitive_adapter_encode_decode() {

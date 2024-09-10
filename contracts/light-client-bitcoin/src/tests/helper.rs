@@ -1,8 +1,8 @@
 use cosmwasm_std::{Addr, Coin};
 use cosmwasm_testing_util::MockResult;
 
-use crate::msg;
 use derive_more::{Deref, DerefMut};
+use light_client_bitcoin::msg;
 
 #[cfg(not(feature = "test-tube"))]
 pub type TestMockApp = cosmwasm_testing_util::MultiTestMockApp;

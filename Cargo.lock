@@ -558,7 +558,6 @@ dependencies = [
  "cosmwasm-std",
  "cw-storage-plus 1.2.0",
  "derive_more",
- "ibc-proto",
  "libsecp256k1-core",
  "serde",
  "serde_json",
@@ -1021,7 +1020,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw-bitcoin"
+name = "cw-app-bitcoin"
 version = "0.1.0"
 dependencies = [
  "arrayref",
@@ -1034,6 +1033,7 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=e68faf6)",
+ "cw-light-client-bitcoin",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
  "cw20 1.1.2",
@@ -1051,6 +1051,29 @@ dependencies = [
  "thiserror",
  "token-bindings 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=9796c74)",
  "tokenfactory 0.11.0 (git+https://github.com/oraichain/token-bindings.git?rev=9796c74)",
+ "tokio",
+]
+
+[[package]]
+name = "cw-light-client-bitcoin"
+version = "0.1.0"
+dependencies = [
+ "bitcoin 0.29.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bitcoincore-rpc-async2",
+ "bitcoind",
+ "chrono",
+ "common-bitcoin",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=e68faf6)",
+ "cw-storage-plus 1.2.0",
+ "cw2 1.1.2",
+ "derive_more",
+ "light-client-bitcoin",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "thiserror",
  "tokio",
 ]
 
@@ -2406,22 +2429,21 @@ dependencies = [
 name = "light-client-bitcoin"
 version = "0.1.0"
 dependencies = [
+ "arrayref",
  "bitcoin 0.29.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bitcoin-script",
  "bitcoincore-rpc-async2",
  "bitcoind",
  "chrono",
  "common-bitcoin",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=e68faf6)",
- "cw-storage-plus 1.2.0",
- "cw2 1.1.2",
  "derive_more",
+ "libsecp256k1-core",
  "serde",
  "serde_json",
  "serial_test",
  "thiserror",
- "tokio",
 ]
 
 [[package]]

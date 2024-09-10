@@ -2,10 +2,10 @@ use common_bitcoin::error::ContractResult;
 use cosmwasm_std::{Addr, MessageInfo, Response, Storage};
 
 use crate::{
-    header::{HeaderList, HeaderQueue, WrappedHeader},
-    interface::HeaderConfig,
+    header::{HeaderList, HeaderQueue},
     state::CONFIG,
 };
+use light_client_bitcoin::{header::WrappedHeader, interface::HeaderConfig};
 
 pub fn relay_headers(
     store: &mut dyn Storage,

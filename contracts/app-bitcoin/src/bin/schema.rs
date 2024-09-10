@@ -1,5 +1,5 @@
 use cosmwasm_schema::write_api;
-use cw_bitcoin::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use cw_app_bitcoin::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 
 fn main() {
     write_api! {

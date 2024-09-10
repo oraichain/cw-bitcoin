@@ -2,8 +2,7 @@ use bitcoin::util::uint::Uint256;
 use common_bitcoin::{adapter::Adapter, deque::DequeExtension, error::ContractResult};
 use cosmwasm_std::Storage;
 use cw_storage_plus::Item;
-
-use crate::{header::WorkHeader, interface::HeaderConfig, msg::Config};
+use light_client_bitcoin::{header::WorkHeader, interface::HeaderConfig, msg::Config};
 
 pub const CONFIG: Item<Config> = Item::new("config");
 pub const HEADER_CONFIG: Item<HeaderConfig> = Item::new("header");

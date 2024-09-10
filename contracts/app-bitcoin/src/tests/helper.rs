@@ -88,9 +88,9 @@ impl MockApp {
             ));
             light_client_id = app.upload(Box::new(
                 cosmwasm_testing_util::ContractWrapper::new_with_empty(
-                    light_client_bitcoin::contract::execute,
-                    light_client_bitcoin::contract::instantiate,
-                    light_client_bitcoin::contract::query,
+                    cw_light_client_bitcoin::contract::execute,
+                    cw_light_client_bitcoin::contract::instantiate,
+                    cw_light_client_bitcoin::contract::query,
                 ),
             ));
         }

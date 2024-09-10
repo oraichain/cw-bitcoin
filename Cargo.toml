@@ -29,13 +29,14 @@ cosmwasm-storage = {version = "1.5"}
 chrono = "0.4.19"
 common-bitcoin = {path = "./packages/common-bitcoin"}
 cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "e68faf6"}
+cw-light-client-bitcoin = {path = "./contracts/light-client-bitcoin"}
 cw-storage-plus = {version = "1.0.1"}
 cw2 = {version = "1.0.1"}
 cw20 = {version = "1.0.1"}
 cw20-base = {version = "1.0.1"}
 derive_more = "0.99.17"
 ibc-proto = {version = "0.32.1", default-features = false}
-light-client-bitcoin = {path = "./contracts/light-client-bitcoin", features = ["library"]}
+light-client-bitcoin = {path = "./packages/light-client"}
 oraiswap = {git = "https://github.com/oraichain/oraiswap.git", rev = "c5fd186"}
 prost = {version = "0.11.9"}
 serde = "1.0.133"

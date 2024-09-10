@@ -1,9 +1,10 @@
-use crate::{header::WrappedHeader, interface::HeaderConfig, msg, tests::helper::MockApp};
+use crate::tests::helper::MockApp;
 use bitcoincore_rpc_async::jsonrpc::error::RpcError;
 use bitcoind::bitcoincore_rpc::RpcApi;
 use bitcoind::{BitcoinD, Conf, P2P};
 use common_bitcoin::adapter::Adapter;
-use cosmwasm_std::{coins, Addr, Uint128};
+use cosmwasm_std::{coins, Addr};
+use light_client_bitcoin::{header::WrappedHeader, interface::HeaderConfig, msg};
 
 fn into_json<T>(val: T) -> Result<bitcoind::bitcoincore_rpc::jsonrpc::serde_json::Value, RpcError>
 where

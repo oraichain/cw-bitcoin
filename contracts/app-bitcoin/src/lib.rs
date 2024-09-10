@@ -17,8 +17,3 @@ mod state;
 #[cfg(test)]
 mod tests;
 mod threshold_sig;
-
-mod adapter;
-mod deque;
-mod error;
-mod xpub;

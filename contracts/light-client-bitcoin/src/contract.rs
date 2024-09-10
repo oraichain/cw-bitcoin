@@ -4,14 +4,16 @@ use crate::{
         query_verify_tx_with_proof, relay_headers, update_config, update_header_config,
     },
     header::HeaderQueue,
-    interface::HeaderConfig,
-    msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
     state::CONFIG,
 };
 use common_bitcoin::error::ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use light_client_bitcoin::{
+    interface::HeaderConfig,
+    msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
+};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:light-client-bitcoin";
