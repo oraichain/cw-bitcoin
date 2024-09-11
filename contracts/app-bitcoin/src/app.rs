@@ -137,6 +137,9 @@ impl Bitcoin {
             .load(store, signer.as_str())
             .map_err(|_| ContractError::App("Signer does not have a consensus key".to_string()))?;
 
+        println!("network: {:?}", self.network(querier, store));
+        println!("sig network: {:?}", signatory_key.network);
+
         if signatory_key.network != self.network(querier, store) {
             return Err(ContractError::App(
                 "Signatory key network does not match network".to_string(),

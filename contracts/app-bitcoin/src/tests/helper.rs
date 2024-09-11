@@ -69,11 +69,11 @@ impl MockApp {
         let light_client_id;
         #[cfg(feature = "test-tube")]
         {
-            static CW_BYTES: &[u8] = include_bytes!("./testdata/cw-bitcoin.wasm");
+            static CW_BYTES: &[u8] = include_bytes!("./testdata/cw-app-bitcoin.wasm");
             bridge_id = app.upload(CW_BYTES);
 
             static LIGHT_CLIENT_BYTES: &[u8] =
-                include_bytes!("./testdata/light-client-bitcoin.wasm");
+                include_bytes!("./testdata/cw-light-client-bitcoin.wasm");
             light_client_id = app.upload(LIGHT_CLIENT_BYTES);
         }
         #[cfg(not(feature = "test-tube"))]
