@@ -16,22 +16,21 @@ use common_bitcoin::{
     error::{ContractError, ContractResult},
     xpub::Xpub,
 };
-use cosmwasm_std::{to_json_vec, Addr, Binary, Empty, Env, QuerierWrapper, QueryRequest, Storage};
+use cosmwasm_std::{to_json_vec, Addr, Empty, Env, QuerierWrapper, QueryRequest, Storage};
 use ibc_proto::cosmos::staking::v1beta1::{QueryValidatorRequest, QueryValidatorResponse};
 use prost::Message;
 use std::str::FromStr;
 
 pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractResult<String> {
-    let query_validator_request = QueryValidatorRequest {
-        validator_addr: addr,
-    };
-    let encode_query_validator_request =
-        QueryValidatorRequest::encode_to_vec(&query_validator_request);
-    let bin_request: QueryRequest<Empty> = QueryRequest::Stargate {
+    let bin_request = to_json_vec(&QueryRequest::<Empty>::Stargate {
         path: "/cosmos.staking.v1beta1.Query/Validator".to_string(),
-        data: Binary::from(encode_query_validator_request),
-    };
-    let buf = api.raw_query(&to_json_vec(&bin_request)?).unwrap().unwrap();
+        data: QueryValidatorRequest {
+            validator_addr: addr,
+        }
+        .encode_to_vec()
+        .into(),
+    })?;
+    let buf = api.raw_query(&bin_request).unwrap().unwrap();
     let validator_response = QueryValidatorResponse::decode(buf.as_slice()).unwrap();
     let validator = validator_response.validator.unwrap();
     Ok(validator.tokens)
