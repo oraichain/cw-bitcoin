@@ -1059,10 +1059,12 @@ fn test_stargate() {
 
     let val_addr = app.inner().get_first_validator_address().unwrap();
 
-    let data = app.query::<Binary, _>(
-        bitcoin_bridge_addr.clone(),
-        &msg::QueryMsg::StakingValidator { val_addr },
-    );
+    let data: String = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::StakingValidator { val_addr },
+        )
+        .unwrap();
 
     println!("res {:?}", data);
 }
