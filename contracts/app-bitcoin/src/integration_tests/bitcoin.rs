@@ -1018,6 +1018,55 @@ async fn test_full_flow_happy_case_bitcoin() {
     println!("[BRAVOOO] All testcases passed!");
 }
 
+#[cfg(feature = "test-tube")]
+#[test]
+fn test_stargate() {
+    // Set up app
+
+    use cosmwasm_testing_util::test_tube::Account;
+
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
+    ]);
+    let owner = Addr::unchecked(&accounts[0]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[1]);
+    let token_fee_receiver = Addr::unchecked(&accounts[2]);
+
+    let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
+    let light_client_addr = app
+        .create_light_client(owner.clone(), &lc_msg::InstantiateMsg {})
+        .unwrap();
+
+    let bitcoin_bridge_addr = app
+        .create_bridge(
+            owner.clone(),
+            &msg::InstantiateMsg {
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: token_fee_receiver.clone(),
+                token_factory_contract: token_factory_addr.clone(),
+                light_client_contract: light_client_addr.clone(),
+                swap_router_contract: None,
+                osor_entry_point_contract: None,
+            },
+        )
+        .unwrap();
+
+    let val_addr = app.inner().get_first_validator_address().unwrap();
+
+    let data = app.query::<Binary, _>(
+        bitcoin_bridge_addr.clone(),
+        &msg::QueryMsg::StakingValidator { val_addr },
+    );
+
+    println!("res {:?}", data);
+}
+
 #[cfg(feature = "mainnet")]
 #[tokio::test]
 #[serial_test::serial]
