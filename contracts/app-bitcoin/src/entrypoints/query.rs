@@ -16,8 +16,27 @@ use common_bitcoin::{
     error::{ContractError, ContractResult},
     xpub::Xpub,
 };
-use cosmwasm_std::{Addr, Env, QuerierWrapper, Storage};
+use cosmwasm_std::{Addr, Binary, Env, QuerierWrapper, QueryRequest, Storage};
+use ibc_proto::cosmos::staking::v1beta1::{QueryValidatorRequest, QueryValidatorResponse};
+use prost::Message;
 use std::str::FromStr;
+
+pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractResult<String> {
+    let query_validator_request = QueryValidatorRequest {
+        validator_addr: addr,
+    };
+    let encode_query_validator_request =
+        QueryValidatorRequest::encode_to_vec(&query_validator_request);
+    let query_validator_request_binary = Binary::from(encode_query_validator_request);
+    let query_validator_response: Binary = api.query(&QueryRequest::Stargate {
+        path: "/cosmos.staking.v1beta1.QueryValidatorRequest".to_string(),
+        data: query_validator_request_binary,
+    })?;
+    let validator_response =
+        QueryValidatorResponse::decode(query_validator_response.as_slice()).unwrap();
+    let validator = validator_response.validator.unwrap();
+    Ok(validator.tokens)
+}
 
 pub fn query_config(store: &dyn Storage) -> ContractResult<ConfigResponse> {
     let config = CONFIG.load(store)?;

@@ -180,6 +180,8 @@ pub enum QueryMsg {
     ChangeRates { interval: u64 },
     #[returns(u64)]
     ValueLocked {},
+    #[returns(String)]
+    StakingValidator { val_addr: String },
 }
 
 #[cw_serde]
