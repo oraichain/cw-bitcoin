@@ -1057,7 +1057,10 @@ fn test_stargate() {
         )
         .unwrap();
 
-    let val_addr = app.inner().get_first_validator_address().unwrap();
+    let val_addr = app
+        .inner()
+        .setup_validator(&coins(100_000_000_000, "orai"))
+        .unwrap();
 
     let data: String = app
         .query(
