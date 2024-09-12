@@ -742,7 +742,7 @@ dependencies = [
 [[package]]
 name = "cosmwasm-testing-util"
 version = "0.1.0"
-source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=1ea45cf#1ea45cfc0afdf9383ec21eacfc9ec72ecab29f3d"
+source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=8f2286a#8f2286aa70d29a1bd1ce798456557e61aae7eb3d"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -994,7 +994,7 @@ dependencies = [
  "common-bitcoin",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=1ea45cf)",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=8f2286a)",
  "cw-light-client-bitcoin",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
@@ -1027,7 +1027,7 @@ dependencies = [
  "common-bitcoin",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=1ea45cf)",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=8f2286a)",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
  "derive_more",
