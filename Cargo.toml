@@ -29,7 +29,7 @@ cosmwasm-storage = {version = "1.5"}
 bech32 = "0.11.0"
 chrono = "0.4.19"
 common-bitcoin = {path = "./packages/common-bitcoin"}
-cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "b5705fb"}
+cosmwasm-testing-util = {git = "https://github.com/oraichain/cosmwasm-testing-util.git", rev = "84c9f1a"}
 cw-light-client-bitcoin = {path = "./contracts/light-client-bitcoin"}
 cw-storage-plus = {version = "1.0.1"}
 cw2 = {version = "1.0.1"}

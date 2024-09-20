@@ -1022,6 +1022,7 @@ async fn test_full_flow_happy_case_bitcoin() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_stargate() {
+    use cosmwasm_testing_util::test_tube::Account;
     // Set up app
     use ibc_proto::cosmos::staking::v1beta1::QueryValidatorResponse;
     use prost::Message;
@@ -1062,6 +1063,8 @@ async fn test_stargate() {
         .inner()
         .setup_validator_with_secret(&coins(100_000_000_000, "orai"), "val")
         .unwrap();
+    let accounts = app.inner().get_validator_signing_accounts().unwrap();
+    println!("All accounts: {:?}", accounts[0].address());
 
     let staking_validator_result: Binary = app
         .query(
