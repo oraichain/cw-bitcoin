@@ -1,5 +1,7 @@
 use crate::{
     app::{Bitcoin, ConsensusKey},
+    constants::VALIDATOR_ADDRESS_PREFIX,
+    helper::{convert_addr_by_prefix, fetch_staking_validator},
     interface::{BitcoinConfig, CheckpointConfig, Dest},
     state::{
         get_full_btc_denom, Ratio, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS,
@@ -7,17 +9,20 @@ use crate::{
     },
     threshold_sig::Signature,
 };
+use bech32::Bech32;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use common_bitcoin::{
     adapter::{Adapter, WrappedBinary},
     error::{ContractError, ContractResult},
     xpub::Xpub,
 };
+use ibc_proto::cosmos::staking::v1beta1::{BondStatus, QueryValidatorResponse};
+use prost::Message;
 use std::str::FromStr;
 
 use cosmwasm_std::{
-    to_json_binary, wasm_execute, Addr, Api, Env, MessageInfo, QuerierWrapper, Response, Storage,
-    Uint128, WasmMsg,
+    to_json_binary, wasm_execute, Addr, Api, Binary, Env, MessageInfo, QuerierWrapper, Response,
+    Storage, Uint128, WasmMsg,
 };
 use oraiswap::asset::AssetInfo;
 use token_bindings::Metadata;
@@ -223,7 +228,6 @@ pub fn set_signatory_key(
     Ok(response)
 }
 
-// TODO: Add check only owners of this contract can call
 pub fn add_validators(
     store: &mut dyn Storage,
     info: MessageInfo,
@@ -244,6 +248,48 @@ pub fn add_validators(
         VALIDATORS.save(store, cons_key, &(power, addr.clone()))?;
     }
     let response = Response::new().add_attribute("action", "add_validators");
+    Ok(response)
+}
+
+pub fn register_validator(
+    store: &mut dyn Storage,
+    querier: &QuerierWrapper,
+    info: MessageInfo,
+) -> ContractResult<Response> {
+    let sender = info.sender;
+    let val_addr = convert_addr_by_prefix(sender.as_str(), VALIDATOR_ADDRESS_PREFIX);
+    let binary_validator_result = fetch_staking_validator(querier, val_addr).unwrap();
+    let validator_response =
+        QueryValidatorResponse::decode(binary_validator_result.as_slice()).unwrap();
+    let validator: ibc_proto::cosmos::staking::v1beta1::Validator =
+        validator_response.validator.unwrap();
+    if validator.jailed {
+        return Err(ContractError::ValidatorJailed {});
+    }
+    if validator.consensus_pubkey.is_none() {
+        return Err(ContractError::ValidatorNoConsensusPubKey {});
+    }
+    if validator.status != BondStatus::Bonded as i32 {
+        return Err(ContractError::ValidatorNotBonded {});
+    }
+    let cons_key: [u8; 32] = validator
+        .consensus_pubkey
+        .unwrap()
+        .value
+        .try_into()
+        .expect("Consensus keys must have only 32 elements");
+    let voting_power: u64 = validator.tokens.parse().expect("Cannot parse voting power");
+    SIGNERS.save(store, sender.as_str(), &cons_key)?;
+    VALIDATORS.save(
+        store,
+        &cons_key,
+        &(voting_power, sender.clone().into_string()),
+    )?;
+    let response = Response::new()
+        .add_attribute("action", "register_validator")
+        .add_attribute("sender", sender)
+        .add_attribute("consensus_key", Binary::from(cons_key).to_string())
+        .add_attribute("voting_power", voting_power.to_string());
     Ok(response)
 }
 

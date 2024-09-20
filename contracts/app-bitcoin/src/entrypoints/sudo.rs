@@ -1,13 +1,19 @@
 use crate::{
     app::Bitcoin,
     fee::process_deduct_fee,
-    state::{BLOCK_HASHES, CONFIG, VALIDATORS},
+    helper::fetch_staking_validator,
+    state::{BLOCK_HASHES, CONFIG, SIGNERS, VALIDATORS},
 };
-use common_bitcoin::error::{ContractError, ContractResult};
+use common_bitcoin::{
+    error::{ContractError, ContractResult},
+    msg::BondStatus,
+};
 use cosmwasm_std::{
-    to_json_binary, Api, Binary, Coin, CosmosMsg, Env, QuerierWrapper, Response, Storage, Uint128,
-    WasmMsg,
+    to_json_binary, Api, Binary, Coin, CosmosMsg, Env, Order, QuerierWrapper, Response, Storage,
+    Uint128, WasmMsg,
 };
+use ibc_proto::cosmos::staking::v1beta1::QueryValidatorResponse;
+use prost::Message;
 
 pub fn clock_end_block(
     env: &Env,
@@ -77,6 +83,43 @@ pub fn clock_end_block(
         btc.punish_validator(storage, cons_key, address)?;
     }
     BLOCK_HASHES.save(storage, &hash, &()).unwrap();
+
+    let mut signer_addrs = Vec::new();
+    for signer in SIGNERS.range_raw(storage, None, None, Order::Ascending) {
+        signer_addrs.push(signer.unwrap());
+    }
+
+    // for signer in signer_addrs.iter() {
+    //     let (addr, cons_key) = signer;
+    //     let binary_validator_result =
+    //         fetch_staking_validator(querier, String::from_utf8(addr.clone()).unwrap())?;
+    //     let validator_response =
+    //         QueryValidatorResponse::decode(binary_validator_result.as_slice()).unwrap();
+    //     let validator_info = validator_response.validator;
+    //     if validator_info.is_none() {
+    //         // delete signers and validators
+    //         SIGNERS.remove(storage, String::from_utf8(addr.clone()).unwrap().as_str());
+    //         VALIDATORS.remove(storage, &cons_key);
+    //         continue;
+    //     }
+    //     if let Some(validator) = validator_info {
+    //         if validator.jailed || validator.status != BondStatus::Bonded as i32 {
+    //             // delete signers and validators
+    //             SIGNERS.remove(storage, String::from_utf8(addr.clone()).unwrap().as_str());
+    //             VALIDATORS.remove(storage, &cons_key);
+    //             continue;
+    //         }
+
+    //         let voting_power: u64 = validator.tokens.parse().expect("Cannot parse voting power");
+    //         VALIDATORS
+    //             .save(
+    //                 storage,
+    //                 &cons_key,
+    //                 &(voting_power, String::from_utf8(addr.clone()).unwrap()),
+    //             )
+    //             .unwrap();
+    //     }
+    // }
 
     Ok(Response::new().add_messages(msgs))
 }

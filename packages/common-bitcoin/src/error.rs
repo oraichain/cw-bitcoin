@@ -48,6 +48,12 @@ pub enum ContractError {
     Signer(String),
     #[error("unauthorized")]
     Unauthorized {},
+    #[error("Validator is on jailed")]
+    ValidatorJailed {},
+    #[error("Validator does not have consensus keys")]
+    ValidatorNoConsensusPubKey {},
+    #[error("Validator is not in bonded status")]
+    ValidatorNotBonded {},
 }
 
 impl From<ContractError> for StdError {

@@ -1018,12 +1018,12 @@ async fn test_full_flow_happy_case_bitcoin() {
     println!("[BRAVOOO] All testcases passed!");
 }
 
-#[cfg(feature = "test-tube")]
-#[test]
-fn test_stargate() {
+#[cfg(all(feature = "mainnet", feature = "test-tube"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn test_stargate() {
     // Set up app
-
-    use cosmwasm_testing_util::test_tube::Account;
+    use ibc_proto::cosmos::staking::v1beta1::QueryValidatorResponse;
     use prost::Message;
 
     let (mut app, accounts) = MockApp::new(&[
@@ -1063,13 +1063,19 @@ fn test_stargate() {
         .setup_validator_with_secret(&coins(100_000_000_000, "orai"), "val")
         .unwrap();
 
-    let consensus_pubkey: ibc_proto::google::protobuf::Any = app
+    let staking_validator_result: Binary = app
         .query(
             bitcoin_bridge_addr.clone(),
-            &msg::QueryMsg::StakingValidator { val_addr },
+            &msg::QueryMsg::StakingValidator {
+                val_addr: val_addr.clone(),
+            },
         )
         .unwrap();
-    let pubkey: &[u8] = consensus_pubkey.value.rchunks(32).next().unwrap();
+    let validator_result =
+        QueryValidatorResponse::decode(staking_validator_result.as_slice()).unwrap();
+    let validator = validator_result.validator.unwrap();
+    let consensus_key = validator.consensus_pubkey.unwrap();
+    let pubkey: &[u8] = consensus_key.value.rchunks(32).next().unwrap();
     println!("res {:?}", pubkey);
 }
 

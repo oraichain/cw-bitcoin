@@ -1,4 +1,5 @@
 use crate::checkpoint::Checkpoint;
+use crate::helper::fetch_staking_validator;
 use crate::interface::{BitcoinConfig, ChangeRates, Dest, Validator};
 use crate::signatory::SignatoryKeys;
 use crate::state::{
@@ -14,6 +15,7 @@ use super::checkpoint::BatchType;
 use super::checkpoint::CheckpointQueue;
 use bitcoin::Script;
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
+use common_bitcoin::msg::BondStatus;
 use common_bitcoin::{
     adapter::Adapter,
     error::{ContractError, ContractResult},
@@ -21,6 +23,8 @@ use common_bitcoin::{
 };
 use cosmwasm_schema::serde::{Deserialize, Serialize};
 use cosmwasm_std::{Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
+use ibc_proto::cosmos::staking::v1beta1::QueryValidatorResponse;
+use prost::Message;
 
 use super::outpoint_set::OutpointSet;
 use super::signatory::SignatorySet;
@@ -136,9 +140,6 @@ impl Bitcoin {
         let consensus_key = SIGNERS
             .load(store, signer.as_str())
             .map_err(|_| ContractError::App("Signer does not have a consensus key".to_string()))?;
-
-        println!("network: {:?}", self.network(querier, store));
-        println!("sig network: {:?}", signatory_key.network);
 
         if signatory_key.network != self.network(querier, store) {
             return Err(ContractError::App(

@@ -146,6 +146,7 @@ pub fn execute(
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }
+        ExecuteMsg::RegisterValidator {} => register_validator(deps.storage, &deps.querier, info),
         ExecuteMsg::ChangeBtcDenomOwner { new_owner } => {
             change_btc_denom_owner(deps.storage, info, new_owner)
         }

@@ -16,7 +16,7 @@ pub enum BondStatus {
 #[cw_serde]
 pub struct ValidatorInfo {
     pub operator_address: String,
-    pub consensus_pubkey: Option<Vec<u8>>,
+    pub consensus_pubkey: Vec<u8>,
     pub jailed: bool,
     pub status: i32,
     pub tokens: Uint128,

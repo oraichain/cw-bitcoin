@@ -122,6 +122,7 @@ pub enum ExecuteMsg {
         subdenom: String,
         metadata: Option<Metadata>,
     },
+    RegisterValidator {},
     ChangeBtcDenomOwner {
         new_owner: String,
     },
@@ -180,7 +181,7 @@ pub enum QueryMsg {
     ChangeRates { interval: u64 },
     #[returns(u64)]
     ValueLocked {},
-    #[returns(String)]
+    #[returns(Binary)]
     StakingValidator { val_addr: String },
 }
 

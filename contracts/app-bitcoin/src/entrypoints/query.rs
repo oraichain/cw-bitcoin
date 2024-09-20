@@ -16,15 +16,12 @@ use common_bitcoin::{
     error::{ContractError, ContractResult},
     xpub::Xpub,
 };
-use cosmwasm_std::{to_json_vec, Addr, Empty, Env, QuerierWrapper, QueryRequest, Storage};
-use ibc_proto::{
-    cosmos::staking::v1beta1::{QueryValidatorRequest, QueryValidatorResponse},
-    google::protobuf::Any,
-};
+use cosmwasm_std::{to_json_vec, Addr, Binary, Empty, Env, QuerierWrapper, QueryRequest, Storage};
+use ibc_proto::cosmos::staking::v1beta1::QueryValidatorRequest;
 use prost::Message;
 use std::str::FromStr;
 
-pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractResult<Any> {
+pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractResult<Binary> {
     let bin_request = to_json_vec(&QueryRequest::<Empty>::Stargate {
         path: "/cosmos.staking.v1beta1.Query/Validator".to_string(),
         data: QueryValidatorRequest {
@@ -33,11 +30,8 @@ pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractRes
         .encode_to_vec()
         .into(),
     })?;
-
     let buf = api.raw_query(&bin_request).unwrap().unwrap();
-    let validator_response = QueryValidatorResponse::decode(buf.as_slice()).unwrap();
-    let validator = validator_response.validator.unwrap();
-    Ok(validator.consensus_pubkey.unwrap())
+    Ok(buf)
 }
 
 pub fn query_config(store: &dyn Storage) -> ContractResult<ConfigResponse> {
@@ -82,7 +76,6 @@ pub fn query_signatory_key(
 
 pub fn query_deposit_fees(store: &dyn Storage, index: Option<u32>) -> ContractResult<u64> {
     let btc = Bitcoin::default();
-
     let checkpoint = btc.get_checkpoint(store, index)?;
     let input_vsize = checkpoint.sigset.est_witness_vsize() + 40;
     let deposit_fees = btc.calc_minimum_deposit_fees(store, input_vsize, checkpoint.fee_rate)?;
