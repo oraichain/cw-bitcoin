@@ -1060,7 +1060,7 @@ fn test_stargate() {
 
     let val_addr = app
         .inner()
-        .setup_validator_with_secret(&coins(100_000_000_000, "orai"), "val1")
+        .setup_validator_with_secret(&coins(100_000_000_000, "orai"), "val")
         .unwrap();
 
     let consensus_pubkey: ibc_proto::google::protobuf::Any = app
@@ -1069,13 +1069,8 @@ fn test_stargate() {
             &msg::QueryMsg::StakingValidator { val_addr },
         )
         .unwrap();
-    let pubkey: Vec<u8> = consensus_pubkey
-        .value
-        .into_iter()
-        .skip(1)
-        .take(32)
-        .collect();
-    println!("res {:?}-{}", pubkey, pubkey.len());
+    let pubkey: &[u8] = consensus_pubkey.value.rchunks(32).next().unwrap();
+    println!("res {:?}", pubkey);
 }
 
 #[cfg(feature = "mainnet")]
