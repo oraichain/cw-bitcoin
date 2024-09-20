@@ -89,37 +89,41 @@ pub fn clock_end_block(
         signer_addrs.push(signer.unwrap());
     }
 
-    // for signer in signer_addrs.iter() {
-    //     let (addr, cons_key) = signer;
-    //     let binary_validator_result =
-    //         fetch_staking_validator(querier, String::from_utf8(addr.clone()).unwrap())?;
-    //     let validator_response =
-    //         QueryValidatorResponse::decode(binary_validator_result.as_slice()).unwrap();
-    //     let validator_info = validator_response.validator;
-    //     if validator_info.is_none() {
-    //         // delete signers and validators
-    //         SIGNERS.remove(storage, String::from_utf8(addr.clone()).unwrap().as_str());
-    //         VALIDATORS.remove(storage, &cons_key);
-    //         continue;
-    //     }
-    //     if let Some(validator) = validator_info {
-    //         if validator.jailed || validator.status != BondStatus::Bonded as i32 {
-    //             // delete signers and validators
-    //             SIGNERS.remove(storage, String::from_utf8(addr.clone()).unwrap().as_str());
-    //             VALIDATORS.remove(storage, &cons_key);
-    //             continue;
-    //         }
+    #[cfg(feature = "native-validator")]
+    {
+        for signer in signer_addrs.iter() {
+            let (addr, cons_key) = signer;
+            let binary_validator_result =
+                fetch_staking_validator(querier, String::from_utf8(addr.clone()).unwrap())?;
+            let validator_response =
+                QueryValidatorResponse::decode(binary_validator_result.as_slice()).unwrap();
+            let validator_info = validator_response.validator;
+            if validator_info.is_none() {
+                // delete signers and validators
+                SIGNERS.remove(storage, String::from_utf8(addr.clone()).unwrap().as_str());
+                VALIDATORS.remove(storage, &cons_key);
+                continue;
+            }
+            if let Some(validator) = validator_info {
+                if validator.jailed || validator.status != BondStatus::Bonded as i32 {
+                    // delete signers and validators
+                    SIGNERS.remove(storage, String::from_utf8(addr.clone()).unwrap().as_str());
+                    VALIDATORS.remove(storage, &cons_key);
+                    continue;
+                }
 
-    //         let voting_power: u64 = validator.tokens.parse().expect("Cannot parse voting power");
-    //         VALIDATORS
-    //             .save(
-    //                 storage,
-    //                 &cons_key,
-    //                 &(voting_power, String::from_utf8(addr.clone()).unwrap()),
-    //             )
-    //             .unwrap();
-    //     }
-    // }
+                let voting_power: u64 =
+                    validator.tokens.parse().expect("Cannot parse voting power");
+                VALIDATORS
+                    .save(
+                        storage,
+                        &cons_key,
+                        &(voting_power, String::from_utf8(addr.clone()).unwrap()),
+                    )
+                    .unwrap();
+            }
+        }
+    }
 
     Ok(Response::new().add_messages(msgs))
 }

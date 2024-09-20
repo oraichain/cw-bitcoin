@@ -119,6 +119,14 @@ pub fn execute(
         ExecuteMsg::UpdateCheckpointConfig { config } => {
             update_checkpoint_config(deps.storage, info, config)
         }
+        #[cfg(feature = "native-validator")]
+        ExecuteMsg::RegisterValidator {} => register_validator(deps.storage, &deps.querier, info),
+        #[cfg(not(feature = "native-validator"))]
+        ExecuteMsg::AddValidators {
+            addrs,
+            voting_powers,
+            consensus_keys,
+        } => add_validators(deps.storage, info, addrs, voting_powers, consensus_keys),
         ExecuteMsg::SubmitCheckpointSignature {
             xpub,
             sigs,
@@ -138,15 +146,9 @@ pub fn execute(
         ExecuteMsg::SetSignatoryKey { xpub } => {
             set_signatory_key(&deps.querier, deps.storage, info, xpub)
         }
-        ExecuteMsg::AddValidators {
-            addrs,
-            voting_powers,
-            consensus_keys,
-        } => add_validators(deps.storage, info, addrs, voting_powers, consensus_keys),
         ExecuteMsg::RegisterDenom { subdenom, metadata } => {
             register_denom(deps.storage, info, subdenom, metadata)
         }
-        ExecuteMsg::RegisterValidator {} => register_validator(deps.storage, &deps.querier, info),
         ExecuteMsg::ChangeBtcDenomOwner { new_owner } => {
             change_btc_denom_owner(deps.storage, info, new_owner)
         }

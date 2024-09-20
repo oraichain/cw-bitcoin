@@ -180,7 +180,7 @@ async fn relay_recovery(
     }
 }
 
-#[cfg(feature = "mainnet")]
+#[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
 #[tokio::test]
 async fn test_full_flow_happy_case_bitcoin() {
     // Set up app
@@ -1018,7 +1018,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     println!("[BRAVOOO] All testcases passed!");
 }
 
-#[cfg(all(feature = "mainnet", feature = "test-tube"))]
+#[cfg(all(feature = "mainnet", feature = "native-validator"))]
 #[tokio::test]
 #[serial_test::serial]
 async fn test_stargate() {
@@ -1082,7 +1082,7 @@ async fn test_stargate() {
     println!("res {:?}", pubkey);
 }
 
-#[cfg(feature = "mainnet")]
+#[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
 #[tokio::test]
 #[serial_test::serial]
 async fn test_deposit_with_token_fee() {

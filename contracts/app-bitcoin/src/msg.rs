@@ -84,6 +84,14 @@ pub enum ExecuteMsg {
     UpdateCheckpointConfig {
         config: CheckpointConfig,
     },
+    #[cfg(feature = "native-validator")]
+    RegisterValidator {},
+    #[cfg(not(feature = "native-validator"))]
+    AddValidators {
+        addrs: Vec<String>,
+        voting_powers: Vec<u64>,
+        consensus_keys: Vec<ConsensusKey>,
+    },
     RelayDeposit {
         btc_tx: Adapter<Transaction>,
         btc_height: u32,
@@ -113,16 +121,10 @@ pub enum ExecuteMsg {
     SetSignatoryKey {
         xpub: WrappedBinary<Xpub>,
     },
-    AddValidators {
-        addrs: Vec<String>,
-        voting_powers: Vec<u64>,
-        consensus_keys: Vec<ConsensusKey>,
-    },
     RegisterDenom {
         subdenom: String,
         metadata: Option<Metadata>,
     },
-    RegisterValidator {},
     ChangeBtcDenomOwner {
         new_owner: String,
     },
