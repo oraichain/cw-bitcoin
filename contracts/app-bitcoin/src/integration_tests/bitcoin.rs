@@ -1069,8 +1069,13 @@ fn test_stargate() {
             &msg::QueryMsg::StakingValidator { val_addr },
         )
         .unwrap();
-
-    println!("res {:?}", consensus_pubkey);
+    let pubkey: Vec<u8> = consensus_pubkey
+        .value
+        .into_iter()
+        .skip(1)
+        .take(32)
+        .collect();
+    println!("res {:?}-{}", pubkey, pubkey.len());
 }
 
 #[cfg(feature = "mainnet")]

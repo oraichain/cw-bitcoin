@@ -33,6 +33,7 @@ pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractRes
         .encode_to_vec()
         .into(),
     })?;
+
     let buf = api.raw_query(&bin_request).unwrap().unwrap();
     let validator_response = QueryValidatorResponse::decode(buf.as_slice()).unwrap();
     let validator = validator_response.validator.unwrap();
