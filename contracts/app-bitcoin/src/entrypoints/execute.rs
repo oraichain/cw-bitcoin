@@ -25,6 +25,7 @@ use cosmwasm_std::{
     Storage, Uint128, WasmMsg,
 };
 use oraiswap::asset::AssetInfo;
+use std::convert::TryInto;
 use token_bindings::Metadata;
 
 pub fn update_config(
@@ -276,8 +277,11 @@ pub fn register_validator(
         .consensus_pubkey
         .unwrap()
         .value
+        .rchunks(32)
+        .next()
+        .unwrap()
         .try_into()
-        .expect("Consensus keys must have only 32 elements");
+        .expect("Failed to convert &[u8] to [u8; 32]");
     let voting_power: u64 = validator.tokens.parse().expect("Cannot parse voting power");
     SIGNERS.save(store, sender.as_str(), &cons_key)?;
     VALIDATORS.save(

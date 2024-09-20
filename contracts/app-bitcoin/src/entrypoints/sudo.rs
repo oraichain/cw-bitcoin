@@ -1,7 +1,8 @@
 use crate::{
     app::Bitcoin,
+    constants::VALIDATOR_ADDRESS_PREFIX,
     fee::process_deduct_fee,
-    helper::fetch_staking_validator,
+    helper::{convert_addr_by_prefix, fetch_staking_validator},
     state::{BLOCK_HASHES, CONFIG, SIGNERS, VALIDATORS},
 };
 use common_bitcoin::{
@@ -93,8 +94,11 @@ pub fn clock_end_block(
     {
         for signer in signer_addrs.iter() {
             let (addr, cons_key) = signer;
-            let binary_validator_result =
-                fetch_staking_validator(querier, String::from_utf8(addr.clone()).unwrap())?;
+            let val_addr = convert_addr_by_prefix(
+                String::from_utf8(addr.clone()).unwrap().as_str(),
+                VALIDATOR_ADDRESS_PREFIX,
+            );
+            let binary_validator_result = fetch_staking_validator(querier, val_addr)?;
             let validator_response =
                 QueryValidatorResponse::decode(binary_validator_result.as_slice()).unwrap();
             let validator_info = validator_response.validator;
