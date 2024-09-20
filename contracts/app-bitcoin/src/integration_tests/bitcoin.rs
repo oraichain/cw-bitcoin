@@ -1024,6 +1024,7 @@ fn test_stargate() {
     // Set up app
 
     use cosmwasm_testing_util::test_tube::Account;
+    use prost::Message;
 
     let (mut app, accounts) = MockApp::new(&[
         ("perfogic", &coins(100_000_000_000, "orai")),
@@ -1059,17 +1060,17 @@ fn test_stargate() {
 
     let val_addr = app
         .inner()
-        .setup_validator(&coins(100_000_000_000, "orai"))
+        .setup_validator_with_secret(&coins(100_000_000_000, "orai"), "val1")
         .unwrap();
 
-    let data: String = app
+    let consensus_pubkey: ibc_proto::google::protobuf::Any = app
         .query(
             bitcoin_bridge_addr.clone(),
             &msg::QueryMsg::StakingValidator { val_addr },
         )
         .unwrap();
 
-    println!("res {:?}", data);
+    println!("res {:?}", consensus_pubkey);
 }
 
 #[cfg(feature = "mainnet")]

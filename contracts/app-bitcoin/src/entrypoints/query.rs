@@ -17,11 +17,14 @@ use common_bitcoin::{
     xpub::Xpub,
 };
 use cosmwasm_std::{to_json_vec, Addr, Empty, Env, QuerierWrapper, QueryRequest, Storage};
-use ibc_proto::cosmos::staking::v1beta1::{QueryValidatorRequest, QueryValidatorResponse};
+use ibc_proto::{
+    cosmos::staking::v1beta1::{QueryValidatorRequest, QueryValidatorResponse},
+    google::protobuf::Any,
+};
 use prost::Message;
 use std::str::FromStr;
 
-pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractResult<String> {
+pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractResult<Any> {
     let bin_request = to_json_vec(&QueryRequest::<Empty>::Stargate {
         path: "/cosmos.staking.v1beta1.Query/Validator".to_string(),
         data: QueryValidatorRequest {
@@ -33,7 +36,7 @@ pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractRes
     let buf = api.raw_query(&bin_request).unwrap().unwrap();
     let validator_response = QueryValidatorResponse::decode(buf.as_slice()).unwrap();
     let validator = validator_response.validator.unwrap();
-    Ok(validator.tokens)
+    Ok(validator.consensus_pubkey.unwrap())
 }
 
 pub fn query_config(store: &dyn Storage) -> ContractResult<ConfigResponse> {

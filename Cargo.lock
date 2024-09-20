@@ -742,7 +742,7 @@ dependencies = [
 [[package]]
 name = "cosmwasm-testing-util"
 version = "0.1.0"
-source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=8363328#8363328393b754b68e6f464e3c89d6eef6d7fd2b"
+source = "git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=b5705fb#b5705fb494a16bda000ac3627f6d828df8ca0d14"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -994,7 +994,7 @@ dependencies = [
  "common-bitcoin",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=8363328)",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=b5705fb)",
  "cw-light-client-bitcoin",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
@@ -1027,7 +1027,7 @@ dependencies = [
  "common-bitcoin",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=8363328)",
+ "cosmwasm-testing-util 0.1.0 (git+https://github.com/oraichain/cosmwasm-testing-util.git?rev=b5705fb)",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.2",
  "derive_more",
@@ -2056,7 +2056,9 @@ dependencies = [
  "anyhow",
  "bytes",
  "hex",
+ "informalsystems-pbjson",
  "prost 0.11.9",
+ "serde",
 ]
 
 [[package]]
@@ -2110,6 +2112,16 @@ checksum = "93ead53efc7ea8ed3cfb0c79fc8023fbb782a5432b52830b6518941cebe6505c"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.5",
+]
+
+[[package]]
+name = "informalsystems-pbjson"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4eecd90f87bea412eac91c6ef94f6b1e390128290898cbe14f2b926787ae1fb"
+dependencies = [
+ "base64 0.13.1",
+ "serde",
 ]
 
 [[package]]
@@ -2537,7 +2549,7 @@ checksum = "e2355d85b9a3786f481747ced0e0ff2ba35213a1f9bd406ed906554d7af805a1"
 [[package]]
 name = "osmosis-test-tube"
 version = "19.2.0"
-source = "git+https://github.com/oraichain/test-tube.git?rev=389f69c#389f69ceac1f8cf4be65fa376d45b7d9380ce2d7"
+source = "git+https://github.com/oraichain/test-tube.git?rev=c79b54a#c79b54a68390a6965b44090e58387cd1003d9c36"
 dependencies = [
  "base64 0.13.1",
  "bindgen",
@@ -3883,7 +3895,7 @@ dependencies = [
 [[package]]
 name = "test-tube"
 version = "0.1.7"
-source = "git+https://github.com/oraichain/test-tube.git?rev=389f69c#389f69ceac1f8cf4be65fa376d45b7d9380ce2d7"
+source = "git+https://github.com/oraichain/test-tube.git?rev=c79b54a#c79b54a68390a6965b44090e58387cd1003d9c36"
 dependencies = [
  "base64 0.13.1",
  "cosmrs",
