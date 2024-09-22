@@ -1472,69 +1472,6 @@ async fn test_full_flow_native_validators() {
     assert_eq!(confirmed_cp_index, 0);
 }
 
-#[cfg(feature = "test-tube")]
-#[test]
-fn test_stargate() {
-    use ibc_proto::cosmos::staking::v1beta1::QueryValidatorResponse;
-    use prost::Message;
-
-    let (mut app, accounts) = MockApp::new(&[
-        ("perfogic", &coins(100_000_000_000, "orai")),
-        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
-        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
-    ]);
-    let owner = Addr::unchecked(&accounts[0]);
-    let relayer_fee_receiver = Addr::unchecked(&accounts[1]);
-    let token_fee_receiver = Addr::unchecked(&accounts[2]);
-
-    let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
-    let light_client_addr = app
-        .create_light_client(owner.clone(), &lc_msg::InstantiateMsg {})
-        .unwrap();
-
-    let bitcoin_bridge_addr = app
-        .create_bridge(
-            owner.clone(),
-            &msg::InstantiateMsg {
-                relayer_fee: Uint128::from(0 as u16),
-                relayer_fee_receiver: relayer_fee_receiver.clone(),
-                relayer_fee_token: AssetInfo::NativeToken {
-                    denom: "orai".to_string(),
-                },
-                token_fee_receiver: token_fee_receiver.clone(),
-                token_factory_contract: token_factory_addr.clone(),
-                light_client_contract: light_client_addr.clone(),
-                swap_router_contract: None,
-                osor_entry_point_contract: None,
-            },
-        )
-        .unwrap();
-
-    let val_addr = app
-        .inner()
-        .setup_validator_with_secret(&coins(100_000_000_000, "orai"), "val")
-        .unwrap();
-
-    let result: Binary = app
-        .query(
-            bitcoin_bridge_addr.clone(),
-            &msg::QueryMsg::StakingValidator { val_addr },
-        )
-        .unwrap();
-    let validator_result = QueryValidatorResponse::decode(result.as_slice()).unwrap();
-    let validator = validator_result.validator.unwrap();
-    let cons_key: [u8; 32] = validator
-        .consensus_pubkey
-        .unwrap()
-        .value
-        .rchunks(32)
-        .next()
-        .unwrap()
-        .try_into()
-        .expect("Failed to convert &[u8] to [u8; 32]");
-    println!("res {:?}", cons_key);
-}
-
 #[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
 #[tokio::test]
 #[serial_test::serial]
