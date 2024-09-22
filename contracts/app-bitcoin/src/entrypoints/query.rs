@@ -1,6 +1,7 @@
 use crate::{
     app::{Bitcoin, ConsensusKey},
     checkpoint::{Checkpoint, CheckpointQueue, CheckpointStatus},
+    helper::fetch_staking_validator,
     interface::{BitcoinConfig, ChangeRates, CheckpointConfig},
     msg::ConfigResponse,
     recovery::{RecoveryTxs, SignedRecoveryTx},
@@ -16,22 +17,25 @@ use common_bitcoin::{
     error::{ContractError, ContractResult},
     xpub::Xpub,
 };
-use cosmwasm_std::{to_json_vec, Addr, Binary, Empty, Env, QuerierWrapper, QueryRequest, Storage};
-use ibc_proto::cosmos::staking::v1beta1::QueryValidatorRequest;
+use cosmwasm_std::{Addr, Env, QuerierWrapper, Storage};
+use ibc_proto::cosmos::staking::v1beta1::{BondStatus, QueryValidatorResponse};
 use prost::Message;
 use std::str::FromStr;
 
-pub fn query_staking_validator(api: QuerierWrapper, addr: String) -> ContractResult<Binary> {
-    let bin_request = to_json_vec(&QueryRequest::<Empty>::Stargate {
-        path: "/cosmos.staking.v1beta1.Query/Validator".to_string(),
-        data: QueryValidatorRequest {
-            validator_addr: addr,
-        }
-        .encode_to_vec()
-        .into(),
-    })?;
-    let buf = api.raw_query(&bin_request).unwrap().unwrap();
-    Ok(buf)
+pub fn query_check_eligible_validator(
+    querier: QuerierWrapper,
+    val_addr: String,
+) -> ContractResult<bool> {
+    let binary_result = fetch_staking_validator(&querier, val_addr).unwrap();
+    let validator_result = QueryValidatorResponse::decode(binary_result.as_slice()).unwrap();
+    if validator_result.validator.is_none() {
+        return Ok(false);
+    }
+    let validator = validator_result.validator.unwrap();
+    if validator.jailed || validator.status != BondStatus::Bonded as i32 {
+        return Ok(false);
+    }
+    Ok(true)
 }
 
 pub fn query_config(store: &dyn Storage) -> ContractResult<ConfigResponse> {
