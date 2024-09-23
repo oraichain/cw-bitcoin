@@ -160,15 +160,15 @@ pub fn withdraw_to_bitcoin(
             btc.add_withdrawal(store, Adapter::new(script_pubkey.clone()), amount)?;
 
             // burn here
-            cosmos_msgs.push(WasmMsg::Execute {
-                contract_addr: config.token_factory_contract.clone().into_string(),
-                msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::BurnTokens {
+            cosmos_msgs.push(wasm_execute(
+                config.token_factory_contract.as_str(),
+                &tokenfactory::msg::ExecuteMsg::BurnTokens {
                     amount,
                     denom: fund.denom,
                     burn_from_address: env.contract.address.to_string(),
-                })?,
-                funds: vec![],
-            });
+                },
+                vec![],
+            )?);
         }
     }
 

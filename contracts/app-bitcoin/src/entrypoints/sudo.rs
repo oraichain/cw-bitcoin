@@ -10,8 +10,7 @@ use common_bitcoin::{
     msg::BondStatus,
 };
 use cosmwasm_std::{
-    to_json_binary, Api, Binary, Coin, CosmosMsg, Env, Order, QuerierWrapper, Response, Storage,
-    Uint128, WasmMsg,
+    wasm_execute, Api, Binary, Coin, Env, Order, QuerierWrapper, Response, Storage, Uint128,
 };
 use ibc_proto::cosmos::staking::v1beta1::QueryValidatorResponse;
 use prost::Message;
@@ -49,32 +48,38 @@ pub fn clock_end_block(
                     amount: fee_data.deducted_amount,
                 },
                 env.contract.address.clone(),
-                token_factory.clone(),
+                token_factory.as_str(),
                 osor_entry_point_contract.clone(),
             );
 
             if fee_data.relayer_fee.amount.gt(&Uint128::zero()) {
-                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: token_factory.to_string(),
-                    msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                        denom: denom.clone(),
-                        amount: fee_data.relayer_fee.amount,
-                        mint_to_address: config.relayer_fee_receiver.to_string(),
-                    })?,
-                    funds: vec![],
-                }));
+                msgs.push(
+                    wasm_execute(
+                        token_factory.as_str(),
+                        &tokenfactory::msg::ExecuteMsg::MintTokens {
+                            denom: denom.clone(),
+                            amount: fee_data.relayer_fee.amount,
+                            mint_to_address: config.relayer_fee_receiver.to_string(),
+                        },
+                        vec![],
+                    )?
+                    .into(),
+                );
             }
 
             if fee_data.token_fee.amount.gt(&Uint128::zero()) {
-                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: token_factory.to_string(),
-                    msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                        denom: denom.clone(),
-                        amount: fee_data.token_fee.amount,
-                        mint_to_address: config.token_fee_receiver.to_string(),
-                    })?,
-                    funds: vec![],
-                }));
+                msgs.push(
+                    wasm_execute(
+                        token_factory.as_str(),
+                        &tokenfactory::msg::ExecuteMsg::MintTokens {
+                            denom: denom.clone(),
+                            amount: fee_data.token_fee.amount,
+                            mint_to_address: config.token_fee_receiver.to_string(),
+                        },
+                        vec![],
+                    )?
+                    .into(),
+                );
             }
         }
     }

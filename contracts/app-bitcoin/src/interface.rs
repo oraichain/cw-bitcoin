@@ -3,9 +3,7 @@ use cosmwasm_schema::{
     schemars::JsonSchema,
     serde::{Deserialize, Serialize},
 };
-use cosmwasm_std::{
-    to_json_binary, to_json_vec, Addr, Binary, Coin, CosmosMsg, Env, Uint128, WasmMsg,
-};
+use cosmwasm_std::{to_json_vec, wasm_execute, Addr, Binary, Coin, CosmosMsg, Env, Uint128};
 use oraiswap::universal_swap_memo::{
     memo::{IbcTransfer, PostAction},
     Memo,
@@ -68,34 +66,40 @@ impl Dest {
         msgs: &mut Vec<CosmosMsg>,
         coin: Coin,
         bitcoin_bridge_addr: Addr,
-        token_factory_addr: Addr,
+        token_factory_addr: &str,
         osor_api_contract: Option<Addr>,
     ) {
         match self {
             Self::Address(addr) => {
-                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: token_factory_addr.to_string(),
-                    msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                        denom: coin.denom.to_owned(),
-                        amount: coin.amount,
-                        mint_to_address: addr.to_string(),
-                    })
-                    .unwrap(),
-                    funds: vec![],
-                }));
+                msgs.push(
+                    wasm_execute(
+                        token_factory_addr,
+                        &tokenfactory::msg::ExecuteMsg::MintTokens {
+                            denom: coin.denom.to_owned(),
+                            amount: coin.amount,
+                            mint_to_address: addr.to_string(),
+                        },
+                        vec![],
+                    )
+                    .unwrap()
+                    .into(),
+                );
             }
             Self::Ibc(dest) => {
                 if osor_api_contract.is_none() || dest.timeout_timestamp < env.block.time.nanos() {
-                    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                        contract_addr: token_factory_addr.to_string(),
-                        msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                            denom: coin.denom.to_owned(),
-                            amount: coin.amount,
-                            mint_to_address: dest.sender.to_string(),
-                        })
-                        .unwrap(),
-                        funds: vec![],
-                    }));
+                    msgs.push(
+                        wasm_execute(
+                            token_factory_addr,
+                            &tokenfactory::msg::ExecuteMsg::MintTokens {
+                                denom: coin.denom.to_owned(),
+                                amount: coin.amount,
+                                mint_to_address: dest.sender.to_string(),
+                            },
+                            vec![],
+                        )
+                        .unwrap()
+                        .into(),
+                    );
                     return;
                 }
 
@@ -127,21 +131,28 @@ impl Dest {
 
                 // Create stargate message from osmosis ibc transfer message
 
-                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: token_factory_addr.to_string(),
-                    msg: to_json_binary(&tokenfactory::msg::ExecuteMsg::MintTokens {
-                        denom: coin.denom.to_owned(),
-                        amount: coin.amount,
-                        mint_to_address: bitcoin_bridge_addr.to_string(),
-                    })
-                    .unwrap(),
-                    funds: vec![],
-                }));
-                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: osor_api_contract.unwrap().to_string(),
-                    msg: to_json_binary(&UniversalSwap { memo: str_memo }).unwrap(),
-                    funds: vec![coin],
-                }));
+                msgs.push(
+                    wasm_execute(
+                        token_factory_addr,
+                        &tokenfactory::msg::ExecuteMsg::MintTokens {
+                            denom: coin.denom.to_owned(),
+                            amount: coin.amount,
+                            mint_to_address: bitcoin_bridge_addr.to_string(),
+                        },
+                        vec![],
+                    )
+                    .unwrap()
+                    .into(),
+                );
+                msgs.push(
+                    wasm_execute(
+                        osor_api_contract.unwrap(),
+                        &UniversalSwap { memo: str_memo },
+                        vec![coin],
+                    )
+                    .unwrap()
+                    .into(),
+                );
             }
         };
     }
