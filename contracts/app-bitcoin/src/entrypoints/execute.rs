@@ -9,7 +9,7 @@ use crate::{
     },
     threshold_sig::Signature,
 };
-use bech32::Bech32;
+
 use bitcoin::{util::merkleblock::PartialMerkleTree, Transaction};
 use common_bitcoin::{
     adapter::{Adapter, WrappedBinary},
@@ -21,8 +21,7 @@ use prost::Message;
 use std::str::FromStr;
 
 use cosmwasm_std::{
-    to_json_binary, wasm_execute, Addr, Api, Binary, Env, MessageInfo, QuerierWrapper, Response,
-    Storage, Uint128, WasmMsg,
+    wasm_execute, Addr, Api, Binary, Env, MessageInfo, QuerierWrapper, Response, Storage, Uint128,
 };
 use oraiswap::asset::AssetInfo;
 use std::convert::TryInto;
