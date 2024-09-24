@@ -52,7 +52,7 @@ pub fn clock_end_block(
                 osor_entry_point_contract.clone(),
             );
 
-            if fee_data.relayer_fee.amount.gt(&Uint128::zero()) {
+            if !fee_data.relayer_fee.amount.is_zero() {
                 msgs.push(
                     wasm_execute(
                         token_factory.as_str(),
@@ -67,7 +67,7 @@ pub fn clock_end_block(
                 );
             }
 
-            if fee_data.token_fee.amount.gt(&Uint128::zero()) {
+            if !fee_data.token_fee.amount.is_zero() {
                 msgs.push(
                     wasm_execute(
                         token_factory.as_str(),
