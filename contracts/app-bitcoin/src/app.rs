@@ -22,7 +22,7 @@ use common_bitcoin::{
     xpub::Xpub,
 };
 use cosmwasm_schema::serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
+use cosmwasm_std::{Addr, Api, Coin, Env, Order, QuerierWrapper, Storage, Uint128};
 use ibc_proto::cosmos::staking::v1beta1::QueryValidatorResponse;
 use prost::Message;
 
@@ -398,6 +398,7 @@ impl Bitcoin {
         store: &mut dyn Storage,
         script_pubkey: Adapter<Script>,
         mut amount: Uint128,
+        fee: Option<u64>,
     ) -> ContractResult<()> {
         let config = self.config(store)?;
         if script_pubkey.len() as u64 > config.max_withdrawal_script_length {
@@ -413,11 +414,12 @@ impl Bitcoin {
             )));
         }
 
-        let fee_amount = self.calc_minimum_withdrawal_fees(
+        let calc_fee_amount = self.calc_minimum_withdrawal_fees(
             store,
             script_pubkey.len() as u64,
             self.checkpoints.building(store)?.fee_rate,
         )?;
+        let fee_amount = std::cmp::max(calc_fee_amount, fee.unwrap_or(0));
         let fee = fee_amount.into();
         amount = amount.checked_sub(fee).map_err(|_| {
             ContractError::App("Withdrawal is too small to pay its miner fee".to_string())

@@ -16,7 +16,7 @@ use bitcoin::{secp256k1::Secp256k1, util::bip32::ExtendedPrivKey, OutPoint, Txid
 use common_bitcoin::adapter::Adapter;
 use common_bitcoin::error::ContractResult;
 use common_bitcoin::xpub::Xpub;
-use cosmwasm_std::testing::{mock_dependencies, MockQuerier};
+use cosmwasm_std::testing::{mock_dependencies, MockApi, MockQuerier};
 use cosmwasm_std::{
     from_json, to_json_binary, Addr, Api, Coin, DepsMut, Empty, Env, QuerierResult, QuerierWrapper,
     Storage, SystemError, SystemResult, Uint128, WasmQuery,
@@ -147,6 +147,7 @@ fn check_change_rates() -> ContractResult<()> {
             store,
             Adapter::new(Script::new()),
             459_459_927_000_000u128.into(),
+            None,
         )?;
 
         let mut building_mut = btc.checkpoints.building(store)?;

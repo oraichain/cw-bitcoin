@@ -110,9 +110,15 @@ pub fn execute(
             btc_proof,
             cp_index,
         } => relay_checkpoint(&deps.querier, deps.storage, btc_height, btc_proof, cp_index),
-        ExecuteMsg::WithdrawToBitcoin { btc_address } => {
-            withdraw_to_bitcoin(deps.storage, info, env, btc_address)
-        }
+        ExecuteMsg::WithdrawToBitcoin { btc_address, fee } => withdraw_to_bitcoin(
+            deps.storage,
+            &deps.querier,
+            deps.api,
+            info,
+            env,
+            btc_address,
+            fee,
+        ),
         ExecuteMsg::UpdateBitcoinConfig { config } => {
             update_bitcoin_config(deps.storage, info, config)
         }
