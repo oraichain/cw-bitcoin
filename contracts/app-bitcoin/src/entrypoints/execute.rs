@@ -1,6 +1,7 @@
 use crate::{
     app::{Bitcoin, ConsensusKey},
     constants::VALIDATOR_ADDRESS_PREFIX,
+    fee::process_deduct_fee,
     helper::{convert_addr_by_prefix, fetch_staking_validator},
     interface::{BitcoinConfig, CheckpointConfig, Dest},
     state::{
@@ -21,7 +22,8 @@ use prost::Message;
 use std::str::FromStr;
 
 use cosmwasm_std::{
-    wasm_execute, Addr, Api, Binary, Env, MessageInfo, QuerierWrapper, Response, Storage, Uint128,
+    wasm_execute, Addr, Api, BankMsg, Binary, CosmosMsg, Env, MessageInfo, QuerierWrapper,
+    Response, Storage, Uint128,
 };
 use oraiswap::asset::AssetInfo;
 use std::convert::TryInto;
@@ -140,34 +142,67 @@ pub fn relay_deposit(
 
 pub fn withdraw_to_bitcoin(
     store: &mut dyn Storage,
+    querier: &QuerierWrapper,
+    api: &dyn Api,
     info: MessageInfo,
     env: Env,
     btc_address: String,
+    fee: Option<u64>,
 ) -> ContractResult<Response> {
     let mut btc = Bitcoin::default();
-
-    let mut cosmos_msgs = vec![];
+    let mut cosmos_msgs: Vec<CosmosMsg> = vec![];
 
     let config = CONFIG.load(store)?;
     let denom = get_full_btc_denom(config.token_factory_contract.as_str());
     let script_pubkey = bitcoin::Address::from_str(btc_address.as_str())
         .map_err(|err| ContractError::App(err.to_string()))?
         .script_pubkey();
+
     for fund in info.funds {
         if fund.denom == denom {
-            let amount = fund.amount;
-            btc.add_withdrawal(store, Adapter::new(script_pubkey.clone()), amount)?;
+            let fee_data = process_deduct_fee(store, querier, api, fund.clone())?;
+            btc.add_withdrawal(
+                store,
+                Adapter::new(script_pubkey.clone()),
+                fee_data.deducted_amount,
+                fee,
+            )?;
 
             // burn here
-            cosmos_msgs.push(wasm_execute(
-                config.token_factory_contract.as_str(),
-                &tokenfactory::msg::ExecuteMsg::BurnTokens {
-                    amount,
-                    denom: fund.denom,
-                    burn_from_address: env.contract.address.to_string(),
-                },
-                vec![],
-            )?);
+            cosmos_msgs.push(
+                wasm_execute(
+                    config.token_factory_contract.as_str(),
+                    &tokenfactory::msg::ExecuteMsg::BurnTokens {
+                        amount: fee_data.deducted_amount,
+                        denom: fund.denom,
+                        burn_from_address: env.contract.address.to_string(),
+                    },
+                    vec![],
+                )?
+                .into(),
+            );
+
+            let relayer_fee = fee_data.relayer_fee;
+            if !relayer_fee.amount.is_zero() {
+                cosmos_msgs.push(
+                    (BankMsg::Send {
+                        to_address: config.relayer_fee_receiver.to_string(),
+                        amount: [relayer_fee].to_vec(),
+                    })
+                    .into(),
+                );
+            }
+
+            let token_fee = fee_data.token_fee;
+            if !token_fee.amount.is_zero() {
+                cosmos_msgs.push(
+                    (BankMsg::Send {
+                        to_address: config.token_fee_receiver.to_string(),
+                        amount: [token_fee].to_vec(),
+                    })
+                    .into(),
+                );
+            }
         }
     }
 

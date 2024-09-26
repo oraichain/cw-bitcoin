@@ -107,6 +107,7 @@ pub enum ExecuteMsg {
     },
     WithdrawToBitcoin {
         btc_address: String,
+        fee: Option<u64>,
     },
     SubmitCheckpointSignature {
         xpub: WrappedBinary<Xpub>,
