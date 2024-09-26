@@ -1,0 +1,39 @@
+[package]
+authors = {workspace = true}
+description = "Common bitcoin bridge types and forward types"
+documentation = {workspace = true}
+edition = {workspace = true}
+homepage = {workspace = true}
+license = {workspace = true}
+name = "common-bitcoin"
+readme = "README.md"
+repository = {workspace = true}
+version = {workspace = true}
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# use library feature to disable all instantiate/execute/query exports
+default = []
+
+[dependencies]
+arrayref = "0.3"
+bitcoin = {workspace = true, features = ["serde"]}
+bitcoin-script = {workspace = true}
+cosmwasm-schema = {workspace = true}
+cosmwasm-std = {workspace = true}
+cw-storage-plus = {workspace = true}
+derive_more = {workspace = true}
+libsecp256k1-core = "0.3.0"
+thiserror = {workspace = true}
+
+[dev-dependencies]
+bitcoincore-rpc-async = {workspace = true}
+bitcoind = {workspace = true}
+serde = {workspace = true}
+serde_json = {workspace = true}
+
+chrono = "0.4.19"
+serial_test = "3.1.1"
