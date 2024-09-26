@@ -196,8 +196,13 @@ impl BitcoinTx {
 
     /// The estimated size of the transaction, including the worst-case sizes of
     /// all input witnesses once fully signed, in virtual bytes.
-    pub fn vsize(&self) -> ContractResult<u64> {
-        Ok(self.to_bitcoin_tx()?.vsize().try_into()?)
+    pub fn est_vsize(&self) -> ContractResult<u64> {
+        let base_vsize = self.to_bitcoin_tx()?.vsize() as u64;
+        let est_witness_vsize = self
+            .input
+            .iter()
+            .fold(0, |sum, input| sum + input.est_witness_vsize);
+        Ok(base_vsize + est_witness_vsize)
     }
 
     /// The hash of the transaction. Note that this will change if any inputs or
@@ -693,9 +698,7 @@ impl Checkpoint {
             + cp.input
                 .iter()
                 .take(config.max_inputs as usize)
-                .try_fold(0, |sum, input| {
-                    Ok::<_, ContractError>(sum + input.est_witness_vsize)
-                })?;
+                .fold(0, |sum, input| sum + input.est_witness_vsize);
 
         Ok(vsize)
     }
@@ -713,7 +716,7 @@ impl Checkpoint {
                     "Cannot get batch checkpoint".into(),
                 ))?;
         let checkpoint_tx = checkpoint_batch
-            .get(0)
+            .first()
             .ok_or(ContractError::Checkpoint("Cannot get checkpoint tx".into()))?;
         for i in 0..(config.max_inputs as usize).min(checkpoint_tx.input.len()) {
             let input = checkpoint_tx.input.get(i).ok_or(ContractError::Checkpoint(
@@ -934,13 +937,11 @@ impl CheckpointQueue {
     }
 
     pub fn first_unhandled_confirmed_index(&self, store: &dyn Storage) -> u32 {
-        let index = FIRST_UNHANDLED_CONFIRMED_INDEX.load(store).unwrap();
-        index
+        FIRST_UNHANDLED_CONFIRMED_INDEX.load(store).unwrap()
     }
 
     pub fn confirmed_index(&self, store: &dyn Storage) -> Option<u32> {
-        let index = CONFIRMED_INDEX.may_load(store).unwrap_or_default();
-        index
+        CONFIRMED_INDEX.may_load(store).unwrap_or_default()
     }
 
     /// Removes all checkpoints from the queue and resets the index to zero.

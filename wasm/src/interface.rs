@@ -65,10 +65,10 @@ pub fn toSourceAddr(dest: Dest) -> String {
 }
 
 #[wasm_bindgen]
-pub fn decodeRawTx(raw_tx: String) -> bitcoin::Transaction {
-    let bytes: Vec<u8> = FromHex::from_hex(&raw_tx).unwrap();
-    let tx = bitcoin::consensus::encode::deserialize(&bytes).unwrap();
-    tx
+pub fn decodeRawTx(raw_tx: String) -> ContractResult<bitcoin::Transaction> {
+    let bytes: Vec<u8> = FromHex::from_hex(&raw_tx)?;
+    let tx = bitcoin::consensus::encode::deserialize(&bytes)?;
+    Ok(tx)
 }
 
 #[wasm_bindgen]

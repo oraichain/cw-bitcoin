@@ -428,11 +428,9 @@ impl HeaderQueue {
     pub fn get_initial_height(&self, store: &dyn Storage) -> ContractResult<u32> {
         match HEADERS.front(store)? {
             Some(inner) => Ok(inner.height()),
-            None => {
-                return Err(ContractError::Header(
-                    "Queue does not contain any headers".into(),
-                ))
-            }
+            None => Err(ContractError::Header(
+                "Queue does not contain any headers".into(),
+            )),
         }
     }
 
