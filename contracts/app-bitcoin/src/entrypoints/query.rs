@@ -1,14 +1,15 @@
 use crate::{
     app::{Bitcoin, ConsensusKey},
     checkpoint::{Checkpoint, CheckpointQueue, CheckpointStatus},
-    helper::fetch_staking_validator,
+    constants::VALIDATOR_ADDRESS_PREFIX,
+    helper::{convert_addr_by_prefix, fetch_staking_validator},
     interface::{BitcoinConfig, ChangeRates, CheckpointConfig},
     msg::ConfigResponse,
     recovery::{RecoveryTxs, SignedRecoveryTx},
     signatory::SignatorySet,
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, OUTPOINTS, SIGNERS, SIG_KEYS,
-        TOKEN_FEE_RATIO,
+        TOKEN_FEE_RATIO, WHITELIST_VALIDATORS,
     },
 };
 use bitcoin::Transaction;
@@ -23,10 +24,19 @@ use prost::Message;
 use std::str::FromStr;
 
 pub fn query_check_eligible_validator(
+    store: &dyn Storage,
     querier: QuerierWrapper,
-    val_addr: String,
+    val_addr: Addr,
 ) -> ContractResult<bool> {
-    let binary_result = fetch_staking_validator(&querier, val_addr).unwrap();
+    let permission = WHITELIST_VALIDATORS.has(store, val_addr.clone());
+    if !permission {
+        return Ok(false);
+    }
+    let binary_result = fetch_staking_validator(
+        &querier,
+        convert_addr_by_prefix(val_addr.as_str(), VALIDATOR_ADDRESS_PREFIX),
+    )
+    .unwrap();
     let validator_result = QueryValidatorResponse::decode(binary_result.as_slice()).unwrap();
     if validator_result.validator.is_none() {
         return Ok(false);

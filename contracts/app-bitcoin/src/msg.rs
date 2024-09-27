@@ -132,6 +132,10 @@ pub enum ExecuteMsg {
     TriggerBeginBlock {
         hash: Binary,
     },
+    SetWhitelistValidator {
+        val_addr: Addr,
+        permission: bool,
+    },
 }
 
 #[cw_serde]
@@ -185,7 +189,7 @@ pub enum QueryMsg {
     #[returns(u64)]
     ValueLocked {},
     #[returns(bool)]
-    CheckEligibleValidator { val_addr: String },
+    CheckEligibleValidator { val_addr: Addr },
 }
 
 #[cw_serde]

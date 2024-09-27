@@ -8,7 +8,7 @@ use crate::{
 };
 use common_bitcoin::{deque::DequeExtension, error::ContractResult, xpub::Xpub};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Order, Storage};
+use cosmwasm_std::{Addr, Order, Storage};
 use cw_storage_plus::{Item, Map};
 
 #[cw_serde]
@@ -60,6 +60,9 @@ pub const TOKEN_FEE_RATIO: Item<Ratio> = Item::new("token_fee_ratio");
 
 /// End block hash mapping, this is just unique hash string
 pub const BLOCK_HASHES: Map<&[u8], ()> = Map::new("block_hashes");
+
+/// Whitelist validators
+pub const WHITELIST_VALIDATORS: Map<Addr, ()> = Map::new("whitelist_native_validators");
 
 pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
     VALIDATORS

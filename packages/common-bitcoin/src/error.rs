@@ -48,6 +48,8 @@ pub enum ContractError {
     Signer(String),
     #[error("unauthorized")]
     Unauthorized {},
+    #[error("Validator is not on whitelisted set")]
+    ValidatorUnwhitelisted {},
     #[error("Validator is on jailed")]
     ValidatorJailed {},
     #[error("Validator does not have consensus keys")]

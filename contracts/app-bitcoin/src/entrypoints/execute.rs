@@ -6,7 +6,7 @@ use crate::{
     interface::{BitcoinConfig, CheckpointConfig, Dest},
     state::{
         get_full_btc_denom, Ratio, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS,
-        TOKEN_FEE_RATIO, VALIDATORS,
+        TOKEN_FEE_RATIO, VALIDATORS, WHITELIST_VALIDATORS,
     },
     threshold_sig::Signature,
 };
@@ -291,6 +291,11 @@ pub fn register_validator(
     querier: &QuerierWrapper,
     info: MessageInfo,
 ) -> ContractResult<Response> {
+    let permission = WHITELIST_VALIDATORS.has(store, info.sender.clone());
+    if !permission {
+        return Err(ContractError::ValidatorUnwhitelisted {});
+    }
+
     let sender = info.sender;
     let val_addr = convert_addr_by_prefix(sender.as_str(), VALIDATOR_ADDRESS_PREFIX);
     let binary_validator_result = fetch_staking_validator(querier, val_addr).unwrap();
@@ -338,7 +343,6 @@ pub fn register_denom(
     metadata: Option<Metadata>,
 ) -> ContractResult<Response> {
     assert_eq!(info.sender, CONFIG.load(store)?.owner);
-
     let config = CONFIG.load(store)?;
     let msg = wasm_execute(
         config.token_factory_contract,
@@ -373,4 +377,25 @@ pub fn change_btc_denom_owner(
     Ok(Response::new()
         .add_message(msg)
         .add_attribute("action", "change_btc_denom_owner"))
+}
+
+pub fn set_whitelist_validator(
+    store: &mut dyn Storage,
+    info: MessageInfo,
+    val_addr: Addr,
+    permission: bool,
+) -> ContractResult<Response> {
+    let config = CONFIG.load(store)?;
+    assert_eq!(info.sender, config.owner);
+    if permission {
+        WHITELIST_VALIDATORS
+            .save(store, val_addr.clone(), &())
+            .unwrap();
+    } else {
+        WHITELIST_VALIDATORS.remove(store, val_addr.clone());
+    }
+    Ok(Response::new()
+        .add_attribute("action", "set_whitelist_validator")
+        .add_attribute("validator_address", val_addr.to_string())
+        .add_attribute("permission", permission.to_string()))
 }
