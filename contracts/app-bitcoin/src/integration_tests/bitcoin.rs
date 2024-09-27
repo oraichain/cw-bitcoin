@@ -1187,6 +1187,19 @@ async fn test_full_flow_native_validators() {
         )
     };
 
+    let set_whitelist_validator =
+        |app: &mut MockApp, val_addr: Addr, permission: bool| -> MockResult<_> {
+            app.execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::SetWhitelistValidator {
+                    val_addr,
+                    permission,
+                },
+                &[],
+            )
+        };
+
     let register_validator = |app: &mut MockApp, sender: Addr| -> MockResult<_> {
         app.execute(
             sender,
@@ -1309,6 +1322,8 @@ async fn test_full_flow_native_validators() {
         ExtendedPubKey::from_priv(&secp, &xprivs[1]),
     ];
 
+    set_whitelist_validator(&mut app, validator_1.clone(), true).unwrap();
+    set_whitelist_validator(&mut app, validator_2.clone(), true).unwrap();
     register_validator(&mut app, validator_1.clone()).unwrap();
     register_validator(&mut app, validator_2.clone()).unwrap();
     set_signatory_key(&mut app, validator_1.clone(), Xpub::new(xpubs[0])).unwrap();

@@ -132,6 +132,10 @@ pub enum ExecuteMsg {
     TriggerBeginBlock {
         hash: Binary,
     },
+    SetWhitelistValidator {
+        val_addr: Addr,
+        permission: bool,
+    },
 }
 
 #[cw_serde]

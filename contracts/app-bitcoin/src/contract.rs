@@ -161,6 +161,10 @@ pub fn execute(
         ExecuteMsg::TriggerBeginBlock { hash } => {
             clock_end_block(&env, deps.storage, &deps.querier, deps.api, hash)
         }
+        ExecuteMsg::SetWhitelistValidator {
+            val_addr,
+            permission,
+        } => set_whitelist_validator(deps.storage, info, val_addr, permission),
     }
 }
 
