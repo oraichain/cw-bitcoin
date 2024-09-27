@@ -291,10 +291,11 @@ pub fn register_validator(
     querier: &QuerierWrapper,
     info: MessageInfo,
 ) -> ContractResult<Response> {
-    let permission = WHITELIST_VALIDATORS.load(store, info.sender.clone())?;
+    let permission = WHITELIST_VALIDATORS.has(store, info.sender.clone());
     if !permission {
         return Err(ContractError::ValidatorUnwhitelisted {});
     }
+
     let sender = info.sender;
     let val_addr = convert_addr_by_prefix(sender.as_str(), VALIDATOR_ADDRESS_PREFIX);
     let binary_validator_result = fetch_staking_validator(querier, val_addr).unwrap();
@@ -386,9 +387,13 @@ pub fn set_whitelist_validator(
 ) -> ContractResult<Response> {
     let config = CONFIG.load(store)?;
     assert_eq!(info.sender, config.owner);
-    WHITELIST_VALIDATORS
-        .save(store, val_addr.clone(), &permission)
-        .unwrap();
+    if permission {
+        WHITELIST_VALIDATORS
+            .save(store, val_addr.clone(), &())
+            .unwrap();
+    } else {
+        WHITELIST_VALIDATORS.remove(store, val_addr.clone());
+    }
     Ok(Response::new()
         .add_attribute("action", "set_whitelist_validator")
         .add_attribute("validator_address", val_addr.to_string())

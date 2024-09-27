@@ -62,7 +62,7 @@ pub const TOKEN_FEE_RATIO: Item<Ratio> = Item::new("token_fee_ratio");
 pub const BLOCK_HASHES: Map<&[u8], ()> = Map::new("block_hashes");
 
 /// Whitelist validators
-pub const WHITELIST_VALIDATORS: Map<Addr, bool> = Map::new("whitelist_native_validators");
+pub const WHITELIST_VALIDATORS: Map<Addr, ()> = Map::new("whitelist_native_validators");
 
 pub fn get_validators(store: &dyn Storage) -> ContractResult<Vec<Validator>> {
     VALIDATORS
