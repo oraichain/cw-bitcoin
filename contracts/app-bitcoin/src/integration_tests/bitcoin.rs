@@ -1488,6 +1488,90 @@ async fn test_full_flow_native_validators() {
     assert_eq!(confirmed_cp_index, 0);
 }
 
+#[cfg(all(feature = "mainnet", feature = "native-validator"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn test_check_eligible_validator() {
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000, "orai")),
+        ("alice", &coins(100_000_000_000, "orai")),
+        ("bob", &coins(100_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("receiver", &coins(100_000_000_000, "orai")),
+    ]);
+    let owner = Addr::unchecked(&accounts[0]);
+    let validator_1 = Addr::unchecked(&accounts[1]);
+    let validator_2 = Addr::unchecked(&accounts[2]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[3]);
+    let token_fee_receiver = Addr::unchecked(&accounts[4]);
+    let _ = app
+        .inner()
+        .setup_validator_with_secret(&coins(13_000_000_000, "orai"), "alice")
+        .unwrap();
+    let _ = app
+        .inner()
+        .setup_validator_with_secret(&coins(15_000_000_000, "orai"), "bob")
+        .unwrap();
+
+    let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
+    let light_client_addr = app
+        .create_light_client(owner.clone(), &lc_msg::InstantiateMsg {})
+        .unwrap();
+
+    let bitcoin_bridge_addr = app
+        .create_bridge(
+            owner.clone(),
+            &msg::InstantiateMsg {
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: token_fee_receiver.clone(),
+                token_factory_contract: token_factory_addr.clone(),
+                light_client_contract: light_client_addr.clone(),
+                swap_router_contract: None,
+                osor_entry_point_contract: None,
+            },
+        )
+        .unwrap();
+
+    let set_whitelist_validator =
+        |app: &mut MockApp, val_addr: Addr, permission: bool| -> MockResult<_> {
+            app.execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::SetWhitelistValidator {
+                    val_addr,
+                    permission,
+                },
+                &[],
+            )
+        };
+
+    set_whitelist_validator(&mut app, validator_1.clone(), true).unwrap();
+    let is_eligible: bool = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckEligibleValidator {
+                val_addr: validator_1.clone(),
+            },
+        )
+        .unwrap();
+    assert_eq!(is_eligible, true);
+
+    let is_eligible: bool = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckEligibleValidator {
+                val_addr: validator_2.clone(),
+            },
+        )
+        .unwrap();
+    assert_eq!(is_eligible, false);
+}
+
 #[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
 #[tokio::test]
 #[serial_test::serial]

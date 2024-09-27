@@ -227,6 +227,7 @@ fn reorg() {
 }
 
 #[test]
+#[serial_test::serial]
 fn reorg_competing_chain_similar() {
     // Set up app
     let (mut app, accounts) = MockApp::new(&[("perfogic", &coins(100_000_000_000, "orai"))]);
@@ -362,6 +363,7 @@ fn reorg_competing_chain_similar() {
 }
 
 #[test]
+#[serial_test::serial]
 fn reorg_deep() {
     // Set up app
     let (mut app, accounts) = MockApp::new(&[("perfogic", &coins(100_000_000_000, "orai"))]);

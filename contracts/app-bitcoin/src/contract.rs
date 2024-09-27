@@ -225,9 +225,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             to_json_binary(&query_change_rates(deps.storage, _env, interval)?)
         }
         QueryMsg::ValueLocked {} => to_json_binary(&query_value_locked(deps.storage)?),
-        QueryMsg::CheckEligibleValidator { val_addr } => {
-            to_json_binary(&query_check_eligible_validator(deps.querier, val_addr)?)
-        }
+        QueryMsg::CheckEligibleValidator { val_addr } => to_json_binary(
+            &query_check_eligible_validator(deps.storage, deps.querier, val_addr)?,
+        ),
     }
 }
 
