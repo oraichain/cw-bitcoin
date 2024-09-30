@@ -83,8 +83,8 @@ pub fn execute(
             relayer_fee,
             token_fee,
             light_client_contract,
-            token_factory_contract,
             swap_router_contract,
+            token_factory_contract,
             osor_entry_point_contract,
         ),
         ExecuteMsg::RelayDeposit {
