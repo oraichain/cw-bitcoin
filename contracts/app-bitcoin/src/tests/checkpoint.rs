@@ -12,6 +12,26 @@ use crate::{
 use common_bitcoin::error::ContractResult;
 
 #[test]
+fn test_with_real_data() -> Result<(), common_bitcoin::error::ContractError> {
+    let mut deps = mock_dependencies();
+    static JSON: &[u8] = include_bytes!("testdata/checkpoints.json");
+    let checkpoints: Vec<Checkpoint> = serde_json::from_slice(JSON).unwrap();
+    let mut checkpoint_queue = CheckpointQueue::default();
+    checkpoint_queue.reset(&mut deps.storage).unwrap();
+    for cp in checkpoints {
+        CHECKPOINTS.push_back(&mut deps.storage, &cp).unwrap();
+    }
+    BUILDING_INDEX.save(&mut deps.storage, &19).unwrap();
+
+    let cp_19 = checkpoint_queue.get(&deps.storage, 19).unwrap();
+    println!("Before: {:?}", cp_19);
+    checkpoint_queue.prune(&mut deps.storage).unwrap();
+    let cp_19 = checkpoint_queue.get(&deps.storage, 19).unwrap();
+    println!("After: {:?}", cp_19);
+    Ok(())
+}
+
+#[test]
 fn deduct_fee() {
     let mut bitcoin_tx = BitcoinTx::default();
     push_bitcoin_tx_output(&mut bitcoin_tx, 0);

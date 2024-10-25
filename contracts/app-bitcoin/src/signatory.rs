@@ -364,6 +364,7 @@ impl SignatorySet {
         let signatory = iter.next().ok_or_else(|| {
             ContractError::App("Cannot create redeem script for empty signatory set".to_string())
         })?;
+        
         let truncated_voting_power = signatory.voting_power >> truncation;
         // Push the pubkey onto the stack, check the signature against it, and
         // leave the voting power on the stack if the signature was valid,

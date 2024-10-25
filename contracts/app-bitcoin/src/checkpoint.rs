@@ -961,6 +961,7 @@ impl CheckpointQueue {
         let checkpoint = CHECKPOINTS.get(store, index)?.unwrap();
         Ok(checkpoint)
     }
+    // 14
 
     pub fn set(
         &self,
@@ -1202,7 +1203,7 @@ impl CheckpointQueue {
             return Ok(false);
         }
 
-        self.prune(store)?;
+        self.prune(store).unwrap();
 
         if self.index(store) > 0 {
             let prev_index = self.index(store) - 1;
