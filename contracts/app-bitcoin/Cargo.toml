@@ -36,7 +36,6 @@ derive_more = {workspace = true}
 ibc-proto = {workspace = true}
 libsecp256k1-core = "0.3.0"
 light-client-bitcoin = {workspace = true}
-miniserde = {version = "0.1.40"}
 oraiswap = {workspace = true}
 prost = {workspace = true}
 sha2 = {workspace = true}
