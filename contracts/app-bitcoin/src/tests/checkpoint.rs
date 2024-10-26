@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use bitcoin::util::bip32::ExtendedPubKey;
 use cosmwasm_std::{testing::mock_dependencies, Binary, Storage};
 
@@ -156,10 +154,16 @@ fn test_with_real_data() -> Result<(), common_bitcoin::error::ContractError> {
             &bitcoin_config,
         )
         .unwrap();
+    assert_eq!(maybe_step, true);
+    let queue_len = CHECKPOINTS.len(&deps.storage).unwrap();
+    println!("queue_len: {}", queue_len);
+    println!("[======================CHECKPOINT_QUEUE=======================]");
     let cp_19 = checkpoint_queue.get(&deps.storage, 19).unwrap();
     assert_eq!(cp_19.status, CheckpointStatus::Building);
-    let cp_20 = checkpoint_queue.get(&deps.storage, 20).unwrap();
-    assert_eq!(cp_20.status, CheckpointStatus::Building);
+    let cp_13 = checkpoint_queue.get(&deps.storage, 13).unwrap();
+    assert_eq!(cp_13.status, CheckpointStatus::Signing);
+    // let cp_20 = checkpoint_queue.get(&deps.storage, 20).unwrap();
+    // assert_eq!(cp_20.status, CheckpointStatus::Building);
     Ok(())
 }
 
