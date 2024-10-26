@@ -8,7 +8,7 @@ use crate::{
     signatory::{Signatory, SignatoryKeys, SignatorySet},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
-        SIGNERS, VALIDATORS,
+        FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, VALIDATORS,
     },
     tests::helper::push_bitcoin_tx_output,
     threshold_sig::Pubkey,
@@ -61,7 +61,7 @@ fn xpub_real_validators() -> Vec<Xpub> {
 fn test_with_real_data() -> Result<(), common_bitcoin::error::ContractError> {
     let mut deps = mock_dependencies();
     static JSON: &[u8] = include_bytes!("testdata/checkpoints.json");
-    let checkpoints: Vec<Checkpoint> = serde_json::from_slice(JSON).unwrap();
+    let checkpoints: Vec<Checkpoint> = cosmwasm_std::from_json(JSON).unwrap();
     let mut checkpoint_queue = CheckpointQueue::default();
     checkpoint_queue.reset(&mut deps.storage).unwrap();
     // Set up validators
@@ -174,16 +174,21 @@ fn test_with_real_data() -> Result<(), common_bitcoin::error::ContractError> {
     assert_eq!(cp_14.sigset.index, 14);
 
     // MIGRATE here
-    let json_data: &[u8] = include_bytes!("testdata/checkpoints.json");
-    let checkpoints: Vec<Checkpoint> = serde_json::from_slice(json_data).unwrap();
+    let json_data: &[u8] = include_bytes!("testdata/modified-checkpoints-36975368.json");
+    let checkpoints: Vec<Checkpoint> = cosmwasm_std::from_json(json_data).unwrap();
+    checkpoint_queue
+        .set(&mut deps.storage, 13, &checkpoints[0])
+        .unwrap();
+    checkpoint_queue
+        .set(&mut deps.storage, 14, &checkpoints[1])
+        .unwrap();
+    checkpoint_queue
+        .set(&mut deps.storage, 19, &checkpoints[2])
+        .unwrap();
+    CHECKPOINTS.pop_back(&mut deps.storage).unwrap(); // remove last checkpoint
     BUILDING_INDEX.save(&mut deps.storage, &19)?; // building have changed
-    CHECKPOINTS.clear(&mut deps.storage).unwrap();
-    let queue_len = CHECKPOINTS.len(&deps.storage).unwrap();
-    assert_eq!(queue_len, 0);
+    FIRST_UNHANDLED_CONFIRMED_INDEX.save(&mut deps.storage, &19)?; // set to make sure it is same as previous state
     FEE_POOL.save(&mut deps.storage, &229030000000)?; // fee_pool have changed
-    for cp in checkpoints {
-        CHECKPOINTS.push_back(&mut deps.storage, &cp).unwrap();
-    }
     let maybe_step = checkpoint_queue
         .simulate_maybe_step(
             1729678400,
@@ -198,12 +203,17 @@ fn test_with_real_data() -> Result<(), common_bitcoin::error::ContractError> {
         )
         .unwrap();
     assert_eq!(maybe_step, true);
-    let cp_19 = checkpoint_queue.get(&deps.storage, 19).unwrap();
-    assert_eq!(cp_19.status, CheckpointStatus::Signing);
-    let cp_13 = checkpoint_queue.get(&deps.storage, 13).unwrap();
-    assert_eq!(cp_13.status, CheckpointStatus::Complete);
-    assert_eq!(cp_13.sigset.index, 13);
-
+    for i in 6..=20 {
+        let cp = checkpoint_queue.get(&deps.storage, i).unwrap();
+        assert_eq!(cp.sigset.index, i);
+        if i < 19 {
+            assert_eq!(cp.status, CheckpointStatus::Complete);
+        } else if i == 19 {
+            assert_eq!(cp.status, CheckpointStatus::Signing);
+        } else {
+            assert_eq!(cp.status, CheckpointStatus::Building);
+        }
+    }
     Ok(())
 }
 
