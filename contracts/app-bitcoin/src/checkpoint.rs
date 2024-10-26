@@ -958,7 +958,6 @@ impl CheckpointQueue {
     pub fn get(&self, store: &dyn Storage, index: u32) -> ContractResult<Checkpoint> {
         let queue_len = CHECKPOINTS.len(store)?;
         let deque_index = self.get_deque_index(store, index, queue_len)?;
-        println!("[get] index: {} - on deque index: {}", index, deque_index);
         let checkpoint = CHECKPOINTS.get(store, deque_index)?.unwrap();
         Ok(checkpoint)
     }
@@ -971,16 +970,8 @@ impl CheckpointQueue {
     ) -> ContractResult<()> {
         let queue_len = CHECKPOINTS.len(store)?;
         let index = self.get_deque_index(store, index, queue_len)?;
-        println!(
-            "[set] checkpoint status: {:?} - index: {} - on deque index: {}",
-            checkpoint.status, checkpoint.sigset.index, index
-        );
         CHECKPOINTS.set(store, index, checkpoint)?;
         let item = CHECKPOINTS.get(store, index)?.unwrap();
-        println!(
-            "[next-check] checkpoint status: {:?} - index: {}",
-            item.status, item.sigset.index
-        );
         Ok(())
     }
 
@@ -1331,7 +1322,6 @@ impl CheckpointQueue {
 
         if self.index(store) > 0 {
             let prev_index = self.index(store) - 1;
-            println!("prev_index: {}", prev_index);
             let cp_fees = self.calc_fee_checkpoint(store, prev_index, &timestamping_commitment)?;
 
             let config = self.config(store);
@@ -1341,10 +1331,6 @@ impl CheckpointQueue {
             let mut building_checkpoint = BuildingCheckpoint(prev);
             let (reserve_outpoint, reserve_value, fees_paid, excess_inputs, excess_outputs) =
                 building_checkpoint.advance(timestamping_commitment, cp_fees, &config)?;
-            println!(
-                "building checkpoint status: {:?}",
-                building_checkpoint.0.status
-            );
             // update checkpoint
             self.set(store, prev_index, &building_checkpoint)?;
 
