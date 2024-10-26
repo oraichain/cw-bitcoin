@@ -2,11 +2,12 @@
 use cosmwasm_std::entry_point;
 
 use crate::{
+    checkpoint::{Checkpoint, CheckpointQueue},
     entrypoints::*,
     interface::{BitcoinConfig, CheckpointConfig},
     msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
-        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
+        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
         FIRST_UNHANDLED_CONFIRMED_INDEX,
     },
 };
@@ -235,6 +236,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
     let original_version =
         cw2::ensure_from_older_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    let json_data: &[u8] = include_bytes!("tests/testdata/checkpoints.json");
+    let checkpoints: Vec<Checkpoint> = serde_json::from_slice(json_data).unwrap();
+    CHECKPOINTS.clear(deps.storage)?;
+    BUILDING_INDEX.save(deps.storage, &19)?; // building have changed
+    FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.storage, &19)?; // set to make sure it is same as previous state
+    FEE_POOL.save(deps.storage, &229030000000)?; // fee_pool have changed
+    for cp in checkpoints {
+        CHECKPOINTS.push_back(deps.storage, &cp).unwrap();
+    }
     Ok(Response::new().add_attribute("new_version", original_version.to_string()))
 }
 

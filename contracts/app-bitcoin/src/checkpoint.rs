@@ -1203,7 +1203,8 @@ impl CheckpointQueue {
             return Ok(false);
         }
 
-        self.prune(store).unwrap();
+        // Note: remove prune mechanism for not needed
+        // self.prune(store).unwrap();
 
         if self.index(store) > 0 {
             let prev_index = self.index(store) - 1;
@@ -1295,6 +1296,7 @@ impl CheckpointQueue {
         Ok(true)
     }
 
+    #[cfg(test)]
     pub fn simulate_maybe_step(
         &mut self,
         timestamp: u64,
@@ -1304,6 +1306,7 @@ impl CheckpointQueue {
         timestamping_commitment: Vec<u8>,
         // fee_pool: &mut i64,
         parent_config: &BitcoinConfig,
+        is_prune: bool,
     ) -> ContractResult<bool> {
         let is_should_push =
             self.simulate_should_push(timestamp, store, &timestamping_commitment, btc_height)?;
@@ -1318,7 +1321,9 @@ impl CheckpointQueue {
             return Ok(false);
         }
 
-        self.prune(store).unwrap();
+        if is_prune {
+            self.prune(store).unwrap();
+        }
 
         if self.index(store) > 0 {
             let prev_index = self.index(store) - 1;
@@ -1431,6 +1436,7 @@ impl CheckpointQueue {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn simulate_should_push(
         &mut self,
         timestamp: u64,
@@ -1691,6 +1697,7 @@ impl CheckpointQueue {
         Ok(total_fee)
     }
 
+    #[cfg(test)]
     pub fn simulate_maybe_push(
         &mut self,
         timestamp: u64,

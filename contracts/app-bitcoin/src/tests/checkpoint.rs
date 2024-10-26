@@ -152,18 +152,58 @@ fn test_with_real_data() -> Result<(), common_bitcoin::error::ContractError> {
                 .unwrap()
                 .to_vec(),
             &bitcoin_config,
+            true,
         )
         .unwrap();
     assert_eq!(maybe_step, true);
     let queue_len = CHECKPOINTS.len(&deps.storage).unwrap();
-    println!("queue_len: {}", queue_len);
-    println!("[======================CHECKPOINT_QUEUE=======================]");
+    assert_eq!(queue_len, 15);
+
     let cp_19 = checkpoint_queue.get(&deps.storage, 19).unwrap();
-    assert_eq!(cp_19.status, CheckpointStatus::Building);
+    assert_eq!(cp_19.status, CheckpointStatus::Signing);
+    // check to avoid override
     let cp_13 = checkpoint_queue.get(&deps.storage, 13).unwrap();
-    assert_eq!(cp_13.status, CheckpointStatus::Signing);
-    // let cp_20 = checkpoint_queue.get(&deps.storage, 20).unwrap();
-    // assert_eq!(cp_20.status, CheckpointStatus::Building);
+    assert_eq!(cp_13.status, CheckpointStatus::Complete);
+    assert_eq!(cp_13.sigset.index, 13);
+
+    let cp_20 = checkpoint_queue.get(&deps.storage, 20).unwrap();
+    assert_eq!(cp_20.status, CheckpointStatus::Building);
+    // check to avoid override
+    let cp_14 = checkpoint_queue.get(&deps.storage, 14).unwrap();
+    assert_eq!(cp_14.status, CheckpointStatus::Complete);
+    assert_eq!(cp_14.sigset.index, 14);
+
+    // MIGRATE here
+    let json_data: &[u8] = include_bytes!("testdata/checkpoints.json");
+    let checkpoints: Vec<Checkpoint> = serde_json::from_slice(json_data).unwrap();
+    BUILDING_INDEX.save(&mut deps.storage, &19)?; // building have changed
+    CHECKPOINTS.clear(&mut deps.storage).unwrap();
+    let queue_len = CHECKPOINTS.len(&deps.storage).unwrap();
+    assert_eq!(queue_len, 0);
+    FEE_POOL.save(&mut deps.storage, &229030000000)?; // fee_pool have changed
+    for cp in checkpoints {
+        CHECKPOINTS.push_back(&mut deps.storage, &cp).unwrap();
+    }
+    let maybe_step = checkpoint_queue
+        .simulate_maybe_step(
+            1729678400,
+            &mut deps.storage,
+            866985,
+            true,
+            Binary::from_base64("S/msfBNFBq0MNKe7cVMIkY8n3eEtRydId/7q6Tpn1Lc=")
+                .unwrap()
+                .to_vec(),
+            &bitcoin_config,
+            false,
+        )
+        .unwrap();
+    assert_eq!(maybe_step, true);
+    let cp_19 = checkpoint_queue.get(&deps.storage, 19).unwrap();
+    assert_eq!(cp_19.status, CheckpointStatus::Signing);
+    let cp_13 = checkpoint_queue.get(&deps.storage, 13).unwrap();
+    assert_eq!(cp_13.status, CheckpointStatus::Complete);
+    assert_eq!(cp_13.sigset.index, 13);
+
     Ok(())
 }
 
