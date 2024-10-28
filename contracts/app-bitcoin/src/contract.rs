@@ -8,7 +8,7 @@ use crate::{
     msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
-        FIRST_UNHANDLED_CONFIRMED_INDEX,
+        FIRST_UNHANDLED_CONFIRMED_INDEX, OUTPOINTS,
     },
 };
 use common_bitcoin::error::ContractError;
@@ -236,22 +236,22 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
     let original_version =
         cw2::ensure_from_older_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    let json_data: &[u8] = include_bytes!("tests/testdata/modified-checkpoints-36975368.json");
-    let checkpoints: Vec<Checkpoint> = cosmwasm_std::from_json(json_data).unwrap();
-    let checkpoint_queue = CheckpointQueue::default();
-    checkpoint_queue
-        .set(deps.storage, 13, &checkpoints[0])
-        .unwrap();
-    checkpoint_queue
-        .set(deps.storage, 14, &checkpoints[1])
-        .unwrap();
-    checkpoint_queue
-        .set(deps.storage, 19, &checkpoints[2])
-        .unwrap();
-    CHECKPOINTS.pop_back(deps.storage).unwrap(); // remove last checkpoint
-    BUILDING_INDEX.save(deps.storage, &19)?; // building have changed
-    FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.storage, &19)?; // set to make sure it is same as previous state
-    FEE_POOL.save(deps.storage, &229030000000)?; // fee_pool have changed
+    OUTPOINTS.remove(
+        deps.storage,
+        "06bec38b1b4d9987cef3f3517f2bae518e72c9764ffc73123c30cdea7dbfe91f:0",
+    );
+    OUTPOINTS.remove(
+        deps.storage,
+        "bc70cee8d686fc8ea1fedea8411102ece44c27aade8d1cbc2551c2d4974b40a3:3",
+    );
+    OUTPOINTS.remove(
+        deps.storage,
+        "bc70cee8d686fc8ea1fedea8411102ece44c27aade8d1cbc2551c2d4974b40a3:4",
+    );
+    OUTPOINTS.remove(
+        deps.storage,
+        "bc70cee8d686fc8ea1fedea8411102ece44c27aade8d1cbc2551c2d4974b40a3:5",
+    );
     Ok(Response::new().add_attribute("new_version", original_version.to_string()))
 }
 
