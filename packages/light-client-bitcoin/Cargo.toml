@@ -16,7 +16,8 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 # use library feature to disable all instantiate/execute/query exports
-default = []
+default = ["mainnet"]
+mainnet = []
 
 [dependencies]
 arrayref = "0.3"
