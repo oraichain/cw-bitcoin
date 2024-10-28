@@ -2,11 +2,12 @@
 use cosmwasm_std::entry_point;
 
 use crate::{
+    checkpoint::{Checkpoint, CheckpointQueue},
     entrypoints::*,
     interface::{BitcoinConfig, CheckpointConfig},
     msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
-        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
+        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
         FIRST_UNHANDLED_CONFIRMED_INDEX,
     },
 };
@@ -83,8 +84,8 @@ pub fn execute(
             relayer_fee,
             token_fee,
             light_client_contract,
-            token_factory_contract,
             swap_router_contract,
+            token_factory_contract,
             osor_entry_point_contract,
         ),
         ExecuteMsg::RelayDeposit {
@@ -235,6 +236,22 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
     let original_version =
         cw2::ensure_from_older_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    let json_data: &[u8] = include_bytes!("tests/testdata/modified-checkpoints-36975368.json");
+    let checkpoints: Vec<Checkpoint> = cosmwasm_std::from_json(json_data).unwrap();
+    let checkpoint_queue = CheckpointQueue::default();
+    checkpoint_queue
+        .set(deps.storage, 13, &checkpoints[0])
+        .unwrap();
+    checkpoint_queue
+        .set(deps.storage, 14, &checkpoints[1])
+        .unwrap();
+    checkpoint_queue
+        .set(deps.storage, 19, &checkpoints[2])
+        .unwrap();
+    CHECKPOINTS.pop_back(deps.storage).unwrap(); // remove last checkpoint
+    BUILDING_INDEX.save(deps.storage, &19)?; // building have changed
+    FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.storage, &19)?; // set to make sure it is same as previous state
+    FEE_POOL.save(deps.storage, &229030000000)?; // fee_pool have changed
     Ok(Response::new().add_attribute("new_version", original_version.to_string()))
 }
 

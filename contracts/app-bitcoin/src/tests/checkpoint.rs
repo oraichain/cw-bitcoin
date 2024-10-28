@@ -1,15 +1,221 @@
-use cosmwasm_std::{testing::mock_dependencies, Storage};
+use bitcoin::util::bip32::ExtendedPubKey;
+use cosmwasm_std::{testing::mock_dependencies, Binary, Storage};
 
 use crate::{
     checkpoint::{adjust_fee_rate, BitcoinTx, Checkpoint, CheckpointQueue, CheckpointStatus},
     constants::DEFAULT_FEE_RATE,
-    interface::CheckpointConfig,
-    signatory::{Signatory, SignatorySet},
-    state::{BUILDING_INDEX, CHECKPOINTS, CONFIRMED_INDEX},
+    interface::{BitcoinConfig, CheckpointConfig},
+    signatory::{Signatory, SignatoryKeys, SignatorySet},
+    state::{
+        BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
+        FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, VALIDATORS,
+    },
     tests::helper::push_bitcoin_tx_output,
     threshold_sig::Pubkey,
 };
-use common_bitcoin::error::ContractResult;
+use common_bitcoin::{error::ContractResult, xpub::Xpub};
+
+fn cons_keys_real_validators() -> Vec<[u8; 32]> {
+    vec![
+        Binary::from_base64("E6NYC3EdWPreSGwucQ1jUpMnIFFLLyZcwA3tG7jAhT4=")
+            .unwrap()
+            .rchunks(32)
+            .next()
+            .unwrap()
+            .try_into()
+            .unwrap(),
+        Binary::from_base64("f4QfZU1vYhUiEuBeAAXA4RTYGGiStpjktkKPbn6ZpjM=")
+            .unwrap()
+            .rchunks(32)
+            .next()
+            .unwrap()
+            .try_into()
+            .unwrap(),
+        Binary::from_base64("bJPZePKkNzz3V/WABeHPVdmn4Gk6uHbq1Toro76u4SQ=")
+            .unwrap()
+            .rchunks(32)
+            .next()
+            .unwrap()
+            .try_into()
+            .unwrap(),
+    ]
+}
+
+fn xpub_real_validators() -> Vec<Xpub> {
+    let mut xpubs = vec![];
+    let decode_base64 = ExtendedPubKey::decode(&Binary::from_base64("BIiyHgAAAAAAAAAAAJwuXJlnKyOcQ/hBOlDMZ/lo3XYZ0acAAsFXSXO00X44AwGI2HzHhD8JFKX0md9zGNRq0H6q0kxBU2qKTjA5zcYN").unwrap().to_vec()).unwrap();
+    let xpub: Xpub = Xpub::new(decode_base64);
+    xpubs.push(xpub);
+
+    let decode_base64 = ExtendedPubKey::decode(&Binary::from_base64("BIiyHgAAAAAAAAAAAJf1C4vBY96sVBQo0nIrImUWq0MuNzFEknM7rqUzL2UgA645Rw7OhhV5Y2LGs72m127rxtzkPLVgG7Au2/ynrBEM").unwrap().to_vec()).unwrap();
+    let xpub: Xpub = Xpub::new(decode_base64);
+    xpubs.push(xpub);
+
+    let decode_base64 = ExtendedPubKey::decode(&Binary::from_base64("BIiyHgAAAAAAAAAAAILSFhI3O5Z/I9/d2Gcj390ZbrUMOxMQBMrQxZOcL9B8A3gEq8AXH3ve8fBPSHd4UL7QnqdHew0BaShnRx7ygjVO").unwrap().to_vec()).unwrap();
+    let xpub: Xpub = Xpub::new(decode_base64);
+    xpubs.push(xpub);
+    xpubs
+}
+
+#[test]
+fn test_with_real_data() -> Result<(), common_bitcoin::error::ContractError> {
+    let mut deps = mock_dependencies();
+    static JSON: &[u8] = include_bytes!("testdata/checkpoints.json");
+    let checkpoints: Vec<Checkpoint> = cosmwasm_std::from_json(JSON).unwrap();
+    let mut checkpoint_queue = CheckpointQueue::default();
+    checkpoint_queue.reset(&mut deps.storage).unwrap();
+    // Set up validators
+    let mut signatory_keys = SignatoryKeys::default();
+    let cons_keys = cons_keys_real_validators();
+    let xpubs = xpub_real_validators();
+    SIGNERS
+        .save(
+            &mut deps.storage,
+            &"orai1qv5jn7tueeqw7xqdn5rem7s09n7zletrsnc5vq",
+            &cons_keys[0],
+        )
+        .unwrap();
+    VALIDATORS
+        .save(
+            &mut deps.storage,
+            &cons_keys[0],
+            &(
+                119251177812,
+                "orai1qv5jn7tueeqw7xqdn5rem7s09n7zletrsnc5vq".to_string(),
+            ),
+        )
+        .unwrap();
+    signatory_keys
+        .insert(&mut deps.storage, cons_keys[0], xpubs[0])
+        .unwrap();
+    SIGNERS
+        .save(
+            &mut deps.storage,
+            &"orai1q53ujvvrcd0t543dsh5445lu6ar0qr2z9ll7ux",
+            &cons_keys[1],
+        )
+        .unwrap();
+    VALIDATORS
+        .save(
+            &mut deps.storage,
+            &cons_keys[1],
+            &(
+                72778342087,
+                "orai1q53ujvvrcd0t543dsh5445lu6ar0qr2z9ll7ux".to_string(),
+            ),
+        )
+        .unwrap();
+    signatory_keys
+        .insert(&mut deps.storage, cons_keys[1], xpubs[1])
+        .unwrap();
+    SIGNERS
+        .save(
+            &mut deps.storage,
+            &"orai1ltr3sx9vm9hq4ueajvs7ng24gw3k8t9t67y73h",
+            &cons_keys[2],
+        )
+        .unwrap();
+    VALIDATORS
+        .save(
+            &mut deps.storage,
+            &cons_keys[2],
+            &(
+                35556132100,
+                "orai1ltr3sx9vm9hq4ueajvs7ng24gw3k8t9t67y73h".to_string(),
+            ),
+        )
+        .unwrap();
+    signatory_keys
+        .insert(&mut deps.storage, cons_keys[2], xpubs[2])
+        .unwrap();
+    // End of setting up validators
+    for cp in checkpoints {
+        CHECKPOINTS.push_back(&mut deps.storage, &cp).unwrap();
+    }
+    FEE_POOL.save(&mut deps.storage, &229030000000).unwrap();
+    CONFIRMED_INDEX.save(&mut deps.storage, &18).unwrap();
+    BUILDING_INDEX.save(&mut deps.storage, &19).unwrap();
+    CHECKPOINT_CONFIG
+        .save(&mut deps.storage, &CheckpointConfig::default())
+        .unwrap();
+    BITCOIN_CONFIG
+        .save(&mut deps.storage, &BitcoinConfig::default())
+        .unwrap();
+    let bitcoin_config = BITCOIN_CONFIG.load(&deps.storage).unwrap();
+    let maybe_step = checkpoint_queue
+        .simulate_maybe_step(
+            1729678400,
+            &mut deps.storage,
+            866985,
+            true,
+            Binary::from_base64("S/msfBNFBq0MNKe7cVMIkY8n3eEtRydId/7q6Tpn1Lc=")
+                .unwrap()
+                .to_vec(),
+            &bitcoin_config,
+            true,
+        )
+        .unwrap();
+    assert_eq!(maybe_step, true);
+    let queue_len = CHECKPOINTS.len(&deps.storage).unwrap();
+    assert_eq!(queue_len, 15);
+
+    let cp_19 = checkpoint_queue.get(&deps.storage, 19).unwrap();
+    assert_eq!(cp_19.status, CheckpointStatus::Signing);
+    // check to avoid override
+    let cp_13 = checkpoint_queue.get(&deps.storage, 13).unwrap();
+    assert_eq!(cp_13.status, CheckpointStatus::Complete);
+    assert_eq!(cp_13.sigset.index, 13);
+
+    let cp_20 = checkpoint_queue.get(&deps.storage, 20).unwrap();
+    assert_eq!(cp_20.status, CheckpointStatus::Building);
+    // check to avoid override
+    let cp_14 = checkpoint_queue.get(&deps.storage, 14).unwrap();
+    assert_eq!(cp_14.status, CheckpointStatus::Complete);
+    assert_eq!(cp_14.sigset.index, 14);
+
+    // MIGRATE here
+    let json_data: &[u8] = include_bytes!("testdata/modified-checkpoints-36975368.json");
+    let checkpoints: Vec<Checkpoint> = cosmwasm_std::from_json(json_data).unwrap();
+    checkpoint_queue
+        .set(&mut deps.storage, 13, &checkpoints[0])
+        .unwrap();
+    checkpoint_queue
+        .set(&mut deps.storage, 14, &checkpoints[1])
+        .unwrap();
+    checkpoint_queue
+        .set(&mut deps.storage, 19, &checkpoints[2])
+        .unwrap();
+    CHECKPOINTS.pop_back(&mut deps.storage).unwrap(); // remove last checkpoint
+    BUILDING_INDEX.save(&mut deps.storage, &19)?; // building have changed
+    FIRST_UNHANDLED_CONFIRMED_INDEX.save(&mut deps.storage, &19)?; // set to make sure it is same as previous state
+    FEE_POOL.save(&mut deps.storage, &229030000000)?; // fee_pool have changed
+    let maybe_step = checkpoint_queue
+        .simulate_maybe_step(
+            1729678400,
+            &mut deps.storage,
+            866985,
+            true,
+            Binary::from_base64("S/msfBNFBq0MNKe7cVMIkY8n3eEtRydId/7q6Tpn1Lc=")
+                .unwrap()
+                .to_vec(),
+            &bitcoin_config,
+            false,
+        )
+        .unwrap();
+    assert_eq!(maybe_step, true);
+    for i in 6..=20 {
+        let cp = checkpoint_queue.get(&deps.storage, i).unwrap();
+        assert_eq!(cp.sigset.index, i);
+        if i < 19 {
+            assert_eq!(cp.status, CheckpointStatus::Complete);
+        } else if i == 19 {
+            assert_eq!(cp.status, CheckpointStatus::Signing);
+        } else {
+            assert_eq!(cp.status, CheckpointStatus::Building);
+        }
+    }
+    Ok(())
+}
 
 #[test]
 fn deduct_fee() {
