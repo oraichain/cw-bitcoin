@@ -120,7 +120,9 @@ async fn relay_checkpoint(
                 )
                 .unwrap();
             }
-            Err(_e) => {}
+            Err(_e) => {
+                println!("Error: {:?}", _e);
+            }
         }
     }
 }
@@ -178,6 +180,478 @@ async fn relay_recovery(
         )
         .unwrap();
     }
+}
+
+#[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
+#[tokio::test]
+async fn test_p2sh_flow() {
+    // Set up app
+    let threshold = SIGSET_THRESHOLD;
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000, "orai")),
+        ("alice", &coins(100_000_000_000, "orai")),
+        ("bob", &coins(100_000_000_000, "orai")),
+        ("dave", &coins(100_000_000_000, "orai")),
+        ("jayce", &coins(100_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("receiver", &coins(100_000_000_000, "orai")),
+    ]);
+    let owner = Addr::unchecked(&accounts[0]);
+    let validator_1 = Addr::unchecked(&accounts[1]);
+    let validator_2 = Addr::unchecked(&accounts[2]);
+    let validator_3 = Addr::unchecked(&accounts[3]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[5]);
+    let token_fee_receiver = Addr::unchecked(&accounts[6]);
+    let receiver = Addr::unchecked(&accounts[7]);
+
+    let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
+    let btc_bridge_denom = format!(
+        "factory/{}/{}",
+        token_factory_addr.clone().to_string(),
+        BTC_NATIVE_TOKEN_DENOM
+    );
+    let light_client_addr = app
+        .create_light_client(owner.clone(), &lc_msg::InstantiateMsg {})
+        .unwrap();
+    let bitcoin_bridge_addr = app
+        .create_bridge(
+            owner.clone(),
+            &msg::InstantiateMsg {
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: token_fee_receiver.clone(),
+                token_factory_contract: token_factory_addr.clone(),
+                light_client_contract: light_client_addr.clone(),
+                swap_router_contract: None,
+                osor_entry_point_contract: None,
+            },
+        )
+        .unwrap();
+
+    // Set up bitcoin
+    let mut conf = Conf::default();
+    conf.args.push("-txindex");
+    let bitcoind = BitcoinD::with_conf(bitcoind::downloaded_exe_path().unwrap(), &conf).unwrap();
+    let rpc_url = bitcoind.rpc_url();
+    let cookie_file = bitcoind.params.cookie_file.clone();
+    let btc_client = test_bitcoin_client(rpc_url.clone(), cookie_file.clone()).await;
+    let wallet = retry(|| bitcoind.create_wallet("bridger"), 10).unwrap();
+    let wallet_address = wallet.get_new_address(None, None).unwrap();
+
+    let async_wallet_address =
+        bitcoincore_rpc_async::bitcoin::Address::from_str(&wallet_address.to_string()).unwrap();
+    btc_client
+        .generate_to_address(1000, &async_wallet_address)
+        .await
+        .unwrap();
+    let block_data = populate_bitcoin_block(&btc_client).await;
+    let trusted_header = block_data.block_header;
+
+    let register_denom =
+        |app: &mut MockApp, subdenom: String, metadata: Option<Metadata>| -> MockResult<_> {
+            app.execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
+                &coins(10_000_000, "orai"),
+            )
+        };
+
+    let init_bitcoin_config = |app: &mut MockApp, max_deposit_age: u32| -> () {
+        let mut bitcoin_config = BitcoinConfig::default();
+        bitcoin_config.min_withdrawal_checkpoints = 1;
+        bitcoin_config.max_deposit_age = max_deposit_age as u64;
+        bitcoin_config.max_offline_checkpoints = 1;
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateBitcoinConfig {
+                config: bitcoin_config,
+            },
+            &[],
+        )
+        .unwrap();
+    };
+
+    let init_checkpoint_config = |app: &mut MockApp| -> () {
+        // Set up header config based on the header of block data
+        let mut checkpoint_config = CheckpointConfig::default();
+        checkpoint_config.min_checkpoint_interval = 1; // 1 seconds
+
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateCheckpointConfig {
+                config: checkpoint_config,
+            },
+            &[],
+        )
+        .unwrap();
+    };
+
+    let init_headers =
+        |app: &mut MockApp, trusted_height: u32, trusted_header: BlockHeader| -> () {
+            // Set up header config based on the header of block data
+            let header_config = HeaderConfig {
+                max_length: 2000,
+                max_time_increase: 8 * 60 * 60,
+                trusted_height,
+                retarget_interval: 2016,
+                target_spacing: 10 * 60,
+                target_timespan: 2016 * (10 * 60),
+                max_target: 0x1d00ffff,
+                retargeting: true,
+                min_difficulty_blocks: false,
+                trusted_header: Adapter::from(trusted_header),
+            };
+            app.execute(
+                owner.clone(),
+                light_client_addr.clone(),
+                &lc_msg::ExecuteMsg::UpdateHeaderConfig {
+                    config: header_config,
+                },
+                &[],
+            )
+            .unwrap();
+        };
+
+    let relay_deposit = |app: &mut MockApp,
+                         btc_tx: Adapter<Transaction>,
+                         btc_height: u32,
+                         btc_proof: Adapter<PartialMerkleTree>,
+                         btc_vout: u32,
+                         sigset_index: u32,
+                         dest: Dest|
+     -> MockResult<_> {
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::RelayDeposit {
+                btc_tx,
+                btc_height,
+                btc_proof,
+                btc_vout,
+                sigset_index,
+                dest,
+            },
+            &[],
+        )
+    };
+
+    let add_validators = |app: &mut MockApp,
+                          addrs: Vec<String>,
+                          voting_powers: Vec<u64>,
+                          consensus_keys: Vec<[u8; 32]>|
+     -> MockResult<_> {
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::AddValidators {
+                addrs,
+                voting_powers,
+                consensus_keys,
+            },
+            &[],
+        )
+    };
+
+    let withdraw_to_bitcoin =
+        |app: &mut MockApp, sender: Addr, btc_address: Address, coin: Coin| -> MockResult<_> {
+            app.execute(
+                sender,
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::WithdrawToBitcoin {
+                    btc_address: btc_address.to_string(),
+                    fee: None,
+                },
+                &[coin],
+            )
+        };
+
+    let set_signatory_key = |app: &mut MockApp, sender: Addr, xpub: Xpub| -> MockResult<_> {
+        app.execute(
+            sender,
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::SetSignatoryKey {
+                xpub: WrappedBinary(xpub),
+            },
+            &[],
+        )
+    };
+
+    let increase_block = |app: &mut MockApp, hash: Binary| -> MockResult<_> {
+        app.sudo(
+            bitcoin_bridge_addr.clone(),
+            &msg::SudoMsg::ClockEndBlock { hash },
+        )
+    };
+
+    let sign_cp = |app: &mut MockApp,
+                   sender: Addr,
+                   xpriv: &ExtendedPrivKey,
+                   xpub: ExtendedPubKey,
+                   cp_index: u32,
+                   btc_height: u32|
+     -> MockResult<_> {
+        let secp = Secp256k1::signing_only();
+        let to_signs: Vec<([u8; 32], u32)> = app
+            .query(
+                bitcoin_bridge_addr.clone(),
+                &msg::QueryMsg::SigningTxsAtCheckpointIndex {
+                    xpub: WrappedBinary(Xpub::new(xpub)),
+                    checkpoint_index: cp_index,
+                },
+            )
+            .unwrap();
+        let sigs = sign(&secp, &xpriv, &to_signs).unwrap();
+        app.execute(
+            sender,
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::SubmitCheckpointSignature {
+                xpub: WrappedBinary(Xpub::new(xpub)),
+                sigs,
+                checkpoint_index: cp_index,
+                btc_height,
+            },
+            &[],
+        )
+    };
+
+    // Start testing
+    init_bitcoin_config(&mut app, 180);
+    init_checkpoint_config(&mut app);
+    init_headers(&mut app, 1000, trusted_header);
+    register_denom(&mut app, BTC_NATIVE_TOKEN_DENOM.to_string(), None).unwrap();
+
+    let header_height: u32 = app
+        .query(
+            light_client_addr.clone(),
+            &lc_msg::QueryMsg::HeaderHeight {},
+        )
+        .unwrap();
+    assert_eq!(header_height, 1000);
+
+    // Mine more 20 blocks
+    mine_and_relay_headers(
+        &btc_client,
+        &mut app,
+        &async_wallet_address,
+        20,
+        owner.clone(),
+        light_client_addr.clone(),
+    )
+    .await;
+    let header_height: u32 = app
+        .query(
+            light_client_addr.clone(),
+            &lc_msg::QueryMsg::HeaderHeight {},
+        )
+        .unwrap();
+    assert_eq!(header_height, 1020);
+
+    let network = bitcoin::Network::Bitcoin; // This is actually hard-coded
+    let secp = Secp256k1::new();
+    let xprivs = vec![
+        ExtendedPrivKey::new_master(network, &[0]).unwrap(),
+        ExtendedPrivKey::new_master(network, &[1]).unwrap(),
+        ExtendedPrivKey::new_master(network, &[2]).unwrap(),
+    ];
+    let xpubs = vec![
+        ExtendedPubKey::from_priv(&secp, &xprivs[0]),
+        ExtendedPubKey::from_priv(&secp, &xprivs[1]),
+        ExtendedPubKey::from_priv(&secp, &xprivs[2]),
+    ];
+    let consensus_keys = vec![[0; 32], [1; 32], [2; 32]];
+
+    add_validators(
+        &mut app,
+        vec![
+            validator_1.clone().to_string(),
+            validator_2.clone().to_string(),
+        ],
+        vec![15, 10],
+        vec![consensus_keys[0], consensus_keys[1]],
+    )
+    .unwrap();
+    // add validator 4
+    add_validators(
+        &mut app,
+        vec![validator_3.clone().to_string()],
+        vec![1],
+        vec![consensus_keys[2]],
+    )
+    .unwrap();
+    set_signatory_key(&mut app, validator_1.clone(), Xpub::new(xpubs[0])).unwrap();
+    set_signatory_key(&mut app, validator_2.clone(), Xpub::new(xpubs[1])).unwrap();
+    set_signatory_key(&mut app, validator_3.clone(), Xpub::new(xpubs[2])).unwrap();
+    increase_block(&mut app, Binary::from([0; 32])).unwrap(); // should increase number of hash to be unique
+
+    // Fetching checkpoint and creating deposit address
+    let checkpoint: Checkpoint = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 0 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.pending.len(), 0);
+    assert_eq!(checkpoint.status, CheckpointStatus::Building);
+    let sigset = checkpoint.sigset;
+
+    // [TESTCASE] Bridge one transaction and try to submit tx with proof when not enough confirmations
+    let dest = Dest::Address(receiver.clone());
+    let script = sigset
+        .output_script(&dest.commitment_bytes().unwrap(), threshold)
+        .unwrap();
+    let deposit_addr = bitcoin::Address::from_script(&script, bitcoin::Network::Regtest).unwrap();
+    let deposit_amount = bitcoin::Amount::from_btc(1.2).unwrap();
+
+    let btc_txid = wallet
+        .send_to_address(
+            &deposit_addr,
+            deposit_amount,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    let btc_tx = btc_client
+        .get_raw_transaction(&btc_txid, None)
+        .await
+        .unwrap();
+    let vout = btc_tx
+        .output
+        .iter()
+        .position(|o| o.value == deposit_amount.to_sat())
+        .unwrap();
+
+    // mine one block to get proof
+    let headers = mine_and_relay_headers(
+        &btc_client,
+        &mut app,
+        &async_wallet_address,
+        2,
+        owner.clone(),
+        light_client_addr.clone(),
+    )
+    .await;
+    let header_height: u32 = app
+        .query(
+            light_client_addr.clone(),
+            &lc_msg::QueryMsg::HeaderHeight {},
+        )
+        .unwrap();
+    assert_eq!(header_height, 1022);
+
+    // this proof is for current depositing
+    let tx_proof = btc_client
+        .get_tx_out_proof(&[btc_tx.txid()], Some(&headers[0].block_hash()))
+        .await
+        .unwrap();
+    let proof = bitcoin::util::merkleblock::MerkleBlock::consensus_decode(&mut tx_proof.as_slice())
+        .unwrap()
+        .txn;
+
+    let deposit_fee: u64 = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::DepositFees { index: None },
+        )
+        .unwrap();
+    relay_deposit(
+        &mut app,
+        Adapter::from(btc_tx),
+        1021,
+        Adapter::from(proof),
+        vout as u32, // vout
+        0,           // sigset_index
+        dest.clone(),
+    )
+    .unwrap();
+
+    // Increase block and current Building checkpoint changed to Signing
+    increase_block(&mut app, Binary::from([1; 32])).unwrap(); // should increase number of hash to be unique
+    let checkpoint: Checkpoint = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 0 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.status, CheckpointStatus::Signing);
+
+    // Validators submit signature
+    sign_cp(&mut app, validator_1.clone(), &xprivs[0], xpubs[0], 0, 1021).unwrap();
+    // sign_cp(&mut app, validator_3.clone(), &xprivs[2], xpubs[2], 0, 1021).unwrap();
+    sign_cp(&mut app, validator_2.clone(), &xprivs[1], xpubs[1], 0, 1021).unwrap();
+
+    // Increase block and current Signing checkpoint changed to Complete
+    let checkpoint: Checkpoint = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 0 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.status, CheckpointStatus::Complete);
+    assert_eq!(checkpoint.pending.len(), 1);
+    increase_block(&mut app, Binary::from([2; 32])).unwrap(); // should increase number of hash to be unique
+    let checkpoint: Checkpoint = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 0 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.status, CheckpointStatus::Complete);
+    assert_eq!(checkpoint.pending.len(), 0);
+
+    // Validate balance
+    let balance = app
+        .query_balance(receiver.clone(), btc_bridge_denom.clone())
+        .unwrap();
+    assert_eq!(
+        balance.u128(),
+        (deposit_amount.to_sat() * 1000000 - deposit_fee) as u128
+    );
+    increase_block(&mut app, Binary::from([3; 32])).unwrap(); // should increase number of hash to be unique
+    let checkpoint: Checkpoint = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::CheckpointByIndex { index: 0 },
+        )
+        .unwrap();
+    assert_eq!(checkpoint.pending.len(), 0);
+
+    // Relay checkpoint
+    relay_checkpoint(
+        &btc_client,
+        &mut app,
+        &async_wallet_address,
+        owner.clone(),
+        bitcoin_bridge_addr.clone(),
+        light_client_addr.clone(),
+        0,
+    )
+    .await;
+    let header_height: u32 = app
+        .query(
+            light_client_addr.clone(),
+            &lc_msg::QueryMsg::HeaderHeight {},
+        )
+        .unwrap();
+    assert_eq!(header_height, 1023);
+    let confirmed_cp_index: u32 = app
+        .query(
+            bitcoin_bridge_addr.clone(),
+            &msg::QueryMsg::ConfirmedIndex {},
+        )
+        .unwrap();
+    assert_eq!(confirmed_cp_index, 0);
+    println!("[BRAVOOO] All testcases passed!");
 }
 
 #[cfg(all(feature = "mainnet", not(feature = "native-validator")))]

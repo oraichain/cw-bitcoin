@@ -11,7 +11,7 @@ use crate::{
     interface::{BitcoinConfig, CheckpointConfig, Dest},
     state::CHECKPOINTS,
 };
-use bitcoin::hashes::Hash;
+use bitcoin::{blockdata::script::Builder, hashes::Hash};
 use bitcoin::{blockdata::transaction::EcdsaSighashType, Sequence, Transaction, TxIn, TxOut};
 use common_bitcoin::{
     adapter::Adapter,
@@ -92,16 +92,26 @@ impl Input {
     /// Converts the `Input` to a `bitcoin::TxIn`, useful when constructing an
     /// actual Bitcoin transaction to be broadcast.
     pub fn to_txin(&self) -> ContractResult<TxIn> {
-        let mut witness = self.signatures.to_witness()?;
-        if self.signatures.signed() {
-            witness.push(self.redeem_script.to_bytes());
+        let sigs = self.signatures.to_sh_sigs()?;
+        let mut script_sig = Builder::new();
+
+        for sig in &sigs {
+            script_sig = script_sig.push_slice(sig);
         }
+
+        if self.signatures.signed() {
+            script_sig = script_sig.push_slice(&self.redeem_script.to_bytes());
+        }
+
+        // if self.signatures.signed() {
+        //     witness.push(self.redeem_script.to_bytes());
+        // }
 
         Ok(bitcoin::TxIn {
             previous_output: *self.prevout,
-            script_sig: bitcoin::Script::new(),
+            script_sig: script_sig.into_script(),
             sequence: Sequence(u32::MAX),
-            witness: bitcoin::Witness::from_vec(witness),
+            witness: bitcoin::Witness::new(),
         })
     }
 
@@ -232,11 +242,10 @@ impl BitcoinTx {
             .get_mut(input_index)
             .ok_or(ContractError::InputIndexOutOfBounds(input_index))?;
 
-        let sighash = sc.segwit_signature_hash(
+        let sighash = sc.legacy_signature_hash(
             input_index,
             &input.redeem_script,
-            input.amount,
-            EcdsaSighashType::All,
+            EcdsaSighashType::All as u32,
         )?;
 
         input.signatures.set_message(sighash.into_inner());
@@ -892,12 +901,8 @@ impl BuildingCheckpoint {
         let mut sc = bitcoin::util::sighash::SighashCache::new(&bitcoin_tx);
         for i in 0..checkpoint_tx.input.len() {
             let input = &mut checkpoint_tx.input[i];
-            let sighash = sc.segwit_signature_hash(
-                i,
-                &input.redeem_script,
-                input.amount,
-                EcdsaSighashType::All,
-            )?;
+            let sighash =
+                sc.legacy_signature_hash(i, &input.redeem_script, EcdsaSighashType::All as u32)?;
             input.signatures.set_message(sighash.into_inner());
         }
 
