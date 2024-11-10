@@ -182,7 +182,11 @@ async fn relay_recovery(
     }
 }
 
-#[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
+#[cfg(all(
+    feature = "mainnet",
+    feature = "p2sh",
+    not(feature = "native-validator")
+))]
 #[tokio::test]
 async fn test_p2sh_flow() {
     // Set up app
@@ -473,11 +477,10 @@ async fn test_p2sh_flow() {
             validator_1.clone().to_string(),
             validator_2.clone().to_string(),
         ],
-        vec![15, 10],
+        vec![100, 10],
         vec![consensus_keys[0], consensus_keys[1]],
     )
     .unwrap();
-    // add validator 4
     add_validators(
         &mut app,
         vec![validator_3.clone().to_string()],
@@ -588,7 +591,7 @@ async fn test_p2sh_flow() {
     // Validators submit signature
     sign_cp(&mut app, validator_1.clone(), &xprivs[0], xpubs[0], 0, 1021).unwrap();
     // sign_cp(&mut app, validator_3.clone(), &xprivs[2], xpubs[2], 0, 1021).unwrap();
-    sign_cp(&mut app, validator_2.clone(), &xprivs[1], xpubs[1], 0, 1021).unwrap();
+    // sign_cp(&mut app, validator_2.clone(), &xprivs[1], xpubs[1], 0, 1021).unwrap();
 
     // Increase block and current Signing checkpoint changed to Complete
     let checkpoint: Checkpoint = app

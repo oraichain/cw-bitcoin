@@ -371,14 +371,39 @@ impl SignatorySet {
         // otherwise leave 0 (this number will be an accumulator of voting power
         // which had valid signatures, and will be added to as we check the
         // remaining signatures).
-        let script = script! {
-            <signatory.pubkey.as_slice()> OP_CHECKSIG
-            OP_IF
-                <truncated_voting_power as i64>
-            OP_ELSE
+        #[warn(unused_assignments)]
+        let mut script = script! {};
+        #[cfg(not(feature = "p2sh"))]
+        {
+            script = script! {
+                <signatory.pubkey.as_slice()> OP_CHECKSIG
+                OP_IF
+                    <truncated_voting_power as i64>
+                OP_ELSE
+                    0
+                OP_ENDIF
+            };
+        }
+        #[cfg(feature = "p2sh")]
+        {
+            script = script! {
+                OP_DUP
                 0
-            OP_ENDIF
-        };
+                OP_EQUAL
+                OP_NOT
+                OP_IF
+                    <signatory.pubkey.as_slice()> OP_CHECKSIG
+                    OP_IF
+                        <truncated_voting_power as i64>
+                    OP_ELSE
+                        0
+                    OP_ENDIF
+                OP_ELSE
+                    OP_DROP
+                    0
+                OP_ENDIF
+            };
+        }
         let mut bytes = script.into_bytes();
 
         // All other signatories
@@ -388,13 +413,36 @@ impl SignatorySet {
             // (leaving the next signature at the top of the stack), push the
             // pubkey onto the stack, check the signature against it, and add to
             // the voting power accumulator if the signature was valid.
-            let script = script! {
-                OP_SWAP
-                <signatory.pubkey.as_slice()> OP_CHECKSIG
-                OP_IF
-                    <truncated_voting_power as i64> OP_ADD
-                OP_ENDIF
-            };
+            #[warn(unused_assignments)]
+            let mut script = script! {};
+            #[cfg(not(feature = "p2sh"))]
+            {
+                script = script! {
+                    OP_SWAP
+                    <signatory.pubkey.as_slice()> OP_CHECKSIG
+                    OP_IF
+                        <truncated_voting_power as i64> OP_ADD
+                    OP_ENDIF
+                };
+            }
+            #[cfg(feature = "p2sh")]
+            {
+                script = script! {
+                    OP_SWAP
+                    OP_DUP
+                    0
+                    OP_EQUAL
+                    OP_NOT
+                    OP_IF
+                        <signatory.pubkey.as_slice()> OP_CHECKSIG
+                        OP_IF
+                            <truncated_voting_power as i64> OP_ADD
+                        OP_ENDIF
+                    OP_ELSE
+                        OP_DROP
+                    OP_ENDIF
+                };
+            }
             bytes.extend(&script.into_bytes());
         }
 
