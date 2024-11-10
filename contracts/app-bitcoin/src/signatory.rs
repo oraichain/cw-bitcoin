@@ -422,7 +422,14 @@ impl SignatorySet {
     /// script, which is what is used as the script pubkey in deposit outputs
     /// and reserve outputs.
     pub fn output_script(&self, dest: &[u8], threshold: (u64, u64)) -> ContractResult<Script> {
-        Ok(self.redeem_script(dest, threshold)?.to_p2sh())
+        #[cfg(feature = "p2sh")]
+        {
+            Ok(self.redeem_script(dest, threshold)?.to_p2sh())
+        }
+        #[cfg(not(feature = "p2sh"))]
+        {
+            Ok(self.redeem_script(dest, threshold)?.to_v0_p2wsh())
+        }
     }
 
     /// Calculates the number of bits of precision to remove from voting power

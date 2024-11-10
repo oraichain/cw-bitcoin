@@ -289,36 +289,7 @@ impl ThresholdSig {
     /// script.
     // TODO: this shouldn't know so much about bitcoin-specific structure,
     // decouple by exposing a power-ordered iterator of Option<Signature>
-    pub fn to_witness(&self) -> ContractResult<Vec<Vec<u8>>> {
-        if !self.signed() {
-            return Ok(vec![]);
-        }
-
-        let mut entries: Vec<_> = self.sigs.clone();
-        // Sort ascending by voting power, opposite order of public keys in the
-        // script
-        entries.sort_by(|a, b| {
-            if a.1.power == b.1.power {
-                a.0.bytes.cmp(&b.0.bytes)
-            } else {
-                a.1.power.cmp(&b.1.power)
-            }
-        });
-
-        entries
-            .into_iter()
-            .map(|(_, share)| {
-                share.sig.map_or(Ok(vec![]), |sig| {
-                    let sig = ecdsa::Signature::from_compact(&sig.0)?;
-                    let mut v = sig.serialize_der().to_vec();
-                    v.push(EcdsaSighashType::All.to_u32() as u8);
-                    Ok(v)
-                })
-            })
-            .collect()
-    }
-
-    pub fn to_sh_sigs(&self) -> ContractResult<Vec<Vec<u8>>> {
+    pub fn to_sigs(&self) -> ContractResult<Vec<Vec<u8>>> {
         if !self.signed() {
             return Ok(vec![]);
         }

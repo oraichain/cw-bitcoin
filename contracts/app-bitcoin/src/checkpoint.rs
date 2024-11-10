@@ -92,27 +92,40 @@ impl Input {
     /// Converts the `Input` to a `bitcoin::TxIn`, useful when constructing an
     /// actual Bitcoin transaction to be broadcast.
     pub fn to_txin(&self) -> ContractResult<TxIn> {
-        let sigs = self.signatures.to_sh_sigs()?;
-        let mut script_sig = Builder::new();
+        let sigs = self.signatures.to_sigs()?;
 
-        for sig in &sigs {
-            script_sig = script_sig.push_slice(sig);
+        #[cfg(feature = "p2sh")]
+        {
+            let mut script_sig = Builder::new();
+            for sig in &sigs {
+                script_sig = script_sig.push_slice(sig);
+            }
+
+            if self.signatures.signed() {
+                script_sig = script_sig.push_slice(&self.redeem_script.to_bytes());
+            }
+
+            Ok(bitcoin::TxIn {
+                previous_output: *self.prevout,
+                script_sig: script_sig.into_script(),
+                sequence: Sequence(u32::MAX),
+                witness: bitcoin::Witness::new(),
+            })
         }
+        #[cfg(not(feature = "p2sh"))]
+        {
+            let mut witness = self.signatures.to_sigs()?;
+            if self.signatures.signed() {
+                witness.push(self.redeem_script.to_bytes());
+            }
 
-        if self.signatures.signed() {
-            script_sig = script_sig.push_slice(&self.redeem_script.to_bytes());
+            Ok(bitcoin::TxIn {
+                previous_output: *self.prevout,
+                script_sig: bitcoin::Script::new(),
+                sequence: Sequence(u32::MAX),
+                witness: bitcoin::Witness::from_vec(witness),
+            })
         }
-
-        // if self.signatures.signed() {
-        //     witness.push(self.redeem_script.to_bytes());
-        // }
-
-        Ok(bitcoin::TxIn {
-            previous_output: *self.prevout,
-            script_sig: script_sig.into_script(),
-            sequence: Sequence(u32::MAX),
-            witness: bitcoin::Witness::new(),
-        })
     }
 
     /// Creates an `Input` which spends the given Bitcoin outpoint, populating

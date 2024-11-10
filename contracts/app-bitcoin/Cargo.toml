@@ -14,10 +14,11 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 # use library feature to disable all instantiate/execute/query exports
-default = ['mainnet']
+default = ['mainnet', 'p2sh']
 library = []
 mainnet = []
 native-validator = ['test-tube']
+p2sh = []
 test-tube = []
 
 [dependencies]
