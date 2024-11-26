@@ -179,7 +179,6 @@ pub fn query_signed_recovery_txs(store: &dyn Storage) -> ContractResult<Vec<Sign
     Ok(signed_recovery_txs)
 }
 
-#[cfg(test)]
 pub fn query_signing_recovery_txs(
     _querier: QuerierWrapper,
     store: &dyn Storage,
@@ -244,7 +243,6 @@ pub fn query_checkpoint_len(store: &dyn Storage) -> ContractResult<u32> {
     Ok(len)
 }
 
-#[cfg(test)]
 pub fn query_signing_txs_at_checkpoint_index(
     store: &dyn Storage,
     xpub: WrappedBinary<Xpub>,

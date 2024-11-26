@@ -92,7 +92,6 @@ impl RecoveryTxs {
         Ok(())
     }
 
-    #[cfg(test)]
     pub fn to_sign(
         &self,
         store: &dyn Storage,

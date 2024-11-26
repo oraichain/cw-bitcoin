@@ -200,38 +200,11 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::BuildingCheckpoint {} => {
             to_json_binary(&query_building_checkpoint(deps.storage)?)
         }
-        QueryMsg::SingleSigningRecoveryTxs {
-            xpub,
-            tx_index,
-            input_index,
-        } => to_json_binary(&query_single_signing_recovery_txs(
-            deps.querier,
-            deps.storage,
-            xpub,
-            tx_index,
-            input_index,
-        )?),
-        #[cfg(test)]
         QueryMsg::SigningRecoveryTxs { xpub } => to_json_binary(&query_signing_recovery_txs(
             deps.querier,
             deps.storage,
             xpub,
         )?),
-        QueryMsg::SingleSigningTxsAtCheckpointIndex {
-            xpub,
-            checkpoint_index,
-            batch_index,
-            tx_index,
-            input_index,
-        } => to_json_binary(&query_single_signing_txs_at_checkpoint_index(
-            deps.storage,
-            xpub,
-            checkpoint_index,
-            batch_index,
-            tx_index,
-            input_index,
-        )?),
-        #[cfg(test)]
         QueryMsg::SigningTxsAtCheckpointIndex {
             xpub,
             checkpoint_index,
