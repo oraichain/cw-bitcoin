@@ -112,6 +112,31 @@ impl RecoveryTxs {
         Ok(msgs)
     }
 
+    pub fn to_single_sign(
+        &self,
+        store: &dyn Storage,
+        xpub: &Xpub,
+        tx_index: u32,
+        input_index: usize,
+    ) -> ContractResult<Vec<([u8; 32], u32)>> {
+        let mut msgs = vec![];
+
+        let tx = RECOVERY_TXS.get(store, tx_index)?.ok_or_else(|| {
+            ContractError::Signer("Error getting recovery transaction".to_string())
+        })?;
+
+        let input = tx.tx.input.get(input_index).ok_or_else(|| {
+            ContractError::Signer("Invalid recovery transaction input index".to_string())
+        })?;
+
+        let pubkey = xpub.derive_pubkey(input.sigset_index)?;
+        if input.signatures.needs_sig(pubkey.into()) {
+            msgs.push((input.signatures.message(), input.sigset_index));
+        }
+
+        Ok(msgs)
+    }
+
     pub fn sign(
         &mut self,
         api: &dyn Api,
