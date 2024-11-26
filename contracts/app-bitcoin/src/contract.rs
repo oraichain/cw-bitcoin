@@ -187,12 +187,14 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::CheckpointFees { index } => {
             to_json_binary(&query_checkpoint_fees(deps.storage, index)?)
         }
+        #[cfg(test)]
         QueryMsg::CompletedCheckpointTxs { limit } => {
             to_json_binary(&query_complete_checkpoint_txs(deps.storage, limit)?)
         }
         QueryMsg::CheckpointTx { index } => {
             to_json_binary(&query_checkpoint_tx(deps.storage, index)?)
         }
+        #[cfg(test)]
         QueryMsg::SignedRecoveryTxs {} => to_json_binary(&query_signed_recovery_txs(deps.storage)?),
         QueryMsg::CheckpointByIndex { index } => {
             to_json_binary(&query_checkpoint_by_index(deps.storage, index)?)

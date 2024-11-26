@@ -155,8 +155,10 @@ pub enum QueryMsg {
     CheckpointFees { index: Option<u32> },
     #[returns(u64)]
     WithdrawalFees { address: String, index: Option<u32> },
+    #[cfg(test)]
     #[returns(Vec<Adapter<Transaction>>)]
     CompletedCheckpointTxs { limit: u32 },
+    #[cfg(test)]
     #[returns(Vec<Adapter<Transaction>>)]
     SignedRecoveryTxs {},
     #[returns(Adapter<Transaction>)]
