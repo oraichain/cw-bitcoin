@@ -615,6 +615,38 @@ impl Checkpoint {
         Ok(msgs)
     }
 
+    pub fn to_single_sign(
+        &self,
+        xpub: &Xpub,
+        batch_index: usize,
+        tx_index: usize,
+        input_index: usize,
+    ) -> ContractResult<Vec<([u8; 32], u32)>> {
+        let mut msgs = vec![];
+
+        let batch = self
+            .batches
+            .get(batch_index as usize)
+            .ok_or(ContractError::Checkpoint("Cannot get batch".into()))?;
+
+        let tx = batch
+            .batch
+            .get(tx_index as usize)
+            .ok_or(ContractError::Checkpoint("Cannot get tx".into()))?;
+
+        let input = tx
+            .input
+            .get(input_index as usize)
+            .ok_or(ContractError::Checkpoint("Cannot get input".into()))?;
+
+        let pubkey = xpub.derive_pubkey(input.sigset_index)?;
+        if input.signatures.needs_sig(pubkey.into()) {
+            msgs.push((input.signatures.message(), input.sigset_index));
+        }
+
+        Ok(msgs)
+    }
+
     /// Returns the number of fully-signed batches in the checkpoint.
     fn signed_batches(&self) -> usize {
         let mut signed_batches = 0;

@@ -188,6 +188,17 @@ pub fn query_signing_recovery_txs(
     recovery_txs.to_sign(store, &xpub.0)
 }
 
+pub fn query_single_signing_recovery_txs(
+    _querier: QuerierWrapper,
+    store: &dyn Storage,
+    xpub: WrappedBinary<Xpub>,
+    tx_index: usize,
+    input_index: usize,
+) -> ContractResult<Vec<([u8; 32], u32)>> {
+    let recovery_txs = RecoveryTxs::default();
+    recovery_txs.to_single_sign(store, &xpub.0, tx_index as u32, input_index)
+}
+
 pub fn query_comfirmed_index(store: &dyn Storage) -> ContractResult<Option<u32>> {
     let checkpoints = CheckpointQueue::default();
     let confirmed_index = checkpoints.confirmed_index(store);
@@ -243,6 +254,22 @@ pub fn query_signing_txs_at_checkpoint_index(
         return Err(ContractError::App("checkpoint is not signing".to_string()));
     }
     checkpoint.to_sign(&xpub.0)
+}
+
+pub fn query_single_signing_txs_at_checkpoint_index(
+    store: &dyn Storage,
+    xpub: WrappedBinary<Xpub>,
+    cp_index: u32,
+    batch_index: usize,
+    tx_index: usize,
+    input_index: usize,
+) -> ContractResult<Vec<([u8; 32], u32)>> {
+    let checkpoints = CheckpointQueue::default();
+    let checkpoint = checkpoints.get(store, cp_index)?;
+    if checkpoint.status != CheckpointStatus::Signing {
+        return Err(ContractError::App("checkpoint is not signing".to_string()));
+    }
+    checkpoint.to_single_sign(&xpub.0, batch_index, tx_index, input_index)
 }
 
 pub fn query_change_rates(

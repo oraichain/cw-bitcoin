@@ -2,6 +2,7 @@ use super::helper::sign;
 use crate::app::Bitcoin;
 use crate::checkpoint::{BatchType, Input};
 use crate::constants::BTC_NATIVE_TOKEN_DENOM;
+use crate::entrypoints::query_single_signing_txs_at_checkpoint_index;
 use crate::interface::{BitcoinConfig, CheckpointConfig, Dest};
 use crate::msg::Config;
 use crate::state::{
@@ -219,6 +220,15 @@ fn check_change_rates() -> ContractResult<()> {
     let env = set_time(1000);
     push_deposit(deps.as_mut().storage)?;
     maybe_step(env, deps.as_mut().storage, &mut block_height)?;
+    let signing_txs = query_single_signing_txs_at_checkpoint_index(
+        deps.as_mut().storage,
+        common_bitcoin::adapter::WrappedBinary(Xpub::new(xpub[0])),
+        0,
+        0,
+        0,
+        0,
+    );
+    println!("{:?}", signing_txs);
     sign_cp(deps.as_mut(), 10)?;
     assert_eq!(btc.borrow().checkpoints.len(deps.as_ref().storage)?, 2);
 

@@ -166,7 +166,21 @@ pub enum QueryMsg {
     #[returns(crate::checkpoint::Checkpoint)]
     BuildingCheckpoint {},
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
+    SingleSigningRecoveryTxs {
+        xpub: WrappedBinary<Xpub>,
+        tx_index: usize,
+        input_index: usize,
+    },
+    #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
     SigningRecoveryTxs { xpub: WrappedBinary<Xpub> },
+    #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
+    SingleSigningTxsAtCheckpointIndex {
+        xpub: WrappedBinary<Xpub>,
+        checkpoint_index: u32,
+        batch_index: usize,
+        tx_index: usize,
+        input_index: usize,
+    },
     #[returns(Vec<([u8; 32], u32)>)] // Fix: Added closing angle bracket
     SigningTxsAtCheckpointIndex {
         xpub: WrappedBinary<Xpub>,
