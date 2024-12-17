@@ -182,6 +182,20 @@ async fn relay_recovery(
     }
 }
 
+#[tokio::test]
+async fn test_local_regtest_dogecoin_addr() {
+    let addr = bitcoin::Address::from_str("n2ZvuPa3FR9aVrtr7tE98z9C6GiBTFhaY2").unwrap();
+    let script_pk = addr.script_pubkey();
+    let script = bitcoin::Script::from_str(&hex::encode(script_pk.as_bytes())).unwrap();
+    let re_addr = bitcoin::Address::from_script(&script, bitcoin::Network::Regtest).unwrap();
+    assert_eq!(addr, re_addr);
+    let compress =
+        hex::decode("038bdfff17d8305c82088a913637cb4bb495e13b7a434192e8d3b4f793ac6383fe").unwrap();
+    let pk = bitcoin::PublicKey::from_slice(&compress).unwrap();
+    let add = bitcoin::Address::p2pkh(&pk, bitcoin::Network::Regtest);
+    println!("{:?}", add);
+}
+
 #[cfg(all(
     feature = "mainnet",
     feature = "p2sh",
@@ -248,6 +262,7 @@ async fn test_p2sh_flow() {
 
     let async_wallet_address =
         bitcoincore_rpc_async::bitcoin::Address::from_str(&wallet_address.to_string()).unwrap();
+    println!("Wallet address: {:?}", async_wallet_address);
     btc_client
         .generate_to_address(1000, &async_wallet_address)
         .await

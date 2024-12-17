@@ -18,10 +18,12 @@ repository = "https://github.com/oraichain/bitcoin-bridge-cw.git"
 version = "0.1.0"
 
 [workspace.dependencies]
-bitcoin = {version = "0.29.2"}
+bitcoin = {git = "https://github.com/boolnetwork/rust-dogecoin", rev = "c976a25"}
+# bitcoin = {version = "0.29.2"}
 bitcoin-script = {git = "https://github.com/oraichain/rust-bitcoin-script.git"}
-bitcoincore-rpc-async = {package = "bitcoincore-rpc-async2", version = "4.0.2"}
-bitcoind = {version = "0.27.0", features = ["22_0"]}
+# bitcoincore-rpc-async = {package = "bitcoincore-rpc-async2", version = "4.0.2"}
+bitcoincore-rpc-async = {package = "bitcoincore-rpc-async2", git = "https://github.com/oraichain/rust-bitcoincore-rpc-async2", rev = "b36cba6"}
+bitcoind = {git = "https://github.com/oraichain/bitcoind.git", rev = "6732940", features = ["22_0"]}
 cosmwasm-schema = {version = "1.5"}
 cosmwasm-std = {version = "1.5", features = ["stargate"]}
 cosmwasm-storage = {version = "1.5"}
