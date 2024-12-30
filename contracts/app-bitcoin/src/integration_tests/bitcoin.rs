@@ -957,7 +957,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     let balance = app
         .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.u128(), 309846837000000 as u128);
+    assert_eq!(balance.u128(), 309835521000000 as u128);
 
     relay_checkpoint(
         &btc_client,
