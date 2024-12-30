@@ -32,6 +32,8 @@ pub const SIGNERS: Map<&str, ConsensusKey> = Map::new("signers");
 // by_cons Map<ConsensusKey, Xpub>
 pub const SIG_KEYS: Map<&ConsensusKey, Xpub> = Map::new("sig_keys");
 
+pub const FOUNDATION_KEYS: Item<Vec<Xpub>> = Item::new("foundation_keys");
+
 /// The collection also includes an set of all signatory extended public keys,
 /// which is used to prevent duplicate keys from being submitted.
 /// xpubs Map<Xpub::encode(), ()>

@@ -705,6 +705,15 @@ async fn test_full_flow_happy_case_bitcoin() {
         0,
     )
     .await;
+    let _ = mine_and_relay_headers(
+        &btc_client,
+        &mut app,
+        &async_wallet_address,
+        1,
+        owner.clone(),
+        light_client_addr.clone(),
+    )
+    .await;
     let header_height: u32 = app
         .query(
             light_client_addr.clone(),

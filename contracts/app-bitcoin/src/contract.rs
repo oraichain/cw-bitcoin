@@ -134,6 +134,9 @@ pub fn execute(
             voting_powers,
             consensus_keys,
         } => add_validators(deps.storage, info, addrs, voting_powers, consensus_keys),
+        ExecuteMsg::UpdateFoundationKeys { xpubs } => {
+            update_foundation_keys(deps.storage, info, xpubs)
+        }
         ExecuteMsg::SubmitCheckpointSignature {
             xpub,
             sigs,

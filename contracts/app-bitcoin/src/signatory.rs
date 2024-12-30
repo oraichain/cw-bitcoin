@@ -80,6 +80,11 @@ pub struct SignatorySet {
 
     /// The signatories in this set, sorted by voting power.
     pub signatories: Vec<Signatory>,
+
+    /// The foundation signatories in this set.
+    /// add default
+    #[serde(default)]
+    pub foundation_signatories: Vec<Signatory>,
 }
 
 type IterItem<'a> = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>;
@@ -97,6 +102,7 @@ impl SignatorySet {
             possible_vp: 0,
             index,
             signatories: vec![],
+            foundation_signatories: vec![],
         };
 
         let val_set = get_validators(store)?;
@@ -255,6 +261,7 @@ impl SignatorySet {
             possible_vp: total_vp,
             create_time: 0,
             index: 0,
+            foundation_signatories: vec![],
         };
 
         for _ in 0..100 {
@@ -366,12 +373,17 @@ impl SignatorySet {
         })?;
 
         let truncated_voting_power = signatory.voting_power >> truncation;
+
+        let mut bytes = vec![];
         // Push the pubkey onto the stack, check the signature against it, and
         // leave the voting power on the stack if the signature was valid,
         // otherwise leave 0 (this number will be an accumulator of voting power
         // which had valid signatures, and will be added to as we check the
         // remaining signatures).
         let script = script! {
+            0
+            OP_EQUAL
+            OP_IF
             <signatory.pubkey.as_slice()> OP_CHECKSIG
             OP_IF
                 <truncated_voting_power as i64>
@@ -379,7 +391,7 @@ impl SignatorySet {
                 0
             OP_ENDIF
         };
-        let mut bytes = script.into_bytes();
+        bytes.extend(script.into_bytes());
 
         // All other signatories
         for signatory in iter {
@@ -414,6 +426,52 @@ impl SignatorySet {
         // value on the stack is the threshold check result.
         let script = script!(<dest> OP_DROP);
         bytes.extend(&script.into_bytes());
+
+        if self.foundation_signatories.len() > 0 {
+            let mut iter = self.foundation_signatories.iter();
+
+            // First signatory
+            let signatory = iter.next().ok_or_else(|| {
+                ContractError::App(
+                    "Cannot create redeem script for empty signatory set".to_string(),
+                )
+            })?;
+
+            let mut total_voting_power = signatory.voting_power;
+
+            let script = script! {
+                <signatory.pubkey.as_slice()> OP_CHECKSIG
+                OP_IF
+                    <signatory.voting_power as i64>
+                OP_ELSE
+                    0
+                OP_ENDIF
+            };
+            bytes.extend(script.into_bytes());
+
+            for signatory in iter {
+                let script = script! {
+                    OP_SWAP
+                    <signatory.pubkey.as_slice()> OP_CHECKSIG
+                    OP_IF
+                        <signatory.voting_power as i64> OP_ADD
+                    OP_ENDIF
+                };
+                total_voting_power += signatory.voting_power;
+                bytes.extend(&script.into_bytes());
+            }
+
+            let truncated_threshold = total_voting_power * threshold.0 / threshold.1;
+            // Check that accumulator of voting power which had valid signatures
+            // (now a final sum) is greater than the threshold.
+            let script = script! {
+                <truncated_threshold as i64> OP_GREATERTHAN
+            };
+            bytes.extend(&script.into_bytes());
+        } else {
+            let script = script!(OP_RETURN);
+            bytes.extend(script.into_bytes());
+        }
 
         Ok(bytes.into())
     }

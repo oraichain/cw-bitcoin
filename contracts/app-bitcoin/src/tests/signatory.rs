@@ -36,6 +36,7 @@ fn mock_signatory_set() -> SignatorySet {
                 ]),
             },
         ],
+        foundation_signatories: vec![],
     };
     sigsets
 }
@@ -246,7 +247,8 @@ fn from_script() {
                         116, 47, 145, 136, 147, 41, 44, 35, 196, 157, 0, 12, 64, 35, 186, 212, 255
                     ])
                 }
-            ]
+            ],
+            foundation_signatories: vec![]
         }
     );
     assert_eq!(commitment, vec![0]);
