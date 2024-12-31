@@ -8,7 +8,7 @@ use crate::{
     signatory::{Signatory, SignatoryKeys, SignatorySet},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIRMED_INDEX, FEE_POOL,
-        FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, VALIDATORS,
+        FIRST_UNHANDLED_CONFIRMED_INDEX, FOUNDATION_KEYS, SIGNERS, VALIDATORS,
     },
     tests::helper::push_bitcoin_tx_output,
     threshold_sig::Pubkey,
@@ -68,6 +68,7 @@ fn test_with_real_data() -> Result<(), common_bitcoin::error::ContractError> {
     let mut signatory_keys = SignatoryKeys::default();
     let cons_keys = cons_keys_real_validators();
     let xpubs = xpub_real_validators();
+    FOUNDATION_KEYS.save(deps.as_mut().storage, &Vec::new())?;
     SIGNERS
         .save(
             &mut deps.storage,

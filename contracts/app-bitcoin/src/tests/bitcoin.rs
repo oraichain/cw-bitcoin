@@ -7,7 +7,7 @@ use crate::interface::{BitcoinConfig, CheckpointConfig, Dest};
 use crate::msg::Config;
 use crate::state::{
     BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINT_CONFIG, CONFIG, CONFIRMED_INDEX, FEE_POOL,
-    FIRST_UNHANDLED_CONFIRMED_INDEX, SIGNERS, VALIDATORS,
+    FIRST_UNHANDLED_CONFIRMED_INDEX, FOUNDATION_KEYS, SIGNERS, VALIDATORS,
 };
 use crate::tests::helper::set_time;
 use bitcoin::hashes::Hash;
@@ -84,7 +84,7 @@ fn check_change_rates() -> ContractResult<()> {
     BITCOIN_CONFIG.save(deps.as_mut().storage, &bitcoin_config)?;
     FEE_POOL.save(deps.as_mut().storage, &0)?;
     CHECKPOINT_CONFIG.save(deps.as_mut().storage, &CheckpointConfig::default())?;
-
+    FOUNDATION_KEYS.save(deps.as_mut().storage, &Vec::new())?;
     BUILDING_INDEX.save(deps.as_mut().storage, &0)?;
 
     let consensus_key1 = [0; 32];
@@ -339,7 +339,7 @@ fn test_take_pending() -> ContractResult<()> {
     FEE_POOL.save(deps.as_mut().storage, &0)?;
     CHECKPOINT_CONFIG.save(deps.as_mut().storage, &CheckpointConfig::default())?;
     FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.as_mut().storage, &0)?;
-
+    FOUNDATION_KEYS.save(deps.as_mut().storage, &Vec::new())?;
     BUILDING_INDEX.save(deps.as_mut().storage, &0)?;
 
     let consensus_key1 = [0; 32];

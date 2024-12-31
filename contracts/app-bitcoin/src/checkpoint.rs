@@ -116,6 +116,7 @@ impl Input {
         threshold: (u64, u64),
     ) -> ContractResult<Self> {
         let script_pubkey = sigset.output_script(dest, threshold)?;
+        println!("script_pubkey: {:?}", script_pubkey.script_hash());
         let redeem_script = sigset.redeem_script(dest, threshold)?;
 
         Ok(Input {
