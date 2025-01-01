@@ -82,6 +82,7 @@ async fn relay_checkpoint(
 
     for cp in completed_cps {
         let tx = cp.into_inner();
+        println!("tx: {:?}", tx.raw_hex());
         let wrapped_txid = btc_client.send_raw_transaction(&tx).await;
         match wrapped_txid {
             Ok(txid) => {
@@ -1386,6 +1387,7 @@ async fn test_full_flow_with_foundation_validators() {
         .get_raw_transaction(&btc_txid, None)
         .await
         .unwrap();
+    println!("btc_tx: {:?}", btc_tx.raw_hex());
     let vout = btc_tx
         .output
         .iter()
@@ -1522,12 +1524,15 @@ async fn test_full_flow_with_foundation_validators() {
     let checkpoint: Checkpoint = app
         .query(
             bitcoin_bridge_addr.clone(),
-            &msg::QueryMsg::CheckpointByIndex { index: 1 },
+            &msg::QueryMsg::CheckpointByIndex { index: 0 },
         )
         .unwrap();
 
     let sigset = checkpoint.sigset.clone();
     let redeem_script = sigset.redeem_script(&[0], threshold).unwrap();
+    let cp_index = 0;
+    let script_address = redeem_script.wscript_hash();
+    println!("script address: {:?}", script_address);
     let bitcoin_txin = bitcoin::TxIn {
         previous_output: bitcoin::OutPoint {
             txid: checkpoint_tx.txid(),
@@ -1543,7 +1548,7 @@ async fn test_full_flow_with_foundation_validators() {
         checkpoint_tx.output[1].value
     };
     let bitcoin_txout = bitcoin::TxOut {
-        value: 1000,
+        value: input_amount - 1000,
         script_pubkey: receive_fund_address.script_pubkey(),
     };
     let bitcoin_transaction = bitcoin::Transaction {
@@ -1561,25 +1566,33 @@ async fn test_full_flow_with_foundation_validators() {
     let secp = Secp256k1::new();
     for i in 0..3 {
         let privkey = foundation_xprivs[i]
-            .derive_priv(&secp, &[ChildNumber::from_normal_idx(1).unwrap()])
+            .derive_priv(&secp, &[ChildNumber::from_normal_idx(cp_index).unwrap()])
             .unwrap()
             .private_key;
-        let message = Message::from_slice(&sighash.as_ref()).unwrap();
-        let sig = secp.sign_ecdsa(&message, &privkey);
-        sigs.push(sig);
+        let message = Message::from_slice(&sighash.as_ref()).unwrap(); // Extract the [u8; 32] value from the tuple
+        let mut sig = secp.sign_ecdsa(&message, &privkey).serialize_der().to_vec();
+        sig.push(EcdsaSighashType::All.to_u32() as u8);
+        sigs.push(sig.clone());
     }
 
     // append signatures to witness based on the order of foundation keys
     let mut witness = bitcoin::Witness::new();
     let foundation_signatories = checkpoint.sigset.foundation_signatories;
+    let mut sigs_push_pivot = 0;
     for i in 0..3 {
         for j in 0..3 {
             let pubkey: Pubkey = Xpub::new(foundation_xpubs[j])
-                .derive_pubkey(1)
+                .derive_pubkey(cp_index)
                 .unwrap()
                 .into();
             if foundation_signatories[2 - i].pubkey == pubkey {
-                witness.push(sigs[j].serialize_der().to_vec());
+                if sigs_push_pivot == 0 {
+                    witness.push(hex::decode("").unwrap());
+                    sigs_push_pivot += 1;
+                } else {
+                    witness.push(sigs[j].clone());
+                    sigs_push_pivot += 1;
+                }
             }
         }
     }
@@ -1595,17 +1608,19 @@ async fn test_full_flow_with_foundation_validators() {
         witness,
     };
     let bitcoin_txout = bitcoin::TxOut {
-        value: 1000,
+        value: input_amount - 1000,
         script_pubkey: receive_fund_address.script_pubkey(),
     };
-    let bitcoin_transaction = bitcoin::Transaction {
+    let bitcoin_transaction_1 = bitcoin::Transaction {
         version: 1,
         lock_time: bitcoin::PackedLockTime(0),
         input: vec![bitcoin_txin],
         output: vec![bitcoin_txout],
     };
-    let wrapped_txid = btc_client.send_raw_transaction(&bitcoin_transaction).await;
-    println!("tx hex: {:?}", bitcoin_transaction.raw_hex());
+    let wrapped_txid = btc_client
+        .send_raw_transaction(&bitcoin_transaction_1)
+        .await;
+    println!("tx hex: {:?}", bitcoin_transaction_1.raw_hex());
     println!("txin hex: {:?}", checkpoint_tx.raw_hex());
     match wrapped_txid {
         Ok(txid) => {

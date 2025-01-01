@@ -129,7 +129,6 @@ impl SignatorySet {
 
         for entry in foundation_sigs {
             let signatory_key = entry.derive_pubkey(index)?.into();
-
             let signatory = Signatory {
                 voting_power: 1,
                 pubkey: signatory_key,
@@ -488,11 +487,13 @@ impl SignatorySet {
                 bytes.extend(&script.into_bytes());
             }
 
-            let truncated_threshold = total_voting_power * threshold.0 / threshold.1;
+            let truncated_threshold = ((total_voting_power as f64) * (threshold.0 as f64)
+                / (threshold.1 as f64))
+                .ceil() as u64;
             // Check that accumulator of voting power which had valid signatures
             // (now a final sum) is greater than the threshold.
             let script = script! {
-                <truncated_threshold as i64> OP_GREATERTHAN
+                <truncated_threshold as i64> OP_GREATERTHANOREQUAL
             };
             bytes.extend(&script.into_bytes());
         } else {
