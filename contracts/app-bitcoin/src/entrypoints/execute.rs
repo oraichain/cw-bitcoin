@@ -5,8 +5,8 @@ use crate::{
     helper::{convert_addr_by_prefix, fetch_staking_validator},
     interface::{BitcoinConfig, CheckpointConfig, Dest},
     state::{
-        get_full_btc_denom, Ratio, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, SIGNERS,
-        TOKEN_FEE_RATIO, VALIDATORS, WHITELIST_VALIDATORS,
+        get_full_btc_denom, Ratio, BITCOIN_CONFIG, CHECKPOINT_CONFIG, CONFIG, FOUNDATION_KEYS,
+        SIGNERS, TOKEN_FEE_RATIO, VALIDATORS, WHITELIST_VALIDATORS,
     },
     threshold_sig::Signature,
 };
@@ -108,6 +108,29 @@ pub fn update_bitcoin_config(
     assert_eq!(info.sender, CONFIG.load(store)?.owner);
     BITCOIN_CONFIG.save(store, &config)?;
     Ok(Response::new().add_attribute("action", "update_bitcoin_config"))
+}
+
+pub fn update_foundation_keys(
+    store: &mut dyn Storage,
+    info: MessageInfo,
+    xpubs: Vec<WrappedBinary<Xpub>>,
+) -> ContractResult<Response> {
+    assert_eq!(info.sender, CONFIG.load(store)?.owner);
+    let mut raw_xpubs = vec![];
+    for i in 0..xpubs.len() {
+        let xpub = xpubs.get(i).unwrap();
+        raw_xpubs.push(xpub.0.clone());
+    }
+    FOUNDATION_KEYS.save(store, &raw_xpubs)?;
+    Ok(Response::new()
+        .add_attribute("action", "update_foundation_keys")
+        .add_attribute(
+            "xpubs",
+            raw_xpubs
+                .into_iter()
+                .map(|x| x.to_string())
+                .collect::<String>(),
+        ))
 }
 
 pub fn relay_deposit(

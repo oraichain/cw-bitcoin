@@ -8,7 +8,7 @@ use crate::{
     msg::{Config, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg},
     state::{
         BITCOIN_CONFIG, BUILDING_INDEX, CHECKPOINTS, CHECKPOINT_CONFIG, CONFIG, FEE_POOL,
-        FIRST_UNHANDLED_CONFIRMED_INDEX, OUTPOINTS,
+        FIRST_UNHANDLED_CONFIRMED_INDEX, FOUNDATION_KEYS, OUTPOINTS,
     },
 };
 use common_bitcoin::error::ContractError;
@@ -51,6 +51,7 @@ pub fn instantiate(
     // Set up checkpoint index
     BUILDING_INDEX.save(deps.storage, &0)?;
     FIRST_UNHANDLED_CONFIRMED_INDEX.save(deps.storage, &0)?;
+    FOUNDATION_KEYS.save(deps.storage, &Vec::new())?;
 
     Ok(Response::default())
 }
@@ -134,6 +135,9 @@ pub fn execute(
             voting_powers,
             consensus_keys,
         } => add_validators(deps.storage, info, addrs, voting_powers, consensus_keys),
+        ExecuteMsg::UpdateFoundationKeys { xpubs } => {
+            update_foundation_keys(deps.storage, info, xpubs)
+        }
         ExecuteMsg::SubmitCheckpointSignature {
             xpub,
             sigs,
@@ -236,22 +240,11 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
     let original_version =
         cw2::ensure_from_older_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    OUTPOINTS.remove(
-        deps.storage,
-        "06bec38b1b4d9987cef3f3517f2bae518e72c9764ffc73123c30cdea7dbfe91f:0",
-    );
-    OUTPOINTS.remove(
-        deps.storage,
-        "bc70cee8d686fc8ea1fedea8411102ece44c27aade8d1cbc2551c2d4974b40a3:3",
-    );
-    OUTPOINTS.remove(
-        deps.storage,
-        "bc70cee8d686fc8ea1fedea8411102ece44c27aade8d1cbc2551c2d4974b40a3:4",
-    );
-    OUTPOINTS.remove(
-        deps.storage,
-        "bc70cee8d686fc8ea1fedea8411102ece44c27aade8d1cbc2551c2d4974b40a3:5",
-    );
+    let foundation_keys = FOUNDATION_KEYS.may_load(deps.storage)?;
+    if let Some(_) = foundation_keys {
+    } else {
+        FOUNDATION_KEYS.save(deps.storage, &Vec::new())?;
+    }
     Ok(Response::new().add_attribute("new_version", original_version.to_string()))
 }
 

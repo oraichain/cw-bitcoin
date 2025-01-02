@@ -3,10 +3,12 @@ use std::cmp::Ordering;
 use crate::app::ConsensusKey;
 use crate::constants::MAX_SIGNATORIES;
 use crate::state::get_validators;
+use crate::state::FOUNDATION_KEYS;
 use crate::state::SIG_KEYS;
 use crate::state::XPUBS;
 
 use super::threshold_sig::Pubkey;
+use bitcoin::blockdata::opcodes::all::OP_EQUAL;
 use bitcoin::blockdata::opcodes::all::{
     OP_ADD, OP_CHECKSIG, OP_DROP, OP_ELSE, OP_ENDIF, OP_GREATERTHAN, OP_IF, OP_SWAP,
 };
@@ -80,6 +82,11 @@ pub struct SignatorySet {
 
     /// The signatories in this set, sorted by voting power.
     pub signatories: Vec<Signatory>,
+
+    /// The foundation signatories in this set.
+    /// add default
+    #[serde(default)]
+    pub foundation_signatories: Vec<Signatory>,
 }
 
 type IterItem<'a> = std::result::Result<Instruction<'a>, bitcoin::blockdata::script::Error>;
@@ -97,9 +104,11 @@ impl SignatorySet {
             possible_vp: 0,
             index,
             signatories: vec![],
+            foundation_signatories: vec![],
         };
 
         let val_set = get_validators(store)?;
+        let foundation_sigs = FOUNDATION_KEYS.load(store)?;
 
         for entry in &val_set {
             sigset.possible_vp += entry.power;
@@ -118,9 +127,20 @@ impl SignatorySet {
 
         sigset.sort_and_truncate();
 
+        for entry in foundation_sigs {
+            let signatory_key = entry.derive_pubkey(index)?.into();
+            let signatory = Signatory {
+                voting_power: 1,
+                pubkey: signatory_key,
+            };
+            sigset.foundation_signatories.push(signatory);
+        }
+        sigset.sort_foundation_sigs();
+
         Ok(sigset)
     }
 
+    // FIXME: make this function can pick up foundation sigsets
     pub fn from_script(
         script: &bitcoin::Script,
         threshold_ratio: (u64, u64),
@@ -182,6 +202,10 @@ impl SignatorySet {
         fn take_first_signatory<'a>(
             ins: &mut impl Iterator<Item = IterItem<'a>>,
         ) -> ContractResult<Signatory> {
+            let condition = take_instruction(ins)?;
+            println!("condition {:?}", condition);
+            take_op(ins, OP_EQUAL)?;
+            take_op(ins, OP_IF)?;
             let pubkey = take_key(ins)?;
             take_op(ins, OP_CHECKSIG)?;
             take_op(ins, OP_IF)?;
@@ -246,8 +270,6 @@ impl SignatorySet {
         let expected_threshold = take_threshold(&mut ins)?;
         let commitment = take_commitment(&mut ins)?;
 
-        assert!(ins.next().is_none());
-
         let total_vp: u64 = sigs.iter().map(|s| s.voting_power).sum();
         let mut sigset = Self {
             signatories: sigs,
@@ -255,6 +277,7 @@ impl SignatorySet {
             possible_vp: total_vp,
             create_time: 0,
             index: 0,
+            foundation_signatories: vec![],
         };
 
         for _ in 0..100 {
@@ -276,6 +299,11 @@ impl SignatorySet {
             sigset.signature_threshold(threshold_ratio),
             expected_threshold,
         );
+        // let hex = sigset
+        //     .redeem_script(commitment, threshold_ratio)
+        //     .unwrap()
+        //     .to_hex();
+        // println!("hex: {}", hex);
         assert_eq!(&sigset.redeem_script(commitment, threshold_ratio)?, script);
 
         Ok((sigset, commitment.to_vec()))
@@ -284,6 +312,10 @@ impl SignatorySet {
     fn insert(&mut self, signatory: Signatory) {
         self.present_vp += signatory.voting_power;
         self.signatories.push(signatory);
+    }
+
+    fn sort_foundation_sigs(&mut self) {
+        self.foundation_signatories.sort_by(|a, b| b.cmp(a));
     }
 
     fn sort_and_truncate(&mut self) {
@@ -366,20 +398,25 @@ impl SignatorySet {
         })?;
 
         let truncated_voting_power = signatory.voting_power >> truncation;
+
+        let mut bytes = vec![];
         // Push the pubkey onto the stack, check the signature against it, and
         // leave the voting power on the stack if the signature was valid,
         // otherwise leave 0 (this number will be an accumulator of voting power
         // which had valid signatures, and will be added to as we check the
         // remaining signatures).
         let script = script! {
-            <signatory.pubkey.as_slice()> OP_CHECKSIG
+            <[0].as_slice()>
+            OP_EQUAL
             OP_IF
-                <truncated_voting_power as i64>
-            OP_ELSE
-                0
-            OP_ENDIF
+                <signatory.pubkey.as_slice()> OP_CHECKSIG
+                OP_IF
+                    <truncated_voting_power as i64>
+                OP_ELSE
+                    0
+                OP_ENDIF
         };
-        let mut bytes = script.into_bytes();
+        bytes.extend(script.into_bytes());
 
         // All other signatories
         for signatory in iter {
@@ -414,6 +451,60 @@ impl SignatorySet {
         // value on the stack is the threshold check result.
         let script = script!(<dest> OP_DROP);
         bytes.extend(&script.into_bytes());
+
+        if self.foundation_signatories.len() > 0 {
+            let mut iter = self.foundation_signatories.iter();
+
+            // First signatory
+            let signatory = iter.next().ok_or_else(|| {
+                ContractError::App(
+                    "Cannot create redeem script for empty signatory set".to_string(),
+                )
+            })?;
+
+            let mut total_voting_power = signatory.voting_power;
+
+            let script = script! {
+                OP_ELSE
+                    <signatory.pubkey.as_slice()> OP_CHECKSIG
+                    OP_IF
+                        <signatory.voting_power as i64>
+                    OP_ELSE
+                        0
+                    OP_ENDIF
+            };
+            bytes.extend(script.into_bytes());
+
+            for signatory in iter {
+                let script = script! {
+                    OP_SWAP
+                    <signatory.pubkey.as_slice()> OP_CHECKSIG
+                    OP_IF
+                        <signatory.voting_power as i64> OP_ADD
+                    OP_ENDIF
+                };
+                total_voting_power += signatory.voting_power;
+                bytes.extend(&script.into_bytes());
+            }
+
+            let truncated_threshold = ((total_voting_power as f64) * (threshold.0 as f64)
+                / (threshold.1 as f64))
+                .ceil() as u64;
+            // Check that accumulator of voting power which had valid signatures
+            // (now a final sum) is greater than the threshold.
+            let script = script! {
+                <truncated_threshold as i64> OP_GREATERTHANOREQUAL
+            };
+            bytes.extend(&script.into_bytes());
+        } else {
+            let script = script! {
+                OP_ELSE
+                    OP_RETURN
+            };
+            bytes.extend(script.into_bytes());
+        }
+        let script = script!(OP_ENDIF);
+        bytes.extend(script.into_bytes());
 
         Ok(bytes.into())
     }

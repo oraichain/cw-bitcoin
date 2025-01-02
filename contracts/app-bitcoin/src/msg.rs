@@ -92,6 +92,9 @@ pub enum ExecuteMsg {
         voting_powers: Vec<u64>,
         consensus_keys: Vec<ConsensusKey>,
     },
+    UpdateFoundationKeys {
+        xpubs: Vec<WrappedBinary<Xpub>>,
+    },
     RelayDeposit {
         btc_tx: Adapter<Transaction>,
         btc_height: u32,

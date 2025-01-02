@@ -94,6 +94,7 @@ impl Input {
     pub fn to_txin(&self) -> ContractResult<TxIn> {
         let mut witness = self.signatures.to_witness()?;
         if self.signatures.signed() {
+            witness.push(vec![0]);
             witness.push(self.redeem_script.to_bytes());
         }
 
@@ -876,7 +877,6 @@ impl BuildingCheckpoint {
         config: &CheckpointConfig,
     ) -> ContractResult<BuildingAdvanceRes> {
         self.0.status = CheckpointStatus::Signing;
-
         let outs = self.additional_outputs(config, &timestamping_commitment)?;
         let checkpoint_batch = &mut self.batches[BatchType::Checkpoint];
         let checkpoint_tx = &mut checkpoint_batch[0];
@@ -924,6 +924,12 @@ impl BuildingCheckpoint {
         let mut sc = bitcoin::util::sighash::SighashCache::new(&bitcoin_tx);
         for i in 0..checkpoint_tx.input.len() {
             let input = &mut checkpoint_tx.input[i];
+            println!(
+                "input_index: {:?}, redeem_script: {:?}, amount: {:?}",
+                i,
+                input.redeem_script.wscript_hash(),
+                input.amount
+            );
             let sighash = sc.segwit_signature_hash(
                 i,
                 &input.redeem_script,
