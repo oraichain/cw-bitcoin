@@ -838,7 +838,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     let balance = app
         .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.u128(), 189894417000000 as u128);
+    assert_eq!(balance.u128(), 189932811000000 as u128);
 
     let mut trusted_balance = 0;
     match wallet.get_balances() {
@@ -960,7 +960,7 @@ async fn test_full_flow_happy_case_bitcoin() {
     let balance = app
         .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.u128(), 309835521000000 as u128);
+    assert_eq!(balance.u128(), 309875351000000 as u128);
 
     relay_checkpoint(
         &btc_client,
@@ -1530,7 +1530,6 @@ async fn test_full_flow_with_foundation_validators() {
 
     let sigset = checkpoint.sigset.clone();
     let redeem_script = sigset.redeem_script(&[0], threshold).unwrap();
-    let cp_index = 0;
     let script_address = redeem_script.wscript_hash();
     println!("script address: {:?}", script_address);
     let bitcoin_txin = bitcoin::TxIn {
@@ -1565,10 +1564,7 @@ async fn test_full_flow_with_foundation_validators() {
     let mut sigs = vec![];
     let secp = Secp256k1::new();
     for i in 0..3 {
-        let privkey = foundation_xprivs[i]
-            .derive_priv(&secp, &[ChildNumber::from_normal_idx(cp_index).unwrap()])
-            .unwrap()
-            .private_key;
+        let privkey = foundation_xprivs[i].private_key;
         let message = Message::from_slice(&sighash.as_ref()).unwrap(); // Extract the [u8; 32] value from the tuple
         let mut sig = secp.sign_ecdsa(&message, &privkey).serialize_der().to_vec();
         sig.push(EcdsaSighashType::All.to_u32() as u8);
@@ -1581,10 +1577,7 @@ async fn test_full_flow_with_foundation_validators() {
     let mut sigs_push_pivot = 0;
     for i in 0..3 {
         for j in 0..3 {
-            let pubkey: Pubkey = Xpub::new(foundation_xpubs[j])
-                .derive_pubkey(cp_index)
-                .unwrap()
-                .into();
+            let pubkey: Pubkey = Xpub::new(foundation_xpubs[j]).public_key.into();
             if foundation_signatories[2 - i].pubkey == pubkey {
                 if sigs_push_pivot == 0 {
                     witness.push(hex::decode("").unwrap());
@@ -2608,11 +2601,11 @@ async fn test_deposit_with_token_fee() {
         .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
     // Check fee receiver balance
-    assert_eq!(balance.u128(), 118765157940000 as u128);
+    assert_eq!(balance.u128(), 118777827960000 as u128);
     let balance = app
         .query_balance(token_fee_receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.u128(), 1199648060000 as u128);
+    assert_eq!(balance.u128(), 1199776040000 as u128);
     increase_block(&mut app, Binary::from([3; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
         .query(
@@ -3088,11 +3081,11 @@ async fn test_withdraw_with_dynamic_fee() {
         .query_balance(receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
     // Check fee receiver balance
-    assert_eq!(balance.u128(), 118765157940000 as u128);
+    assert_eq!(balance.u128(), 118777827960000 as u128);
     let balance = app
         .query_balance(token_fee_receiver.clone(), btc_bridge_denom.clone())
         .unwrap();
-    assert_eq!(balance.u128(), 1199648060000 as u128);
+    assert_eq!(balance.u128(), 1199776040000 as u128);
     increase_block(&mut app, Binary::from([3; 32])).unwrap(); // should increase number of hash to be unique
     let checkpoint: Checkpoint = app
         .query(

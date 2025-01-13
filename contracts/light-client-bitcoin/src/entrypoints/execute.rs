@@ -11,7 +11,6 @@ pub fn relay_headers(
     store: &mut dyn Storage,
     headers: Vec<WrappedHeader>,
 ) -> ContractResult<Response> {
-    // let header_config = HEADER_CONFIG.load(store)?;
     let mut header_queue = HeaderQueue::default();
     header_queue.add(store, HeaderList::from(headers))?;
     Ok(Response::new().add_attribute("action", "add_headers"))

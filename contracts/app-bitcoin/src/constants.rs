@@ -3,7 +3,7 @@ pub const MAX_FEE_RATE: u64 = 1000; // in satoshis per vbytes
 pub const USER_FEE_FACTOR: u64 = 27000; // 2.7x. Calculate by USER_FEE_FACTOR / 10000
 /// The default fee rate to be used to pay miner fees, in satoshis per virtual byte.
 /// The default fee rate to be used to pay miner fees, in satoshis per virtual byte.
-pub const DEFAULT_FEE_RATE: u64 = 55; // ~ 100 sat/vb
+pub const DEFAULT_FEE_RATE: u64 = 35; // ~ 100 sat/vb
 pub const TRANSFER_FEE: u64 = 0;
 
 // checkpoints

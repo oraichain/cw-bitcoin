@@ -291,7 +291,7 @@ fn check_change_rates() -> ContractResult<()> {
     let change_rates = btc
         .borrow()
         .change_rates(deps.as_mut().storage, 3000, 5100)?;
-    assert_eq!(change_rates.withdrawal, 8664);
+    assert_eq!(change_rates.withdrawal, 8658);
     assert_eq!(change_rates.sigset_change, 4090);
     assert_eq!(
         btc.borrow()

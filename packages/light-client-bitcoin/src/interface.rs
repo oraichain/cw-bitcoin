@@ -49,10 +49,14 @@ pub struct HeaderConfig {
 
 impl HeaderConfig {
     pub fn mainnet() -> ContractResult<Self> {
-        Self::from_bytes(include_bytes!("checkpoint.json"))
+        Self::from_bytes(include_bytes!("checkpoint.json"), false)
     }
 
-    pub fn from_bytes(checkpoint_json: &[u8]) -> ContractResult<Self> {
+    pub fn testnet() -> ContractResult<Self> {
+        Self::from_bytes(include_bytes!("testnet-checkpoint.json"), true)
+    }
+
+    pub fn from_bytes(checkpoint_json: &[u8], min_difficulty_blocks: bool) -> ContractResult<Self> {
         let checkpoint: (u32, BlockHeader) = from_json(checkpoint_json)?;
         let (height, header) = checkpoint;
 
@@ -66,7 +70,7 @@ impl HeaderConfig {
             max_target: MAX_TARGET,
             trusted_header: header.into(),
             retargeting: true,
-            min_difficulty_blocks: false,
+            min_difficulty_blocks,
         })
     }
 

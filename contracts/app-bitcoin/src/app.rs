@@ -207,6 +207,15 @@ impl Bitcoin {
         if !testing_sandbox {
             let sidechain_btc_height: u32 =
                 querier.query_wasm_smart(config.light_client_contract.clone(), &HeaderHeight {})?;
+            if sidechain_btc_height < btc_height {
+                return Err(ContractError::App(
+                    format!(
+                        "Block height is in the future, btc_height: {} - sidechain_btc_height: {} queried on contract: {:?}",
+                        btc_height, sidechain_btc_height, config.light_client_contract.clone()
+                    )
+                    .to_string(),
+                ));
+            }
             if sidechain_btc_height - btc_height < bitcoin_config.min_confirmations {
                 return Err(ContractError::App(
                     "Block is not sufficiently confirmed".to_string(),
@@ -247,7 +256,12 @@ impl Bitcoin {
         let expected_script = sigset.output_script(&dest_bytes, threshold)?;
         if output.script_pubkey != expected_script {
             return Err(ContractError::App(
-                "Output script does not match signature set".to_string(),
+                format!(
+                    "Output script does not match signature set {} {}",
+                    output.script_pubkey.to_v0_p2wsh().to_string(),
+                    expected_script.to_v0_p2wsh().to_string()
+                )
+                .to_string(),
             ))?;
         }
         let outpoint = bitcoin::OutPoint::new(btc_tx.txid(), btc_vout);

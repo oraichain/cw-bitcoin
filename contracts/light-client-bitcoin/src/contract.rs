@@ -30,7 +30,10 @@ pub fn instantiate(
     CONFIG.save(deps.storage, &Config { owner: info.sender })?;
 
     // Set up header
+    #[cfg(feature = "mainnet")]
     let header_config = HeaderConfig::mainnet()?;
+    #[cfg(not(feature = "mainnet"))]
+    let header_config = HeaderConfig::testnet()?;
     let mut header_queue = HeaderQueue::default();
     header_queue.configure(deps.storage, header_config.clone())?;
     Ok(Response::default())

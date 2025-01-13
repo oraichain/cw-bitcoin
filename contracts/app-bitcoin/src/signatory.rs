@@ -128,7 +128,7 @@ impl SignatorySet {
         sigset.sort_and_truncate();
 
         for entry in foundation_sigs {
-            let signatory_key = entry.derive_pubkey(index)?.into();
+            let signatory_key = entry.public_key.into();
             let signatory = Signatory {
                 voting_power: 1,
                 pubkey: signatory_key,
