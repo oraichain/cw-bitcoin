@@ -185,6 +185,309 @@ async fn relay_recovery(
 
 #[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
 #[tokio::test]
+#[should_panic]
+async fn test_unauthorized_when_trying_to_set_foundation_validators() {
+    // Set up app
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000, "orai")),
+        ("alice", &coins(100_000_000_000, "orai")),
+        ("bob", &coins(100_000_000_000, "orai")),
+        ("dave", &coins(100_000_000_000, "orai")),
+        ("jayce", &coins(100_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("receiver", &coins(100_000_000_000, "orai")),
+    ]);
+    let owner = Addr::unchecked(&accounts[0]);
+    let validator_1 = Addr::unchecked(&accounts[1]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[5]);
+    let token_fee_receiver = Addr::unchecked(&accounts[6]);
+    let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
+    let light_client_addr = app
+        .create_light_client(owner.clone(), &lc_msg::InstantiateMsg {})
+        .unwrap();
+    let bitcoin_bridge_addr = app
+        .create_bridge(
+            owner.clone(),
+            &msg::InstantiateMsg {
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: token_fee_receiver.clone(),
+                token_factory_contract: token_factory_addr.clone(),
+                light_client_contract: light_client_addr.clone(),
+                swap_router_contract: None,
+                osor_entry_point_contract: None,
+            },
+        )
+        .unwrap();
+
+    // Set up bitcoin
+    let mut conf = Conf::default();
+    conf.args.push("-txindex");
+    let bitcoind = BitcoinD::with_conf(bitcoind::downloaded_exe_path().unwrap(), &conf).unwrap();
+    let rpc_url = bitcoind.rpc_url();
+    let cookie_file = bitcoind.params.cookie_file.clone();
+    let btc_client = test_bitcoin_client(rpc_url.clone(), cookie_file.clone()).await;
+    let wallet = retry(|| bitcoind.create_wallet("bridger"), 10).unwrap();
+    let wallet_address = wallet.get_new_address(None, None).unwrap();
+    let receive_fund_address = wallet.get_new_address(None, None).unwrap();
+
+    let async_wallet_address =
+        bitcoincore_rpc_async::bitcoin::Address::from_str(&wallet_address.to_string()).unwrap();
+    btc_client
+        .generate_to_address(1000, &async_wallet_address)
+        .await
+        .unwrap();
+    let block_data = populate_bitcoin_block(&btc_client).await;
+    let trusted_header = block_data.block_header;
+
+    let register_denom =
+        |app: &mut MockApp, subdenom: String, metadata: Option<Metadata>| -> MockResult<_> {
+            app.execute(
+                owner.clone(),
+                bitcoin_bridge_addr.clone(),
+                &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
+                &coins(10_000_000, "orai"),
+            )
+        };
+
+    let init_bitcoin_config = |app: &mut MockApp, max_deposit_age: u32| -> () {
+        let mut bitcoin_config = BitcoinConfig::default();
+        bitcoin_config.min_withdrawal_checkpoints = 1;
+        bitcoin_config.max_deposit_age = max_deposit_age as u64;
+        bitcoin_config.max_offline_checkpoints = 1;
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateBitcoinConfig {
+                config: bitcoin_config,
+            },
+            &[],
+        )
+        .unwrap();
+    };
+
+    let init_checkpoint_config = |app: &mut MockApp| -> () {
+        // Set up header config based on the header of block data
+        let mut checkpoint_config = CheckpointConfig::default();
+        checkpoint_config.min_checkpoint_interval = 1; // 1 seconds
+
+        app.execute(
+            owner.clone(),
+            bitcoin_bridge_addr.clone(),
+            &msg::ExecuteMsg::UpdateCheckpointConfig {
+                config: checkpoint_config,
+            },
+            &[],
+        )
+        .unwrap();
+    };
+
+    let init_headers =
+        |app: &mut MockApp, trusted_height: u32, trusted_header: BlockHeader| -> () {
+            // Set up header config based on the header of block data
+            let header_config = HeaderConfig {
+                max_length: 2000,
+                max_time_increase: 8 * 60 * 60,
+                trusted_height,
+                retarget_interval: 2016,
+                target_spacing: 10 * 60,
+                target_timespan: 2016 * (10 * 60),
+                max_target: 0x1d00ffff,
+                retargeting: true,
+                min_difficulty_blocks: false,
+                trusted_header: Adapter::from(trusted_header),
+            };
+            app.execute(
+                owner.clone(),
+                light_client_addr.clone(),
+                &lc_msg::ExecuteMsg::UpdateHeaderConfig {
+                    config: header_config,
+                },
+                &[],
+            )
+            .unwrap();
+        };
+
+    // Start testing
+    init_bitcoin_config(&mut app, 180);
+    init_checkpoint_config(&mut app);
+    init_headers(&mut app, 1000, trusted_header);
+    register_denom(&mut app, BTC_NATIVE_TOKEN_DENOM.to_string(), None).unwrap();
+
+    let header_height: u32 = app
+        .query(
+            light_client_addr.clone(),
+            &lc_msg::QueryMsg::HeaderHeight {},
+        )
+        .unwrap();
+    assert_eq!(header_height, 1000);
+
+    // Mine more 20 blocks
+    mine_and_relay_headers(
+        &btc_client,
+        &mut app,
+        &async_wallet_address,
+        20,
+        owner.clone(),
+        light_client_addr.clone(),
+    )
+    .await;
+    let header_height: u32 = app
+        .query(
+            light_client_addr.clone(),
+            &lc_msg::QueryMsg::HeaderHeight {},
+        )
+        .unwrap();
+    assert_eq!(header_height, 1020);
+
+    // Set up 2 validators here
+    let network = bitcoin::Network::Bitcoin; // This is actually hard-coded
+    let secp = Secp256k1::new();
+    let foundation_xprivs = vec![
+        ExtendedPrivKey::new_master(network, &[4]).unwrap(),
+        ExtendedPrivKey::new_master(network, &[5]).unwrap(),
+        ExtendedPrivKey::new_master(network, &[6]).unwrap(),
+    ];
+    let foundation_xpubs = vec![
+        ExtendedPubKey::from_priv(&secp, &foundation_xprivs[0]),
+        ExtendedPubKey::from_priv(&secp, &foundation_xprivs[1]),
+        ExtendedPubKey::from_priv(&secp, &foundation_xprivs[2]),
+    ];
+    app.execute(
+        validator_1.clone(),
+        bitcoin_bridge_addr.clone(),
+        &msg::ExecuteMsg::UpdateFoundationKeys {
+            xpubs: foundation_xpubs
+                .iter()
+                .map(|x| WrappedBinary(Xpub::new(x.clone())))
+                .collect(),
+        },
+        &[],
+    )
+    .unwrap();
+    println!("[BRAVOOO] All testcases passed!");
+}
+
+#[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
+#[tokio::test]
+#[should_panic]
+async fn test_unauthorized_when_trying_to_set_checkpoint_config() {
+    // Set up app
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000, "orai")),
+        ("alice", &coins(100_000_000_000, "orai")),
+        ("bob", &coins(100_000_000_000, "orai")),
+        ("dave", &coins(100_000_000_000, "orai")),
+        ("jayce", &coins(100_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("receiver", &coins(100_000_000_000, "orai")),
+    ]);
+    let owner = Addr::unchecked(&accounts[0]);
+    let validator_1 = Addr::unchecked(&accounts[1]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[5]);
+    let token_fee_receiver = Addr::unchecked(&accounts[6]);
+    let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
+    let light_client_addr = app
+        .create_light_client(owner.clone(), &lc_msg::InstantiateMsg {})
+        .unwrap();
+    let bitcoin_bridge_addr = app
+        .create_bridge(
+            owner.clone(),
+            &msg::InstantiateMsg {
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: token_fee_receiver.clone(),
+                token_factory_contract: token_factory_addr.clone(),
+                light_client_contract: light_client_addr.clone(),
+                swap_router_contract: None,
+                osor_entry_point_contract: None,
+            },
+        )
+        .unwrap();
+
+    // Set up header config based on the header of block data
+    let mut checkpoint_config = CheckpointConfig::default();
+    checkpoint_config.min_checkpoint_interval = 1; // 1 seconds
+
+    app.execute(
+        validator_1.clone(),
+        bitcoin_bridge_addr.clone(),
+        &msg::ExecuteMsg::UpdateCheckpointConfig {
+            config: checkpoint_config,
+        },
+        &[],
+    )
+    .unwrap();
+    println!("[BRAVOOO] All testcases passed!");
+}
+
+#[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
+#[tokio::test]
+#[should_panic]
+async fn test_unauthorized_when_trying_to_set_bitcoin_config() {
+    // Set up app
+    let (mut app, accounts) = MockApp::new(&[
+        ("perfogic", &coins(100_000_000_000, "orai")),
+        ("alice", &coins(100_000_000_000, "orai")),
+        ("bob", &coins(100_000_000_000, "orai")),
+        ("dave", &coins(100_000_000_000, "orai")),
+        ("jayce", &coins(100_000_000_000, "orai")),
+        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
+        ("receiver", &coins(100_000_000_000, "orai")),
+    ]);
+    let owner = Addr::unchecked(&accounts[0]);
+    let validator_1 = Addr::unchecked(&accounts[1]);
+    let relayer_fee_receiver = Addr::unchecked(&accounts[5]);
+    let token_fee_receiver = Addr::unchecked(&accounts[6]);
+    let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
+    let light_client_addr = app
+        .create_light_client(owner.clone(), &lc_msg::InstantiateMsg {})
+        .unwrap();
+    let bitcoin_bridge_addr = app
+        .create_bridge(
+            owner.clone(),
+            &msg::InstantiateMsg {
+                relayer_fee: Uint128::from(0 as u16),
+                relayer_fee_receiver: relayer_fee_receiver.clone(),
+                relayer_fee_token: AssetInfo::NativeToken {
+                    denom: "orai".to_string(),
+                },
+                token_fee_receiver: token_fee_receiver.clone(),
+                token_factory_contract: token_factory_addr.clone(),
+                light_client_contract: light_client_addr.clone(),
+                swap_router_contract: None,
+                osor_entry_point_contract: None,
+            },
+        )
+        .unwrap();
+
+    let mut bitcoin_config = BitcoinConfig::default();
+    bitcoin_config.min_withdrawal_checkpoints = 1;
+    bitcoin_config.max_deposit_age = 86400 as u64;
+    bitcoin_config.max_offline_checkpoints = 1;
+    app.execute(
+        validator_1.clone(),
+        bitcoin_bridge_addr.clone(),
+        &msg::ExecuteMsg::UpdateBitcoinConfig {
+            config: bitcoin_config,
+        },
+        &[],
+    )
+    .unwrap();
+    println!("[BRAVOOO] All testcases passed!");
+}
+
+#[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
+#[tokio::test]
 async fn test_full_flow_happy_case_bitcoin() {
     // Set up app
     let threshold = SIGSET_THRESHOLD;
@@ -1019,195 +1322,6 @@ async fn test_full_flow_happy_case_bitcoin() {
         .unwrap();
     assert_eq!(checkpoint.sigset.signatories.len(), 3);
     assert_eq!(checkpoint.sigset.present_vp, 50);
-    println!("[BRAVOOO] All testcases passed!");
-}
-
-#[cfg(all(feature = "mainnet", not(feature = "native-validator")))]
-#[tokio::test]
-#[should_panic]
-async fn test_unauthorized_when_trying_to_set_foundation_validators() {
-    // Set up app
-    let (mut app, accounts) = MockApp::new(&[
-        ("perfogic", &coins(100_000_000_000, "orai")),
-        ("alice", &coins(100_000_000_000, "orai")),
-        ("bob", &coins(100_000_000_000, "orai")),
-        ("dave", &coins(100_000_000_000, "orai")),
-        ("jayce", &coins(100_000_000_000, "orai")),
-        ("relayer_fee_receiver", &coins(100_000_000_000, "orai")),
-        ("token_fee_receiver", &coins(100_000_000_000, "orai")),
-        ("receiver", &coins(100_000_000_000, "orai")),
-    ]);
-    let owner = Addr::unchecked(&accounts[0]);
-    let validator_1 = Addr::unchecked(&accounts[1]);
-    let relayer_fee_receiver = Addr::unchecked(&accounts[5]);
-    let token_fee_receiver = Addr::unchecked(&accounts[6]);
-    let token_factory_addr = app.create_tokenfactory(owner.clone()).unwrap();
-    let light_client_addr = app
-        .create_light_client(owner.clone(), &lc_msg::InstantiateMsg {})
-        .unwrap();
-    let bitcoin_bridge_addr = app
-        .create_bridge(
-            owner.clone(),
-            &msg::InstantiateMsg {
-                relayer_fee: Uint128::from(0 as u16),
-                relayer_fee_receiver: relayer_fee_receiver.clone(),
-                relayer_fee_token: AssetInfo::NativeToken {
-                    denom: "orai".to_string(),
-                },
-                token_fee_receiver: token_fee_receiver.clone(),
-                token_factory_contract: token_factory_addr.clone(),
-                light_client_contract: light_client_addr.clone(),
-                swap_router_contract: None,
-                osor_entry_point_contract: None,
-            },
-        )
-        .unwrap();
-
-    // Set up bitcoin
-    let mut conf = Conf::default();
-    conf.args.push("-txindex");
-    let bitcoind = BitcoinD::with_conf(bitcoind::downloaded_exe_path().unwrap(), &conf).unwrap();
-    let rpc_url = bitcoind.rpc_url();
-    let cookie_file = bitcoind.params.cookie_file.clone();
-    let btc_client = test_bitcoin_client(rpc_url.clone(), cookie_file.clone()).await;
-    let wallet = retry(|| bitcoind.create_wallet("bridger"), 10).unwrap();
-    let wallet_address = wallet.get_new_address(None, None).unwrap();
-    let receive_fund_address = wallet.get_new_address(None, None).unwrap();
-
-    let async_wallet_address =
-        bitcoincore_rpc_async::bitcoin::Address::from_str(&wallet_address.to_string()).unwrap();
-    btc_client
-        .generate_to_address(1000, &async_wallet_address)
-        .await
-        .unwrap();
-    let block_data = populate_bitcoin_block(&btc_client).await;
-    let trusted_header = block_data.block_header;
-
-    let register_denom =
-        |app: &mut MockApp, subdenom: String, metadata: Option<Metadata>| -> MockResult<_> {
-            app.execute(
-                owner.clone(),
-                bitcoin_bridge_addr.clone(),
-                &msg::ExecuteMsg::RegisterDenom { subdenom, metadata },
-                &coins(10_000_000, "orai"),
-            )
-        };
-
-    let init_bitcoin_config = |app: &mut MockApp, max_deposit_age: u32| -> () {
-        let mut bitcoin_config = BitcoinConfig::default();
-        bitcoin_config.min_withdrawal_checkpoints = 1;
-        bitcoin_config.max_deposit_age = max_deposit_age as u64;
-        bitcoin_config.max_offline_checkpoints = 1;
-        app.execute(
-            owner.clone(),
-            bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::UpdateBitcoinConfig {
-                config: bitcoin_config,
-            },
-            &[],
-        )
-        .unwrap();
-    };
-
-    let init_checkpoint_config = |app: &mut MockApp| -> () {
-        // Set up header config based on the header of block data
-        let mut checkpoint_config = CheckpointConfig::default();
-        checkpoint_config.min_checkpoint_interval = 1; // 1 seconds
-
-        app.execute(
-            owner.clone(),
-            bitcoin_bridge_addr.clone(),
-            &msg::ExecuteMsg::UpdateCheckpointConfig {
-                config: checkpoint_config,
-            },
-            &[],
-        )
-        .unwrap();
-    };
-
-    let init_headers =
-        |app: &mut MockApp, trusted_height: u32, trusted_header: BlockHeader| -> () {
-            // Set up header config based on the header of block data
-            let header_config = HeaderConfig {
-                max_length: 2000,
-                max_time_increase: 8 * 60 * 60,
-                trusted_height,
-                retarget_interval: 2016,
-                target_spacing: 10 * 60,
-                target_timespan: 2016 * (10 * 60),
-                max_target: 0x1d00ffff,
-                retargeting: true,
-                min_difficulty_blocks: false,
-                trusted_header: Adapter::from(trusted_header),
-            };
-            app.execute(
-                owner.clone(),
-                light_client_addr.clone(),
-                &lc_msg::ExecuteMsg::UpdateHeaderConfig {
-                    config: header_config,
-                },
-                &[],
-            )
-            .unwrap();
-        };
-
-    // Start testing
-    init_bitcoin_config(&mut app, 180);
-    init_checkpoint_config(&mut app);
-    init_headers(&mut app, 1000, trusted_header);
-    register_denom(&mut app, BTC_NATIVE_TOKEN_DENOM.to_string(), None).unwrap();
-
-    let header_height: u32 = app
-        .query(
-            light_client_addr.clone(),
-            &lc_msg::QueryMsg::HeaderHeight {},
-        )
-        .unwrap();
-    assert_eq!(header_height, 1000);
-
-    // Mine more 20 blocks
-    mine_and_relay_headers(
-        &btc_client,
-        &mut app,
-        &async_wallet_address,
-        20,
-        owner.clone(),
-        light_client_addr.clone(),
-    )
-    .await;
-    let header_height: u32 = app
-        .query(
-            light_client_addr.clone(),
-            &lc_msg::QueryMsg::HeaderHeight {},
-        )
-        .unwrap();
-    assert_eq!(header_height, 1020);
-
-    // Set up 2 validators here
-    let network = bitcoin::Network::Bitcoin; // This is actually hard-coded
-    let secp = Secp256k1::new();
-    let foundation_xprivs = vec![
-        ExtendedPrivKey::new_master(network, &[4]).unwrap(),
-        ExtendedPrivKey::new_master(network, &[5]).unwrap(),
-        ExtendedPrivKey::new_master(network, &[6]).unwrap(),
-    ];
-    let foundation_xpubs = vec![
-        ExtendedPubKey::from_priv(&secp, &foundation_xprivs[0]),
-        ExtendedPubKey::from_priv(&secp, &foundation_xprivs[1]),
-        ExtendedPubKey::from_priv(&secp, &foundation_xprivs[2]),
-    ];
-    app.execute(
-        validator_1.clone(),
-        bitcoin_bridge_addr.clone(),
-        &msg::ExecuteMsg::UpdateFoundationKeys {
-            xpubs: foundation_xpubs
-                .iter()
-                .map(|x| WrappedBinary(Xpub::new(x.clone())))
-                .collect(),
-        },
-        &[],
-    )
-    .unwrap();
     println!("[BRAVOOO] All testcases passed!");
 }
 
